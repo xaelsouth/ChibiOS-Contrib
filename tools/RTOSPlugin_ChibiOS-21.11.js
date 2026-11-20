@@ -113,10 +113,17 @@ function threadName(tp) {
 }
 
 function threadPrio(tp) {
-  /* priority lives in the ready-list queue header */
-  var p = Debug.evaluate("((thread_t*)" + tp + ").hdr.pqueue.prio");
+  /* thread's own priority - valid in any state (kernel 7.x / 8.x).
+     NOTE: hdr.pqueue.prio is only meaningful while the thread is linked in
+     the ready list (the hdr union holds list/queue linkage otherwise), so
+     it must NOT be used as the general priority source. */
+  var p = Debug.evaluate("((thread_t*)" + tp + ").realprio");
   if (p == undefined) {
-    p = Debug.evaluate("((thread_t*)" + tp + ").prio");
+    /* effective (possibly inherited) priority, ready-list entry */
+    p = Debug.evaluate("((thread_t*)" + tp + ").hdr.pqueue.prio");
+  }
+  if (p == undefined) {
+    p = Debug.evaluate("((thread_t*)" + tp + ").prio");   /* kernel 6.x */
   }
   return (p == undefined) ? 0 : p;
 }
