@@ -26,9 +26,18 @@ static size_t _write(RTTDriver *rttdp, const uint8_t *bp, size_t n) {
 }
 
 static size_t _read(RTTDriver *rttdp, uint8_t *bp, size_t n) {
-	(void)rttdp, (void)bp, (void)n;
-	/* TODO: implement */
-	return 0;
+	unsigned cnt;
+
+	/* Block until at least one byte is available in the down buffer,
+	   then return as many bytes as fit (same semantics as the serial
+	   driver, so e.g. the shell can use the RTT stream as input). */
+	do {
+		cnt = SEGGER_RTT_Read(rttdp->down_buffer_index, bp, (unsigned)n);
+		if (cnt == 0) {
+			chThdSleepMilliseconds(1);
+		}
+	} while (cnt == 0);
+	return (size_t)cnt;
 }
 
 static msg_t _put(RTTDriver *rttdp, uint8_t b) {
@@ -39,9 +48,12 @@ static msg_t _put(RTTDriver *rttdp, uint8_t b) {
 }
 
 static msg_t _get(RTTDriver *rttdp) {
-	(void)rttdp;
-	/* TODO: implement */
-	return MSG_TIMEOUT;
+	uint8_t c;
+
+	while (SEGGER_RTT_Read(rttdp->down_buffer_index, &c, 1) == 0) {
+		chThdSleepMilliseconds(1);
+	}
+	return (msg_t)c;
 }
 
 static const struct RTTDriverVMT vmt = {
