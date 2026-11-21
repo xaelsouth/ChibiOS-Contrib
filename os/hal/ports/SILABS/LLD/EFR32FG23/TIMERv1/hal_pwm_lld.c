@@ -136,9 +136,13 @@ void pwm_lld_init(void) {
 #endif
 }
 
-void pwm_lld_start(PWMDriver *pwmp, const PWMConfig *config) {
+void pwm_lld_start(PWMDriver *pwmp) {
+  const PWMConfig *config = pwmp->config;
   TIMER_TypeDef *tim = pwmp->timer;
   uint32_t index = pwmp->index;
+
+  pwmp->channels = PWM_CHANNELS;
+  pwmp->clock = EFR32_EM01GRPACLK;
 
   if (pwmp->state == PWM_STOP) {
     /* Enable clock. */
@@ -169,8 +173,8 @@ void pwm_lld_start(PWMDriver *pwmp, const PWMConfig *config) {
                             _TIMER_CC_CTRL_CUFOA_MASK)) |
                          (_TIMER_CC_CTRL_COFOA_SET << _TIMER_CC_CTRL_COFOA_SHIFT) |
                          (_TIMER_CC_CTRL_CMOA_CLEAR << _TIMER_CC_CTRL_CMOA_SHIFT);
-      /* Set initial duty cycle. */
-      tim->CC[ch].OC = config->channels[ch];
+      /* Initial duty cycle 0 (channels are enabled via pwmEnableChannel). */
+      tim->CC[ch].OC = 0U;
     }
 
     /* Clear interrupt flags, start counter. */
@@ -180,9 +184,6 @@ void pwm_lld_start(PWMDriver *pwmp, const PWMConfig *config) {
     /* Enable NVIC vector. */
     nvicEnableVector(efr32_timer_irqn[index], efr32_timer_irqprio[index]);
   }
-
-  pwmp->callback = config->callback;
-  pwmp->callback_param = config->callback_param;
 }
 
 void pwm_lld_stop(PWMDriver *pwmp) {
@@ -235,14 +236,17 @@ void pwm_lld_serve_interrupt(PWMDriver *pwmp) {
 
   if ((isr & TIMER_IF_OF) != 0U) {
     tim->IF_CLR = TIMER_IF_OF;
-    if (pwmp->callback != NULL) {
-      pwmp->callback(pwmp, pwmp->callback_param);
+    if (pwmp->config->callback != NULL) {
+      pwmp->config->callback(pwmp);
     }
   }
 
   for (uint32_t ch = 0; ch < PWM_CHANNELS; ch++) {
     if ((isr & (TIMER_IF_CC0 << ch)) != 0U) {
       tim->IF_CLR = (TIMER_IF_CC0 << ch);
+      if (pwmp->config->channels[ch].callback != NULL) {
+        pwmp->config->channels[ch].callback(pwmp);
+      }
     }
   }
 }

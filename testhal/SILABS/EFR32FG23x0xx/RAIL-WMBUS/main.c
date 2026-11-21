@@ -1,0 +1,108 @@
+/*
+    ChibiOS - Copyright (C) 2026 Xael South
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+*/
+
+#include <string.h>
+#include "ch.h"
+#include "hal.h"
+#include "chprintf.h"
+
+#include "rail.h"
+#include "sli_rail_util_callbacks.h"
+#include "sl_rail_util_init.h"
+#include "sl_rail_util_protocol.h"
+
+extern const RAIL_ChannelConfig_t *channelConfigs[];
+
+static RAIL_Handle_t rail_handle;
+static semaphore_t tx_done_sem;
+
+static void rail_event_cb(RAIL_Handle_t handle, RAIL_Events_t events) {
+  (void)handle;
+  if (events & RAIL_EVENT_TX_PACKET_SENT) {
+    osalSysLockFromISR();
+    chSemSignalI(&tx_done_sem);
+    osalSysUnlockFromISR();
+  }
+}
+
+
+/* VCOM console on EUSART2 (SIOD2), PA9=TX / PA10=RX, 115200 8N1. */
+static const SIOConfig console_cfg = {
+  .baud = 115200U,
+  .cfg0 = (0U << 0) | (0U << 5),
+  .framecfg = EFR32_SIO_LLD_EUSART_8N1,
+};
+
+static void console_init(void) {
+  palSetPadMode(GPIOA, 9, PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_ALTERNATE(EUSART1_TX));
+  palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP | PAL_MODE_ALTERNATE(EUSART1_RX));
+  sioStart(&SIOD2, &console_cfg);
+}
+#define PRINTF(...) chprintf((BaseSequentialStream *)&SIOD2, __VA_ARGS__)
+
+static void radio_init(void) {
+  RAIL_Config_t rail_config = { .eventsCallback = rail_event_cb };
+  rail_handle = RAIL_Init(&rail_config, &sl_rail_util_on_rf_ready);
+
+  RAIL_DataConfig_t data_config = {
+    .txSource = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST0_TX_SOURCE,
+    .rxSource = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST0_RX_SOURCE,
+    .txMethod = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST0_TX_MODE,
+    .rxMethod = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST0_RX_MODE,
+  };
+  (void)RAIL_ConfigData(rail_handle, &data_config);
+  (void)RAIL_ConfigChannels(rail_handle, channelConfigs[1],
+                            &sli_rail_util_on_channel_config_change);
+  (void)sl_rail_util_protocol_config(rail_handle,
+                                     SL_RAIL_UTIL_INIT_PROTOCOL_INST0_DEFAULT);
+  (void)RAIL_ConfigCal(rail_handle, RAIL_CAL_TEMP | RAIL_CAL_ONETIME);
+  (void)RAIL_ConfigEvents(rail_handle, RAIL_EVENTS_ALL, RAIL_EVENTS_TX_COMPLETION);
+
+  RAIL_StateTransitions_t tx_tr = {
+    .success = SL_RAIL_UTIL_INIT_TRANSITION_INST0_TX_SUCCESS,
+    .error   = SL_RAIL_UTIL_INIT_TRANSITION_INST0_TX_ERROR,
+  };
+  (void)RAIL_SetTxTransitions(rail_handle, &tx_tr);
+  chSemObjectInit(&tx_done_sem, 0);
+}
+
+/* wMBus SND-NR datagram (C-field 0x44), 868.95 MHz C1-A. */
+static const uint8_t wmbus_datagram[] = {
+  0x2A, 0x44, 0x34, 0x12, 0x78, 0x56, 0x00, 0x00,
+  0x72, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+
+static CC_ALIGN_DATA(16) uint8_t rail_tx_fifo[256];
+
+int main(void) {
+  halInit();
+  chSysInit();
+  console_init();
+  PRINTF("\r\nRAIL-WMBUS test: wMBus C1-A datagram every 3 s\r\n");
+
+  radio_init();
+
+  unsigned n = 0;
+  while (true) {
+    RAIL_SetTxFifo(rail_handle, rail_tx_fifo, 0, sizeof(rail_tx_fifo));
+    memcpy(rail_tx_fifo, wmbus_datagram, sizeof(wmbus_datagram));
+    RAIL_SetTxFifo(rail_handle, rail_tx_fifo, sizeof(wmbus_datagram), sizeof(rail_tx_fifo));
+    RAIL_StartTx(rail_handle, 0, RAIL_TX_OPTIONS_DEFAULT, NULL);
+    (void)chSemWaitTimeout(&tx_done_sem, TIME_MS2I(1000));
+    PRINTF("sent #%u (%u bytes)\r\n", ++n, (unsigned)sizeof(wmbus_datagram));
+    chThdSleepMilliseconds(3000);
+  }
+}

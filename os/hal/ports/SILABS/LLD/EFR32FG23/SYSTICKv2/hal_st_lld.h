@@ -54,6 +54,11 @@
 #define EFR32_SYSRTC_ST_IRQ_PRIORITY         4
 #endif
 
+/* SYSTICKv2 owns the SYSRTC_SEQ interrupt vector (Vector for SYSRTC_SEQ_IRQn).
+   When SYSRTCv1 is also enabled it must NOT define its own SEQ handler;
+   instead this handler forwards events via sysrtc_lld_serve_interrupt(). */
+#define EFR32_ST_OWNS_SYSRTC_SEQ            1
+
 /*===========================================================================*/
 /* Driver data structures and types.                                         */
 /*===========================================================================*/

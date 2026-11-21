@@ -23,6 +23,7 @@
  */
 
 #include "hal.h"
+#include "hal_sysrtc_lld.h"
 
 #if EFR32_SYSRTC_USE_SYSRTC || defined(__DOXYGEN__)
 
@@ -40,14 +41,19 @@ SYSRTCDriver SYSRTCD1;
 
 /**
  * @brief   SYSRTC_SEQ interrupt handler (group 0 events).
+ * @note    Not defined when SYSTICKv2 owns the SYSRTC_SEQ vector
+ *          (EFR32_ST_OWNS_SYSRTC_SEQ) — in that case SYSTICKv2 forwards
+ *          events to sysrtc_lld_serve_interrupt().
  *
  * @isr
  */
+#if !defined(EFR32_ST_OWNS_SYSRTC_SEQ) || (EFR32_ST_OWNS_SYSRTC_SEQ == 0) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_SYSRTC_SEQ_HANDLER) {
   OSAL_IRQ_PROLOGUE();
   sysrtc_lld_serve_interrupt(&SYSRTCD1);
   OSAL_IRQ_EPILOGUE();
 }
+#endif
 
 /*===========================================================================*/
 /* Driver exported functions.                                                */
@@ -338,6 +344,8 @@ void sysrtc_lld_disable_ovf_irq(SYSRTCDriver *drvp) {
 void sysrtc_lld_serve_interrupt(SYSRTCDriver *drvp) {
   uint32_t isr = SYSRTC0->GRP0_IF;
 
+#if !defined(EFR32_ST_OWNS_SYSRTC_SEQ) || (EFR32_ST_OWNS_SYSRTC_SEQ == 0) || defined(__DOXYGEN__)
+  /* OVF and CMP0 are owned by SYSTICKv2 when it uses SYSRTC_SEQ. */
   if ((isr & SYSRTC_GRP0_IF_OVF) != 0U) {
     SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
     if (drvp->callback != NULL) {
@@ -351,6 +359,7 @@ void sysrtc_lld_serve_interrupt(SYSRTCDriver *drvp) {
       drvp->callback(EFR32_SYSRTC_EVT_CMP0, SYSRTC0->GRP0_CMP0VALUE, drvp->callback_arg);
     }
   }
+#endif
 
   if ((isr & SYSRTC_GRP0_IF_CMP1) != 0U) {
     SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP1;

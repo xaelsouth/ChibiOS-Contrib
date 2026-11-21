@@ -27,6 +27,11 @@
 
 #if (HAL_USE_PWM == TRUE) || defined(__DOXYGEN__)
 
+#if !defined(PWMCNT_T_TYPE_DEFINED)
+#define PWMCNT_T_TYPE_DEFINED
+typedef uint32_t pwmcnt_t;
+#endif
+
 /*===========================================================================*/
 /* Driver constants.                                                         */
 /*===========================================================================*/
@@ -86,50 +91,104 @@
 /*===========================================================================*/
 
 /**
- * @brief   PWM channel identifier.
+ * @brief   Type of a PWM channel.
  */
-typedef uint32_t pwmchannel_t;
+typedef uint8_t pwmchannel_t;
+
+/**
+ * @brief   Type of a channels mask.
+ */
+typedef uint32_t pwmchnmsk_t;
+
+/**
+ * @brief   Type of a PWM output mode.
+ */
+typedef uint32_t pwmmode_t;
+
+#if !defined(PWMCNT_T_TYPE_DEFINED)
+#define PWMCNT_T_TYPE_DEFINED
+typedef uint32_t pwmcnt_t;
+#endif
+
+/**
+ * @brief   PWM driver channel configuration structure.
+ */
+typedef struct {
+  /**
+   * @brief Channel active logic level / output mode.
+   */
+  pwmmode_t                 mode;
+  /**
+   * @brief Channel callback pointer, invoked on compare match events.
+   * @note  If set to @p NULL the notification is disabled.
+   */
+  pwmcallback_t             callback;
+} PWMChannelConfig;
 
 /**
  * @brief   PWM driver configuration structure.
  */
 typedef struct {
   /**
+   * @brief   Timer clock in Hz.
+   */
+  uint32_t                  frequency;
+  /**
    * @brief   PWM period in timer ticks (TOP + 1).
    */
-  uint32_t                  period;
+  pwmcnt_t                  period;
+  /**
+   * @brief   Periodic callback pointer (on counter overflow), or NULL.
+   */
+  pwmcallback_t             callback;
+  /**
+   * @brief   Channels configurations.
+   */
+  PWMChannelConfig          channels[PWM_CHANNELS];
   /**
    * @brief   Timer clock prescaler (0 = DIV1, 1 = DIV2, ...).
    */
   uint32_t                  prescaler;
-  /**
-   * @brief   Initial channel widths (duty cycles).
-   */
-  uint32_t                  channels[PWM_CHANNELS];
-  /**
-   * @brief   Callback for period events, or NULL.
-   */
-  pwmcallback_t             callback;
-  /**
-   * @brief   Callback argument.
-   */
-  void                      *callback_param;
 } PWMConfig;
 
 /**
- * @brief   PWM driver structure fields.
+ * @brief   Structure representing a PWM driver.
  */
-#define pwm_lld_driver_fields                                               \
-  /* Pointer to the TIMER registers. */                                     \
-  TIMER_TypeDef             *timer;                                         \
-  /* Timer index (0..4). */                                                 \
-  uint32_t                  index;                                         \
-  /* PWM period (TOP+1). */                                                 \
-  pwmcnt_t                  period;                                        \
-  /* Callback. */                                                           \
-  pwmcallback_t             callback;                                      \
-  /* Callback param. */                                                     \
-  void                      *callback_param
+struct PWMDriver {
+  /**
+   * @brief Driver state.
+   */
+  pwmstate_t                state;
+  /**
+   * @brief Current driver configuration data.
+   */
+  const PWMConfig           *config;
+  /**
+   * @brief   Current PWM period in ticks.
+   */
+  pwmcnt_t                  period;
+  /**
+   * @brief   Mask of the enabled channels.
+   */
+  pwmchnmsk_t               enabled;
+  /**
+   * @brief   Number of channels in this instance.
+   */
+  pwmchannel_t              channels;
+  /* End of the mandatory fields.*/
+  /**
+   * @brief Pointer to the TIMER registers block.
+   */
+  TIMER_TypeDef             *timer;
+  /**
+   * @brief Timer index (0..4).
+   */
+  uint32_t                  index;
+  /**
+   * @brief Timer base clock in Hz.
+   */
+  uint32_t                  clock;
+};
 
 /*===========================================================================*/
 /* Driver macros.                                                            */
@@ -208,7 +267,7 @@ extern PWMDriver PWMD5;
 extern "C" {
 #endif
   void pwm_lld_init(void);
-  void pwm_lld_start(PWMDriver *pwmp, const PWMConfig *config);
+  void pwm_lld_start(PWMDriver *pwmp);
   void pwm_lld_stop(PWMDriver *pwmp);
   void _pwm_lld_enable_channel(PWMDriver *pwmp, pwmchannel_t channel, pwmcnt_t width);
   void _pwm_lld_disable_channel(PWMDriver *pwmp, pwmchannel_t channel);

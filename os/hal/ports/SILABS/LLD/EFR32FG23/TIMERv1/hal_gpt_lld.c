@@ -24,6 +24,10 @@
 
 #include "hal.h"
 
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && !defined(__DOXYGEN__)
+#include "hal_letimer_lld.h"  /* letimer_gpt_lld_* (LETIMERv1 dir is on the include path only then) */
+#endif
+
 #if (HAL_USE_GPT == TRUE) || defined(__DOXYGEN__)
 
 /*===========================================================================*/
@@ -100,9 +104,17 @@ void gpt_lld_init(void) {
   gptObjectInit(&GPTD5);
   GPTD5.timer = TIMER4; GPTD5.index = 4;
 #endif
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && !defined(__DOXYGEN__)
+  letimer_gpt_lld_init();
+#endif
 }
 
-void gpt_lld_start(GPTDriver *gptp, const GPTConfig *config) {
+void gpt_lld_start(GPTDriver *gptp) {
+  if (gptp->letimer != NULL) {
+    letimer_gpt_lld_start(gptp);
+    return;
+  }
+
   TIMER_TypeDef *tim = gptp->timer;
 
   if (gptp->state == GPT_STOP) {
@@ -114,12 +126,14 @@ void gpt_lld_start(GPTDriver *gptp, const GPTConfig *config) {
     tim->IEN = 0;
     nvicEnableVector(efr32_gpt_irqn[gptp->index], efr32_gpt_irqprio[gptp->index]);
   }
-
-  gptp->callback = config->callback;
-  gptp->callback_param = config->callback_param;
 }
 
 void gpt_lld_stop(GPTDriver *gptp) {
+  if (gptp->letimer != NULL) {
+    letimer_gpt_lld_stop(gptp);
+    return;
+  }
+
   TIMER_TypeDef *tim = gptp->timer;
 
   if (gptp->state == GPT_READY) {
@@ -133,6 +147,11 @@ void gpt_lld_stop(GPTDriver *gptp) {
 }
 
 void gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
+  if (gptp->letimer != NULL) {
+    letimer_gpt_lld_start_timer(gptp, period);
+    return;
+  }
+
   TIMER_TypeDef *tim = gptp->timer;
 
   tim->TOP = (uint32_t)period - 1U;
@@ -143,6 +162,11 @@ void gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
 }
 
 void gpt_lld_stop_timer(GPTDriver *gptp) {
+  if (gptp->letimer != NULL) {
+    letimer_gpt_lld_stop_timer(gptp);
+    return;
+  }
+
   TIMER_TypeDef *tim = gptp->timer;
 
   tim->CMD_SET = TIMER_CMD_STOP;
@@ -151,6 +175,11 @@ void gpt_lld_stop_timer(GPTDriver *gptp) {
 }
 
 void gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval) {
+  if (gptp->letimer != NULL) {
+    letimer_gpt_lld_polled_delay(gptp, interval);
+    return;
+  }
+
   TIMER_TypeDef *tim = gptp->timer;
 
   tim->TOP = (uint32_t)interval - 1U;
@@ -164,13 +193,16 @@ void gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval) {
 }
 
 void gpt_lld_serve_interrupt(GPTDriver *gptp) {
+  if (gptp->letimer != NULL) {
+    letimer_gpt_lld_serve_interrupt(gptp);
+    return;
+  }
+
   TIMER_TypeDef *tim = gptp->timer;
 
   if ((tim->IF & TIMER_IF_OF) != 0U) {
     tim->IF_CLR = TIMER_IF_OF;
-    if (gptp->callback != NULL) {
-      gptp->callback(gptp, gptp->callback_param);
-    }
+    _gpt_isr_invoke_cb(gptp);
   }
 }
 

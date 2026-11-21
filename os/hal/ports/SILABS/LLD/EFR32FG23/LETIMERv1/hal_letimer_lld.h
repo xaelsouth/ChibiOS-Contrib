@@ -35,6 +35,11 @@
 
 #if (HAL_USE_GPT == TRUE) || defined(__DOXYGEN__)
 
+/* Shared GPTDriver / GPTConfig / gpt_lld_driver_fields / macros come from
+   TIMERv1/hal_gpt_lld.h (always on the include path). The struct is a
+   superset holding both ->timer and ->letimer pointers. */
+#include "hal_gpt_lld.h"
+
 /*===========================================================================*/
 /* Driver pre-compile time settings.                                         */
 /*===========================================================================*/
@@ -48,22 +53,6 @@
 #endif
 
 /*===========================================================================*/
-/* Driver data structures and types.                                         */
-/*===========================================================================*/
-
-#define gpt_lld_driver_fields                                               \
-  LETIMER_TypeDef           *letimer;                                       \
-  gptcallback_t             callback
-
-#define gpt_lld_change_interval(gptp, interval) {                           \
-  (gptp)->letimer->COMP0 = (uint32_t)(interval) - 1U;                      \
-}
-
-#define gpt_lld_get_interval(gptp) ((gptcnt_t)((gptp)->letimer->COMP0 + 1U))
-
-#define gpt_lld_get_counter(gptp) ((gptcnt_t)((gptp)->letimer->CNT))
-
-/*===========================================================================*/
 /* External declarations.                                                    */
 /*===========================================================================*/
 
@@ -75,13 +64,15 @@ extern GPTDriver GPTD_LETIMER0;
 #ifdef __cplusplus
 extern "C" {
 #endif
-  void gpt_lld_init(void);
-  void gpt_lld_start(GPTDriver *gptp, const GPTConfig *config);
-  void gpt_lld_stop(GPTDriver *gptp);
-  void gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period);
-  void gpt_lld_stop_timer(GPTDriver *gptp);
-  void gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval);
-  void gpt_lld_serve_interrupt(GPTDriver *gptp);
+  /* LETIMER-specific implementations, dispatched from the generic
+     gpt_lld_* functions in TIMERv1/hal_gpt_lld.c when gptp->letimer != NULL. */
+  void letimer_gpt_lld_init(void);
+  void letimer_gpt_lld_start(GPTDriver *gptp);
+  void letimer_gpt_lld_stop(GPTDriver *gptp);
+  void letimer_gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period);
+  void letimer_gpt_lld_stop_timer(GPTDriver *gptp);
+  void letimer_gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval);
+  void letimer_gpt_lld_serve_interrupt(GPTDriver *gptp);
 #ifdef __cplusplus
 }
 #endif

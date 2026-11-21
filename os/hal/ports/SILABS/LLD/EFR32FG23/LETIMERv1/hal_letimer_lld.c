@@ -34,6 +34,7 @@
  */
 
 #include "hal.h"
+#include "hal_letimer_lld.h"
 
 #if (HAL_USE_GPT == TRUE) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) || defined(__DOXYGEN__)
 
@@ -76,7 +77,7 @@ static uint32_t letimer_presc_for_freq(uint32_t clk, uint32_t freq) {
 
 OSAL_IRQ_HANDLER(EFR32_LETIM1_HANDLER) {
   OSAL_IRQ_PROLOGUE();
-  gpt_lld_serve_interrupt(&GPTD_LETIMER0);
+  gpt_lld_serve_interrupt(&GPTD_LETIMER0);  /* dispatches back to letimer_gpt_lld_serve_interrupt */
   OSAL_IRQ_EPILOGUE();
 }
 
@@ -84,20 +85,20 @@ OSAL_IRQ_HANDLER(EFR32_LETIM1_HANDLER) {
 /* Driver exported functions.                                                */
 /*===========================================================================*/
 
-void gpt_lld_init(void) {
+void letimer_gpt_lld_init(void) {
   GPTD_LETIMER0.state = GPT_STOP;
   GPTD_LETIMER0.config = NULL;
   GPTD_LETIMER0.letimer = LETIMER0;
-  GPTD_LETIMER0.callback = NULL;
+  GPTD_LETIMER0.timer = NULL;
+  GPTD_LETIMER0.index = 0;
 
   /* Read the actual EM23GRPACLK frequency. */
   letimer_clock_hz = EFR32_EM23GRPACLK;
 }
 
-void gpt_lld_start(GPTDriver *gptp, const GPTConfig *config) {
+void letimer_gpt_lld_start(GPTDriver *gptp) {
+  const GPTConfig *config = gptp->config;
   if (gptp->state == GPT_STOP) {
-    gptp->config = config;
-    gptp->callback = config->callback;
     gptp->letimer = LETIMER0;
 
     /* Enable clock. */
@@ -117,7 +118,7 @@ void gpt_lld_start(GPTDriver *gptp, const GPTConfig *config) {
 
     /* Enable. */
     lt->EN_SET = LETIMER_EN_EN;
-    while ((lt->SYNCBUSY & LETIMER_SYNCBUSY_EN) != 0U) {}
+    while (lt->SYNCBUSY != 0U) {}
 
     /* Clear counter. */
     lt->CNT = 0U;
@@ -128,7 +129,7 @@ void gpt_lld_start(GPTDriver *gptp, const GPTConfig *config) {
   gptp->state = GPT_READY;
 }
 
-void gpt_lld_stop(GPTDriver *gptp) {
+void letimer_gpt_lld_stop(GPTDriver *gptp) {
   if (gptp->state == GPT_READY || gptp->state == GPT_CONTINUOUS ||
       gptp->state == GPT_ONESHOT) {
     LETIMER_TypeDef *lt = gptp->letimer;
@@ -143,7 +144,7 @@ void gpt_lld_stop(GPTDriver *gptp) {
   }
 }
 
-void gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
+void letimer_gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
   LETIMER_TypeDef *lt = gptp->letimer;
 
   /* LETIMER counts down from COMP0 to 0 (underflow). */
@@ -157,14 +158,14 @@ void gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
   gptp->state = GPT_CONTINUOUS;
 }
 
-void gpt_lld_stop_timer(GPTDriver *gptp) {
+void letimer_gpt_lld_stop_timer(GPTDriver *gptp) {
   LETIMER_TypeDef *lt = gptp->letimer;
   lt->IEN_CLR = LETIMER_IEN_COMP0;
   lt->CMD = LETIMER_CMD_STOP;
   gptp->state = GPT_READY;
 }
 
-void gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval) {
+void letimer_gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval) {
   LETIMER_TypeDef *lt = gptp->letimer;
 
   /* Simple polled delay: set COMP0, wait for underflow flag. */
@@ -180,7 +181,7 @@ void gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval) {
   lt->CMD = LETIMER_CMD_STOP;
 }
 
-void gpt_lld_serve_interrupt(GPTDriver *gptp) {
+void letimer_gpt_lld_serve_interrupt(GPTDriver *gptp) {
   LETIMER_TypeDef *lt = gptp->letimer;
   uint32_t isr = lt->IF;
 
@@ -190,9 +191,7 @@ void gpt_lld_serve_interrupt(GPTDriver *gptp) {
     if (gptp->state == GPT_CONTINUOUS) {
       lt->CNT = lt->COMP0;
     }
-    if (gptp->callback != NULL) {
-      gptp->callback(gptp);
-    }
+    _gpt_isr_invoke_cb(gptp);
   }
   /* COMP1 = secondary alarm (unused in basic GPT mode). */
   if ((isr & LETIMER_IF_COMP1) != 0U) {

@@ -28,6 +28,10 @@
 
 #include "hal.h"
 
+#if defined(EFR32_SYSRTC_USE_SYSRTC) && (EFR32_SYSRTC_USE_SYSRTC == TRUE) && !defined(__DOXYGEN__)
+#include "hal_sysrtc_lld.h"
+#endif
+
 #if (OSAL_ST_MODE != OSAL_ST_MODE_NONE) || defined(__DOXYGEN__)
 
 #if OSAL_ST_MODE == OSAL_ST_MODE_PERIODIC
@@ -52,6 +56,10 @@
 
 OSAL_IRQ_HANDLER(ST_HANDLER) {
   OSAL_IRQ_PROLOGUE();
+#if defined(EFR32_SYSRTC_USE_SYSRTC) && (EFR32_SYSRTC_USE_SYSRTC == TRUE) && !defined(__DOXYGEN__)
+  /* Forward SYSRTCv1 events first (it must not touch CMP0/OVF, see below). */
+  sysrtc_lld_serve_interrupt(&SYSRTCD1);
+#endif
   st_lld_serve_interrupt();
   OSAL_IRQ_EPILOGUE();
 }
