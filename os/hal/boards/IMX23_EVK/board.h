@@ -53,6 +53,14 @@
    samples on the falling edge. */
 #define IMX23_LCD_FLAGS         IMX23_LCDIF_FLAG_DE_HIGH
 
+/* 4-wire resistive touch on the LRADC (imx23-evk.dts: 4 wires). Sense
+   pads and raw calibration range for the 800x480 panel - verify on the
+   actual board with the "adc" shell command and adjust here. */
+#define BOARD_TOUCH_X_SENSE     1U      /* LRADC pad sensing the X plate   */
+#define BOARD_TOUCH_Y_SENSE     0U      /* LRADC pad sensing the Y plate   */
+#define BOARD_TOUCH_RAW_MIN     0x2000U /* raw ADC at screen origin        */
+#define BOARD_TOUCH_RAW_MAX     0x3A000U/* raw ADC at far edge             */
+
 /* ENC28J60 SPI ethernet on SSP0 (shares pads with SSP1, bank2 pins 0,2-6).
    CS is a GPIO (adjust to your wiring), IRQ = GPIO bank2 pin3 (ETHNINT). */
 #define BOARD_ENC28J60              1

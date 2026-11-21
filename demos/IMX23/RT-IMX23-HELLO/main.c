@@ -45,6 +45,7 @@
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_lcdif.h"
 #include "imx23_pxp.h"
+#include "imx23_lradc.h"
 #include "imx23_lvgl.h"
 #include "lvgl/lvgl.h"
 #endif
@@ -233,6 +234,40 @@ static void cmd_pxp(BaseSequentialStream *chp, int argc, char *argv[]) {
   log_line("pxp blit %s", (msg == MSG_OK) ? "OK" : "FAILED");
 }
 #endif
+
+#if defined(BOARD_IMX23_EVK)
+/* "adc <pad 0-7>" - single LRADC conversion; "adc touch" - raw touch x/y. */
+static void cmd_adc(BaseSequentialStream *chp, int argc, char *argv[]) {
+
+  imx23_lradc_init();
+  if (argc >= 1U && strcmp(argv[0], "touch") == 0) {
+    static const imx23_lradc_ts_t ts = {
+      .x_sense = BOARD_TOUCH_X_SENSE,
+      .y_sense = BOARD_TOUCH_Y_SENSE,
+      .raw_min = BOARD_TOUCH_RAW_MIN,
+      .raw_max = BOARD_TOUCH_RAW_MAX,
+    };
+    uint16_t xr, yr;
+    int rc = imx23_lradc_touch_read(&ts, &xr, &yr);
+    chprintf(chp, "touch: %s x_raw=%u y_raw=%u (detect=%d)\r\n",
+             rc == 0 ? "pressed" : "released",
+             (unsigned)xr, (unsigned)yr, imx23_lradc_touch_detect());
+    return;
+  }
+  if (argc >= 1U) {
+    unsigned pad = (unsigned)strtoul(argv[0], NULL, 0);
+    if (pad > 7U) {
+      chprintf(chp, "pad 0..7\r\n");
+      return;
+    }
+    chprintf(chp, "lradc pad %u: %lu (0x%lx)\r\n", pad,
+             (unsigned long)imx23_lradc_read((uint8_t)pad, TIME_MS2I(100)),
+             (unsigned long)imx23_lradc_read((uint8_t)pad, TIME_MS2I(100)));
+    return;
+  }
+  chprintf(chp, "usage: adc <pad 0-7> | adc touch\r\n");
+}
+#endif /* BOARD_IMX23_EVK */
 
 /*
  * "tone [hz] [ms]" - play a sine wave on the mxs-builtin DAC (44100 Hz,
@@ -793,6 +828,7 @@ static const ShellCommand commands[] = {
   { "pxp", cmd_pxp },
   { "nand", cmd_nand },
   { "lfs", cmd_lfs },
+  { "adc", cmd_adc },
 #endif
   { "dcp", cmd_dcp },
 #if HAL_USE_USB
@@ -874,6 +910,17 @@ int main(void) {
   imx23_lvgl_start(&lvgl1);
   log_line("LVGL %d.%d.%d started, flushes via PXP",
            LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
+  {
+    static const imx23_lradc_ts_t ts = {
+      .x_sense = BOARD_TOUCH_X_SENSE,
+      .y_sense = BOARD_TOUCH_Y_SENSE,
+      .raw_min = BOARD_TOUCH_RAW_MIN,
+      .raw_max = BOARD_TOUCH_RAW_MAX,
+    };
+    imx23_lvgl_add_touch(&lvgl1, &ts);
+    log_line("LVGL touch indev on LRADC (x_sense=%u y_sense=%u)",
+             BOARD_TOUCH_X_SENSE, BOARD_TOUCH_Y_SENSE);
+  }
 #endif
 
 #if defined(BOARD_ENC28J60)

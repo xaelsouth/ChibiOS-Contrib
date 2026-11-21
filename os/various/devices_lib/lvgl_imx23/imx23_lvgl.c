@@ -28,6 +28,7 @@
 
 #include "imx23_lcdif.h"
 #include "imx23_pxp.h"
+#include "imx23_lradc.h"
 #include "imx23_lvgl.h"
 
 /*===========================================================================*/
@@ -94,6 +95,26 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area,
   lv_display_flush_ready(disp);
 }
 
+/* Touch (LRADC 4-wire) pointer input read callback, runs on the LVGL
+   handler thread. Maps raw 18-bit ADC values to screen coordinates. */
+static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
+  imx23_lvgl_t *lp = (imx23_lvgl_t *)lv_indev_get_user_data(indev);
+  uint16_t xr, yr;
+  int32_t v;
+
+  if (imx23_lradc_touch_read(&lp->ts, &xr, &yr) != 0) {
+    data->state = LV_INDEV_STATE_RELEASED;
+    return;
+  }
+  data->state = LV_INDEV_STATE_PRESSED;
+  v = (int32_t)xr - lp->ts.raw_min;
+  data->point.x = (lv_coord_t)((v * (int32_t)(lp->hor_res - 1U)) /
+                               (int32_t)(lp->ts.raw_max - lp->ts.raw_min));
+  v = (int32_t)yr - lp->ts.raw_min;
+  data->point.y = (lv_coord_t)((v * (int32_t)(lp->ver_res - 1U)) /
+                               (int32_t)(lp->ts.raw_max - lp->ts.raw_min));
+}
+
 /* LVGL handler thread. */
 static THD_FUNCTION(imx23_lvgl_thread, arg) {
   imx23_lvgl_t *lp = (imx23_lvgl_t *)arg;
@@ -146,6 +167,17 @@ void imx23_lvgl_start(imx23_lvgl_t *lp) {
   lv_tick_set_cb(lvgl_tick_cb);
   chThdCreateStatic(lp->thd_wa, sizeof(lp->thd_wa), IMX23_LVGL_THREAD_PRIO,
                     imx23_lvgl_thread, lp);
+}
+
+void imx23_lvgl_add_touch(imx23_lvgl_t *lp, const imx23_lradc_ts_t *ts) {
+
+  imx23_lradc_init();
+  lp->ts = *ts;
+  lp->indev = lv_indev_create();
+  lv_indev_set_type(lp->indev, LV_INDEV_TYPE_POINTER);
+  lv_indev_set_read_cb(lp->indev, touch_read_cb);
+  lv_indev_set_user_data(lp->indev, lp);
+  lv_indev_set_display(lp->indev, lp->disp);
 }
 
 /** @} */

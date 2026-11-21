@@ -34,6 +34,7 @@
 
 #include "hal.h"
 #include "imx23_lcdif.h"
+#include "imx23_lradc.h"
 #include "lvgl/lvgl.h"
 
 /*===========================================================================*/
@@ -63,6 +64,9 @@ typedef struct {
   bool          use_pxp;              /* flush via PXP, else CPU blit    */
   volatile uint32_t flushes;          /* completed flush callbacks       */
   uint8_t       thd_wa[IMX23_LVGL_THREAD_STACK];  /* handler thread stack */
+  /* Optional touch (LRADC 4-wire) pointer input. */
+  lv_indev_t   *indev;                /* NULL until imx23_lvgl_add_touch */
+  imx23_lradc_ts_t ts;                /* touch wiring + calibration      */
 } imx23_lvgl_t;
 
 /*===========================================================================*/
@@ -76,6 +80,7 @@ extern "C" {
                        void *lcd_fb, void *draw_buf, uint32_t draw_buf_px,
                        bool use_pxp);
   void imx23_lvgl_start(imx23_lvgl_t *lp);
+  void imx23_lvgl_add_touch(imx23_lvgl_t *lp, const imx23_lradc_ts_t *ts);
 #ifdef __cplusplus
 }
 #endif
