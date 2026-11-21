@@ -73,6 +73,9 @@ ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand \
 include $(CHIBIOS_CONTRIB)/os/various/tlsf_bindings/tlsf.mk
 include $(CHIBIOS)/os/various/newlib_bindings/newlib.mk
 
+# USB RNDIS gadget (devices_lib/usb_net) for USB networking.
+include $(CHIBIOS_CONTRIB)/os/various/devices_lib/usb_net/usb_net.mk
+
 ##############################################################################
 # Project, sources and paths
 ##############################################################################
