@@ -502,7 +502,12 @@ void _pal_lld_setpadmode(ioportid_t port,
     _pal_lld_reg_masked_write(&(GPIO_PORT(port)->MODEH), 0xFu << ((pad - 8) * 4), moder << ((pad - 8) * 4));
   }
 
-  pal_lld_writepad(port, pad, (doutr != 0) ? PAL_HIGH : PAL_LOW);
+  /* Only update DOUT for modes where it has meaning: output modes (>= PUSHPULL)
+     and input-pull modes (pull direction). For plain input/disabled, leave DOUT
+     untouched to avoid glitches when switching from output to input. */
+  if ((moder >= 4U) || (moder == 2U)) {
+    pal_lld_writepad(port, pad, (doutr != 0) ? PAL_HIGH : PAL_LOW);
+  }
 }
 
 #if PAL_USE_CALLBACKS || PAL_USE_WAIT || defined(__DOXYGEN__)

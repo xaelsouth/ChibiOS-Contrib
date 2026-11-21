@@ -206,7 +206,7 @@ volatile void* buramAllocateAtI(BURAMDriver* buramp, uintptr_t address, size_t s
 
   osalDbgAssert((buramp->state == BURAM_READY), "invalid state");
 
-  if (buramp->start + address + size >= buramp->end) {
+  if (buramp->start + address + size > buramp->end) {
     osalDbgAssert(false, "exceeded available amount of BURAM");
     return NULL;
   }

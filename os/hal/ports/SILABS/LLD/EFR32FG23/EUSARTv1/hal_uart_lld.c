@@ -1,0 +1,33 @@
+/*
+    ChibiOS - Copyright (C) 2026 Xael South
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+*/
+
+/**
+ * @file    EUSARTv1/hal_uart_lld.c
+ * @brief   PLATFORM UART subsystem low level driver source (not implemented).
+ *
+ * @addtogroup UART
+ * @{
+ */
+
+#include "hal.h"
+
+#if (HAL_USE_UART == TRUE) || defined(__DOXYGEN__)
+
+#error "UART driver is not implemented for the SILABS EFR32FG23 port. Use SIO (HAL_USE_SIO) instead."
+
+#endif /* HAL_USE_UART == TRUE */
+
+/** @} */

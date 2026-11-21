@@ -60,7 +60,7 @@
  * @retval true         correct DMA stream.
  */
 #define EFR32_DMA_IS_VALID_STREAM(id) (((id) >= 0U) &&                      \
-                                       ((id) <= EFR32_DMA_STREAMS))
+                                       ((id) < EFR32_DMA_STREAMS))
 
 /**
  * @name    Special stream identifiers

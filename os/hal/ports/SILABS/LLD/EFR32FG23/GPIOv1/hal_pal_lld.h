@@ -729,7 +729,7 @@ typedef uint32_t iopadid_t;
  * @notapi
  */
 #define pal_lld_get_pad_event(port, pad)                                    \
-  &_pal_events[pad]; (void)(port)
+  ((void)(port), &_pal_events[pad])
 
 /**
  * @brief   Returns a PAL event structure associated to a line.

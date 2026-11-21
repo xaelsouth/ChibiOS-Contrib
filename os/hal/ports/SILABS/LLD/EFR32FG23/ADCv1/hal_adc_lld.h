@@ -56,6 +56,10 @@
 #if !defined(PLATFORM_ADC_USE_ADC1) || defined(__DOXYGEN__)
 #define PLATFORM_ADC_USE_ADC1                  FALSE
 #endif
+
+#if (PLATFORM_ADC_USE_ADC1 == TRUE) && !defined(__DOXYGEN__)
+#error "ADC driver is not implemented for the SILABS EFR32FG23 port."
+#endif
 /** @} */
 
 /*===========================================================================*/

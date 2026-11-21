@@ -47,6 +47,10 @@
 #if !defined(EFR32_SERIAL_USE_USART1) || defined(__DOXYGEN__)
 #define EFR32_SERIAL_USE_USART1             FALSE
 #endif
+
+#if (EFR32_SERIAL_USE_USART1 == TRUE) && !defined(__DOXYGEN__)
+#error "Serial driver is not implemented for the SILABS EFR32FG23 port. Use SIO (HAL_USE_SIO) instead."
+#endif
 /** @} */
 
 /*===========================================================================*/

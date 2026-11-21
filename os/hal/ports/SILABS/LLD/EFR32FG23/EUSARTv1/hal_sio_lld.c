@@ -246,7 +246,7 @@ __STATIC_INLINE void usart_enable_rx_irq(SIODriver* siop) {
       USART_TypeDef* usart = siop->usart;
       usart->IEN_SET = USART_IEN_RXFULL;
     } else {
-      USART_TypeDef* usart = siop->usart;
+      EUSART_TypeDef* usart = siop->usart;
       usart->IEN_SET = EUSART_IEN_RXFL;
     }
   }
@@ -1038,6 +1038,7 @@ __STATIC_INLINE void sio_lld_serve_interrupt_eusart(SIODriver* siop) {
   EUSART_TypeDef* u = siop->usart;
   uint32_t ien = u->IEN;
   uint32_t ifr = u->IF;
+  const uint32_t ifr_orig = ifr;
 
   osalDbgAssert(siop->state == SIO_READY, "invalid state");
 
@@ -1105,7 +1106,7 @@ __STATIC_INLINE void sio_lld_serve_interrupt_eusart(SIODriver* siop) {
     /* Updating control registers, some sources could have been disabled.*/
     u->IEN = ien;
 
-    u->IF = ifr;
+    u->IF_CLR = ifr_orig & ~ifr;
 
     /* The callback is invoked.*/
     __sio_callback(siop);
@@ -1128,6 +1129,7 @@ __STATIC_INLINE void sio_lld_serve_interrupt_usart(SIODriver* siop) {
   USART_TypeDef* u = siop->usart;
   uint32_t ien = u->IEN;
   uint32_t ifr = u->IF;
+  const uint32_t ifr_orig = ifr;
 
   osalDbgAssert(siop->state == SIO_READY, "invalid state");
 
@@ -1195,7 +1197,7 @@ __STATIC_INLINE void sio_lld_serve_interrupt_usart(SIODriver* siop) {
     /* Updating control registers, some sources could have been disabled.*/
     u->IEN = ien;
 
-    u->IF = ifr;
+    u->IF_CLR = ifr_orig & ~ifr;
 
     /* The callback is invoked.*/
     __sio_callback(siop);

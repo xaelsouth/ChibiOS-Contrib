@@ -24,6 +24,12 @@
 
 #include "hal.h"
 
+#if (HAL_USE_RTC == TRUE) || defined(__DOXYGEN__)
+
+#if (HAL_USE_RTC == TRUE) && (!defined(HAL_USE_BURAM) || (HAL_USE_BURAM != TRUE))
+#error "EFR32 BURTC RTC driver requires HAL_USE_BURAM=TRUE (overflow counter stored in backup RAM)"
+#endif
+
 #if (HAL_USE_RTC == TRUE) && (HAL_USE_BURAM == TRUE) || defined(__DOXYGEN__)
 
 #include "hal_buram.h"

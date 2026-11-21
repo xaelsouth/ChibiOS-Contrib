@@ -80,6 +80,10 @@
 #error "DAC1 CH2 not present in the selected device"
 #endif
 
+#if (EFR32_DAC_USE_DAC1_CH1 || EFR32_DAC_USE_DAC1_CH2) && !defined(__DOXYGEN__)
+#error "DAC conversion is not implemented for the SILABS EFR32FG23 port (clock management only). dac_lld_start_conversion() will assert."
+#endif
+
 #if !defined(EFR32_DMA_REQUIRED)
 #define EFR32_DMA_REQUIRED
 #endif
