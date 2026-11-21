@@ -34,6 +34,8 @@
 #if HAL_USE_USB
 #include "usb_rndis.h"
 #include "usb_net_lwip.h"
+#include "telnetd.h"
+#include "tftpd_lfs.h"
 #include "lwip/ip4_addr.h"
 #endif
 
@@ -667,6 +669,27 @@ int main(void) {
   shellInit();
   chThdCreateStatic(waShell, sizeof(waShell), NORMALPRIO + 1,
                     shellThread, (void *)&shell_cfg);
+
+#if HAL_USE_USB
+  /* telnetd: same xshell command table over TCP port 23 (via RNDIS). */
+  telnetdStart(commands);
+#endif
+
+#if defined(BOARD_IMX23_EVK)
+  /* Mount NAND LittleFS at startup and expose it over TFTP (UDP 69). */
+  if (nand_ensure() == IMX23_NAND_OK && !nand_lfs.mounted) {
+    int rc = nand_lfs_mount(&nand_lfs, &IMX23NAND1, 0U, false);
+    if (rc == LFS_ERR_OK) {
+      log_line("NAND LittleFS mounted");
+#if HAL_USE_USB
+      tftpd_lfs_start(nand_lfs_handle(&nand_lfs));
+#endif
+    }
+    else {
+      log_line("lfs mount failed: %d (try 'lfs mount format')", rc);
+    }
+  }
+#endif
 
   /* Heartbeat with timestamped log. */
   while (true) {

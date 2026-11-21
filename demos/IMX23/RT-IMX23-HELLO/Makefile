@@ -81,6 +81,9 @@ USE_LWIP := yes
 LWSRC_EXTRAS = $(HTTPFILES) $(TFTPFILES)
 include $(CHIBIOS)/os/various/lwip_bindings/lwip.mk
 
+# Network services: telnetd (xshell over TCP port 23), TFTP on LittleFS.
+include $(CHIBIOS_CONTRIB)/os/various/devices_lib/net_services/net_services.mk
+
 ##############################################################################
 # Project, sources and paths
 ##############################################################################
