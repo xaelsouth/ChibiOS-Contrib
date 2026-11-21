@@ -220,7 +220,8 @@ void mac_lld_start(MACDriver *macp) {
   uint8_t tx[2];
   unsigned i;
 
-  /* Hardware reset pulse on the RESET line, if one is configured. */
+  /* Hardware reset pulse on the RESET line, if one is configured;
+     otherwise fall back to the SPI soft-reset command. */
   if (rst != 0U) {
     palSetLineMode(rst, PAL_MODE_OUTPUT_PUSHPULL);
     palClearLine(rst);                              /* RESET low          */
@@ -228,17 +229,19 @@ void mac_lld_start(MACDriver *macp) {
     palSetLine(rst);                                /* RESET high         */
     chThdSleepMilliseconds(macp->spi_config->reset_tpl_delay_ms);
   }
+  else {
+    /* Soft reset over SPI (no RESET pin wired). */
+    tx[0] = ENC28J60_SOFT_RESET;
+    tx[1] = ENC28J60_SOFT_RESET;
+    enc_xfer(macp, tx, NULL, 2U);
+    chThdSleepMilliseconds(2);
+  }
 
   /* INT pin as input (active low, with pull-up) when provided. */
   if (enc_irq_line != 0U) {
     palSetLineMode(enc_irq_line, PAL_MODE_INPUT_PULLUP);
   }
 
-  /* Soft reset over SPI (works even without a wired RESET pin). */
-  tx[0] = ENC28J60_SOFT_RESET;
-  tx[1] = ENC28J60_SOFT_RESET;
-  enc_xfer(macp, tx, NULL, 2U);
-  chThdSleepMilliseconds(2);
   /* Wait for the clock to become ready (errata: also just wait). */
   for (i = 0U; i < ENC_TIMEOUT_MS; i++) {
     if ((enc_read8(macp, ESTAT) & ESTAT_CLKRDY) != 0U) {
