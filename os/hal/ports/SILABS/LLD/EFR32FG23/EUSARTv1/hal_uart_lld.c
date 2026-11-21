@@ -23,6 +23,7 @@
  */
 
 #include "hal.h"
+#include "efr32_irda.h"
 
 #if (HAL_USE_UART == TRUE) || defined(__DOXYGEN__)
 
@@ -142,6 +143,9 @@ msg_t uart_lld_start(UARTDriver *uartp, const UARTConfig *config) {
       EUSART_TypeDef *u = uartp->usart;
       u->CFG0 = config->cfg0;
       u->FRAMECFG = config->framecfg;
+      /* IrDA (EUSART only — USART has no IrDA hardware). */
+      efr32_irda_apply(u, config->irctrl, config->irhfcg, config->irlfcfg,
+                       uartp->clock);
       u->EN_SET = EUSART_EN_EN;
       u->CLKDIV = clkdiv;
       u->IF_CLR = u->IF;

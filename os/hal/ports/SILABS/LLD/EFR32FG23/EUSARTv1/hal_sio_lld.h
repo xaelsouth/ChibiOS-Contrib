@@ -184,20 +184,17 @@
 /**
  * @brief   Low level fields of the SIO configuration structure.
  */
-/* IrDA control values for sio_lld_config_fields.irctrl. */
-#define EFR32_SIO_IRDA_NONE     0U  /**< IrDA disabled (default). */
-#define EFR32_SIO_IRDA_HF       1U  /**< HF IrDA mode (IRHFCFG) - for HFRCO/HFXO clocked EUSART. */
-#define EFR32_SIO_IRDA_LF       2U  /**< LF IrDA mode (IRLFCFG) - for LFXO/LFRCO clocked EUSART in EM2/EM3. */
-#define EFR32_SIO_IRDA_AUTO     3U  /**< Auto: LF if clock <= 40kHz (LFXO/LFRCO), else HF. */
+#include "efr32_irda.h"
 
-/*
- * IrDA pulse width presets for HF mode (IRHFCFG_IRHFPW field).
- * Standard IrDA uses 3/16 of a bit time.
- */
-#define EFR32_SIO_IRDA_PW_1_16   EUSART_IRHFCFG_IRHFPW_ONE    /**< 1/16 bit time */
-#define EFR32_SIO_IRDA_PW_2_16   EUSART_IRHFCFG_IRHFPW_TWO    /**< 2/16 bit time */
-#define EFR32_SIO_IRDA_PW_3_16   EUSART_IRHFCFG_IRHFPW_THREE  /**< 3/16 bit time (standard IrDA) */
-#define EFR32_SIO_IRDA_PW_4_16   EUSART_IRHFCFG_IRHFPW_FOUR   /**< 4/16 bit time */
+/* Backward-compatible aliases for SIO IrDA control values. */
+#define EFR32_SIO_IRDA_NONE     EFR32_IRDA_NONE
+#define EFR32_IRDA_HF       EFR32_IRDA_HF
+#define EFR32_IRDA_LF       EFR32_IRDA_LF
+#define EFR32_SIO_IRDA_AUTO     EFR32_IRDA_AUTO
+#define EFR32_SIO_IRDA_PW_1_16  EFR32_IRDA_PW_1_16
+#define EFR32_SIO_IRDA_PW_2_16  EFR32_IRDA_PW_2_16
+#define EFR32_IRDA_PW_3_16  EFR32_IRDA_PW_3_16
+#define EFR32_SIO_IRDA_PW_4_16  EFR32_IRDA_PW_4_16
 
 /*
  * M-Bus (Meter-Bus) IrDA preset for 2400 baud, 8E1, LF IrDA mode.
@@ -217,7 +214,7 @@
     .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
     .irhfcg   = 0,                                                              \
     .irlfcfg  = 0,                                                              \
-    .irctrl   = EFR32_SIO_IRDA_LF,                                              \
+    .irctrl   = EFR32_IRDA_LF,                                              \
   }
 
 /*
@@ -232,9 +229,9 @@
     .baud     = 2400U,                                                          \
     .cfg0     = (0U << 0) | (0U << 5),  /* ASYNC, 16x oversampling */           \
     .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
-    .irhfcg   = EFR32_SIO_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                \
+    .irhfcg   = EFR32_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                \
     .irlfcfg  = 0,                                                              \
-    .irctrl   = EFR32_SIO_IRDA_HF,                                              \
+    .irctrl   = EFR32_IRDA_HF,                                              \
   }
 
 /*
@@ -250,9 +247,9 @@
     .baud     = 9600U,                                                          \
     .cfg0     = (0U << 0) | (0U << 5),  /* ASYNC, 16x oversampling */           \
     .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
-    .irhfcg   = EFR32_SIO_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                \
+    .irhfcg   = EFR32_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                \
     .irlfcfg  = 0,                                                              \
-    .irctrl   = EFR32_SIO_IRDA_HF,                                              \
+    .irctrl   = EFR32_IRDA_HF,                                              \
   }
 
 /*
@@ -269,19 +266,26 @@
     .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
     .irhfcg   = 0,                                                              \
     .irlfcfg  = 0,                                                              \
-    .irctrl   = EFR32_SIO_IRDA_LF,                                              \
+    .irctrl   = EFR32_IRDA_LF,                                              \
   }
 
 /* Backward-compatible alias. */
 #define EFR32_SIO_LLD_MBUS_2400_8E1   EFR32_SIO_LLD_IRDA_2400_8E1_LF
 
+/*
+ * Shared IrDA config fields — included in SIOConfig, UARTConfig, and
+ * SerialConfig so all EUSART-based drivers support IrDA (M-Bus).
+ */
+#define efr32_irda_config_fields                                              \
+  uint32_t irhfcg;  /**< IrDA HF config (0=disabled), EUSART_IRHFCFG. */    \
+  uint32_t irlfcfg; /**< IrDA LF config (0=disabled), EUSART_IRLFCFG. */    \
+  uint32_t irctrl;  /**< IrDA control: 0=none, 1=HF, 2=LF, 3=AUTO. */
+
 #define sio_lld_config_fields                                               \
   uint32_t baud;    /**< Desired baud rate. */                              \
   uint32_t cfg0;    /**< EUSART_CFG _or_ USART_CTRL. */                     \
   uint32_t framecfg; /**< EUSART_FRAMECFG _or_ USART_FRAME. */             \
-  uint32_t irhfcg;  /**< IrDA HF config (0=disabled), EUSART_IRHFCFG. */    \
-  uint32_t irlfcfg; /**< IrDA LF config (0=disabled), EUSART_IRLFCFG. */    \
-  uint32_t irctrl;  /**< IrDA control: 0=none, 1=HF, 2=LF (M-Bus 2400). */
+  efr32_irda_config_fields
 
 /**
  * @brief   Determines the state of the RX FIFO.

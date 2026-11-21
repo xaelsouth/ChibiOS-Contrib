@@ -152,6 +152,12 @@ void sd_lld_start(SerialDriver *sdp, const SerialConfig *config) {
                   USART_FRAME_STOPBITS_ONE;
     u->CLKDIV = serial_lld_clkdiv(SERIAL_CLK, 16, config->speed);
 
+    /* IrDA fields present in SerialConfig for API consistency with SIO/UART,
+       but USART0 has no IrDA hardware — ignored here. */
+    (void)config->irhfcg;
+    (void)config->irlfcfg;
+    (void)config->irctrl;
+
     u->EN_SET = USART_EN_EN;
     while ((u->SYNCBUSY & _USART_SYNCBUSY_MASK) != 0U) {}
 

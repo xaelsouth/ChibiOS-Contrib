@@ -23,6 +23,7 @@
  */
 
 #include "hal.h"
+#include "efr32_irda.h"
 
 #if (HAL_USE_SIO == TRUE) || defined(__DOXYGEN__)
 
@@ -173,31 +174,9 @@ __STATIC_INLINE void _sio_lld_start_eusart(SIODriver* siop) {
 
   _sio_lld_reg_masked_write(&(usart->FRAMECFG), _EUSART_FRAMECFG_MASK, config->framecfg);
 
-  /* IrDA configuration.
-     irctrl: 0 = none, 1 = HF, 2 = LF, 3 = auto (pick LF if clock <= 40kHz else HF).
-     LF IrDA is needed when the EUSART runs from LFXO/LFRCO (32768 Hz) in
-     EM2/EM3 — the HF pulse generator is unavailable in those energy modes. */
-  {
-    uint32_t irda_mode = config->irctrl;
-    if (irda_mode == 3U) {
-      /* Auto-select: LF clock sources are <= 40 kHz. */
-      irda_mode = (siop->clock <= 40000U) ? 2U : 1U;
-    }
-    if (irda_mode == 1U) {
-      /* HF IrDA mode: IRHFCFG with configurable pulse width + filter. */
-      usart->IRHFCFG = config->irhfcg | EUSART_IRHFCFG_IRHFEN;
-      usart->IRLFCFG = 0;
-    } else if (irda_mode == 2U) {
-      /* LF IrDA mode: for low baud rates clocked from LFXO/LFRCO.
-         IRLFCFG_IRLFEN enables the LF pulse generator/extender which
-         automatically produces 3/16-bit-time pulses. */
-      usart->IRLFCFG = config->irlfcfg | EUSART_IRLFCFG_IRLFEN;
-      usart->IRHFCFG = 0;
-    } else {
-      usart->IRHFCFG = 0;
-      usart->IRLFCFG = 0;
-    }
-  }
+  /* IrDA configuration (shared helper). */
+  efr32_irda_apply(usart, config->irctrl, config->irhfcg, config->irlfcfg,
+                   siop->clock);
 
   //_sio_lld_reg_masked_write(&(usart->CFG1), _EUSART_CFG1_MASK, EUSART_CFG1_TXFIW_SIXTEENFRAMES);
 
@@ -478,7 +457,7 @@ void sio_lld_set_baud(SIODriver *siop, uint32_t baud, uint32_t irda_mode) {
       if (mode == 3U)  /* AUTO */
         mode = (siop->clock <= 40000U) ? 2U : 1U;
       if (mode == 1U) {
-        usart->IRHFCFG = EFR32_SIO_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT |
+        usart->IRHFCFG = EFR32_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT |
                          EUSART_IRHFCFG_IRHFEN;
         usart->IRLFCFG = 0;
       } else if (mode == 2U) {

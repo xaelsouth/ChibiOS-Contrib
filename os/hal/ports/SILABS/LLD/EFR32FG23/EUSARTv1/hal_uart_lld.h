@@ -78,6 +78,18 @@ typedef struct {
    */
   uint32_t                  framecfg;
   /**
+   * @brief   IrDA HF config (EUSART only, 0=disabled).
+   */
+  uint32_t                  irhfcg;
+  /**
+   * @brief   IrDA LF config (EUSART only, 0=disabled).
+   */
+  uint32_t                  irlfcfg;
+  /**
+   * @brief   IrDA control: 0=none, 1=HF, 2=LF, 3=AUTO.
+   */
+  uint32_t                  irctrl;
+  /**
    * @brief   End of transmission buffer callback.
    */
   uartcb_t                  txend1_cb;
@@ -149,3 +161,51 @@ extern "C" {
 #endif /* HAL_UART_LLD_H */
 
 /** @} */
+
+/*===========================================================================*/
+/* UART IrDA presets (8E1, 3/16 pulse).                                       */
+/*===========================================================================*/
+
+/* 2400 baud, 8E1, LF IrDA (LFXO/LFRCO clocked, EM2/EM3). */
+#define EFR32_UART_LLD_IRDA_2400_8E1_LF                                        \
+  {                                                                            \
+    .speed    = 2400U,                                                         \
+    .cfg0     = (0U << 0) | (4U << 5),   /* ASYNC, OVS disabled */             \
+    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                      \
+    .irhfcg   = 0,                                                             \
+    .irlfcfg  = 0,                                                             \
+    .irctrl   = EFR32_IRDA_LF,                                                 \
+  }
+
+/* 2400 baud, 8E1, HF IrDA (HFRCO/HFXO clocked, EM0/EM1). */
+#define EFR32_UART_LLD_IRDA_2400_8E1_HF                                        \
+  {                                                                            \
+    .speed    = 2400U,                                                         \
+    .cfg0     = (0U << 0) | (0U << 5),   /* ASYNC, 16x OVS */                  \
+    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                      \
+    .irhfcg   = EFR32_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                  \
+    .irlfcfg  = 0,                                                             \
+    .irctrl   = EFR32_IRDA_HF,                                                 \
+  }
+
+/* 9600 baud, 8E1, HF IrDA. */
+#define EFR32_UART_LLD_IRDA_9600_8E1_HF                                        \
+  {                                                                            \
+    .speed    = 9600U,                                                         \
+    .cfg0     = (0U << 0) | (0U << 5),                                         \
+    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                      \
+    .irhfcg   = EFR32_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                  \
+    .irlfcfg  = 0,                                                             \
+    .irctrl   = EFR32_IRDA_HF,                                                 \
+  }
+
+/* 9600 baud, 8E1, LF IrDA (marginal from 32768 Hz). */
+#define EFR32_UART_LLD_IRDA_9600_8E1_LF                                        \
+  {                                                                            \
+    .speed    = 9600U,                                                         \
+    .cfg0     = (0U << 0) | (4U << 5),                                         \
+    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                      \
+    .irhfcg   = 0,                                                             \
+    .irlfcfg  = 0,                                                             \
+    .irctrl   = EFR32_IRDA_LF,                                                 \
+  }

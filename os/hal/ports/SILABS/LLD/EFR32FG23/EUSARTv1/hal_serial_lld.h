@@ -71,6 +71,18 @@ typedef struct hal_serial_config {
    */
   uint32_t                  speed;
   /* End of the mandatory fields.*/
+  /**
+   * @brief   IrDA HF config (EUSART only, 0=disabled).
+   */
+  uint32_t                  irhfcg;
+  /**
+   * @brief   IrDA LF config (EUSART only, 0=disabled).
+   */
+  uint32_t                  irlfcfg;
+  /**
+   * @brief   IrDA control: 0=none, 1=HF, 2=LF, 3=AUTO.
+   */
+  uint32_t                  irctrl;
 } SerialConfig;
 
 /**
