@@ -31,7 +31,7 @@
 #if (OSAL_ST_MODE != OSAL_ST_MODE_NONE) || defined(__DOXYGEN__)
 
 #if OSAL_ST_MODE == OSAL_ST_MODE_PERIODIC
-#error "SYSTICKv2 (SYSRTC) supports only OSAL_ST_MODE_FREERUNNING"
+#error "SYSTICKv2 (SYSRTC0) supports only OSAL_ST_MODE_FREERUNNING"
 #endif
 
 /*===========================================================================*/
@@ -62,43 +62,43 @@ OSAL_IRQ_HANDLER(ST_HANDLER) {
 
 void st_lld_init(void) {
   /* Enable SYSRTC clock. */
-  CMU->CLKEN0_SET = CMU_CLKEN0_SYSRTC;
+  CMU->CLKEN0_SET = CMU_CLKEN0_SYSRTC0;
 
   /* Reset and configure SYSRTC. */
-  SYSRTC->EN_CLR = SYSRTC_EN_EN;
-  while (SYSRTC->EN & SYSRTC_EN_DISABLING) {}
+  SYSRTC0->EN_CLR = SYSRTC_EN_EN;
+  while (SYSRTC0->EN & SYSRTC_EN_DISABLING) {}
 
-  SYSRTC->SWRST = SYSRTC_SWRST_SWRST;
-  while (SYSRTC->SWRST & SYSRTC_SWRST_RESETTING) {}
+  SYSRTC0->SWRST = SYSRTC_SWRST_SWRST;
+  while (SYSRTC0->SWRST & SYSRTC_SWRST_RESETTING) {}
 
-  SYSRTC->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
-  SYSRTC->GRP0_IEN = 0U;
+  SYSRTC0->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
+  SYSRTC0->GRP0_IEN = 0U;
 
   /* Enable overflow interrupt for 32-bit wrap tracking. */
-  SYSRTC->GRP0_IEN_SET = SYSRTC_GRP0_IEN_OVF;
+  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IEN_OVF;
 
   /* Start counter from 0. */
-  SYSRTC->CNT = 0U;
-  while (SYSRTC->SYNCBUSY & SYSRTC_SYNCBUSY_CNT) {}
+  SYSRTC0->CNT = 0U;
+  while (SYSRTC0->SYNCBUSY & SYSRTC_SYNCBUSY_CNT) {}
 
-  SYSRTC->CMD = SYSRTC_CMD_START;
-  SYSRTC->EN_SET = SYSRTC_EN_EN;
+  SYSRTC0->CMD = SYSRTC_CMD_START;
+  SYSRTC0->EN_SET = SYSRTC_EN_EN;
 
   nvicEnableVector(ST_NUMBER, EFR32_SYSRTC_ST_IRQ_PRIORITY);
 }
 
 void st_lld_serve_interrupt(void) {
-  uint32_t isr = SYSRTC->GRP0_IF;
+  uint32_t isr = SYSRTC0->GRP0_IF;
 
   if ((isr & SYSRTC_GRP0_IF_CMP0) != 0U) {
-    SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP0;
+    SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP0;
     osalSysLockFromISR();
     osalOsTimerHandlerI();
     osalSysUnlockFromISR();
   }
 
   if ((isr & SYSRTC_GRP0_IF_OVF) != 0U) {
-    SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
+    SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
     /* Overflow — the 32-bit counter wrapped. OSAL handles this via
        systime_t arithmetic, no action needed here. */
   }

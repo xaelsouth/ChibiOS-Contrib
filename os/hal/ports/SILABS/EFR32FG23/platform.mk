@@ -44,11 +44,10 @@ else
 endif
 
 # Drivers compatible with the platform.
-# NOTE: SYSTICKv1 (Cortex-M SysTick) is NOT included here — FG23 uses SYSTICKv3
-# (LETIMER0-based, supports EM2 low-power). SYSTICKv1 is only for FG14P.
-include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv3/driver.mk
-# Alternative ST drivers (include ONE of these instead of SYSTICKv3):
-# include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv2/driver.mk   # SYSRTC-based, 32-bit, EM4
+# System tick: SYSTICKv2 (SYSRTC-based, 32-bit, EM4-capable) is the default.
+# Alternative: SYSTICKv3 (LETIMER0, 24-bit, EM2) — swap the include below.
+include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv2/driver.mk
+# include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv3/driver.mk   # LETIMER0-based alternative
 # include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/LETIMERv1/driver.mk   # LETIMER0 as GPT (HAL_USE_GPT)
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/GPIOv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/EUSARTv1/driver.mk

@@ -86,25 +86,25 @@ extern "C" {
  */
 static inline systime_t st_lld_get_counter(void) {
   /* SYSRTC CNT counts up. We return it directly as elapsed ticks. */
-  return (systime_t)SYSRTC->CNT;
+  return (systime_t)SYSRTC0->CNT;
 }
 
 /**
  * @brief   Starts the alarm at abstime.
  */
 static inline void st_lld_start_alarm(systime_t abstime) {
-  SYSRTC->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP0;
+  SYSRTC0->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP0;
   #if (OSAL_ST_RESOLUTION == 32)
-  SYSRTC->GRP0_CMP0VALUE = (uint32_t)abstime;
+  SYSRTC0->GRP0_CMP0VALUE = (uint32_t)abstime;
   #else
-  SYSRTC->GRP0_CMP0VALUE = (uint16_t)abstime;
+  SYSRTC0->GRP0_CMP0VALUE = (uint16_t)abstime;
   #endif
-  SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP0;
-  SYSRTC->GRP0_IEN_SET = SYSRTC_GRP0_IEN_CMP0;
+  SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP0;
+  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IEN_CMP0;
 }
 
 static inline void st_lld_stop_alarm(void) {
-  SYSRTC->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP0;
+  SYSRTC0->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP0;
 }
 
 static inline void st_lld_set_alarm(systime_t abstime) {
@@ -112,11 +112,11 @@ static inline void st_lld_set_alarm(systime_t abstime) {
 }
 
 static inline systime_t st_lld_get_alarm(void) {
-  return (systime_t)SYSRTC->GRP0_CMP0VALUE;
+  return (systime_t)SYSRTC0->GRP0_CMP0VALUE;
 }
 
 static inline bool st_lld_is_alarm_active(void) {
-  return (SYSRTC->GRP0_IEN & SYSRTC_GRP0_IEN_CMP0) != 0U;
+  return (SYSRTC0->GRP0_IEN & SYSRTC_GRP0_IEN_CMP0) != 0U;
 }
 
 #define ST_LLD_NUM_ALARMS                     2
@@ -125,19 +125,19 @@ static inline bool st_lld_is_alarm_active(void) {
 
 static inline void st_lld_start_alarm_n(unsigned alarm, systime_t abstime) {
   (void)alarm;
-  SYSRTC->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP1;
+  SYSRTC0->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP1;
   #if (OSAL_ST_RESOLUTION == 32)
-  SYSRTC->GRP0_CMP1VALUE = (uint32_t)abstime;
+  SYSRTC0->GRP0_CMP1VALUE = (uint32_t)abstime;
   #else
-  SYSRTC->GRP0_CMP1VALUE = (uint16_t)abstime;
+  SYSRTC0->GRP0_CMP1VALUE = (uint16_t)abstime;
   #endif
-  SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP1;
-  SYSRTC->GRP0_IEN_SET = SYSRTC_GRP0_IEN_CMP1;
+  SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP1;
+  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IEN_CMP1;
 }
 
 static inline void st_lld_stop_alarm_n(unsigned alarm) {
   (void)alarm;
-  SYSRTC->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP1;
+  SYSRTC0->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP1;
 }
 
 static inline void st_lld_set_alarm_n(unsigned alarm, systime_t abstime) {
@@ -147,12 +147,12 @@ static inline void st_lld_set_alarm_n(unsigned alarm, systime_t abstime) {
 
 static inline systime_t st_lld_get_alarm_n(unsigned alarm) {
   (void)alarm;
-  return (systime_t)SYSRTC->GRP0_CMP1VALUE;
+  return (systime_t)SYSRTC0->GRP0_CMP1VALUE;
 }
 
 static inline bool st_lld_is_alarm_active_n(unsigned alarm) {
   (void)alarm;
-  return (SYSRTC->GRP0_IEN & SYSRTC_GRP0_IEN_CMP1) != 0U;
+  return (SYSRTC0->GRP0_IEN & SYSRTC_GRP0_IEN_CMP1) != 0U;
 }
 
 #endif /* ST_LLD_NUM_ALARMS > 1 */

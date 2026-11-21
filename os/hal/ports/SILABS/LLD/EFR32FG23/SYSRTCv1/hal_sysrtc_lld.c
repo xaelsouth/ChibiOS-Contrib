@@ -100,19 +100,19 @@ void sysrtc_lld_start(SYSRTCDriver *drvp, efr32_sysrtc_cb_t cb, void *arg) {
     }
 
     /* Enable module. */
-    SYSRTC->EN_SET = SYSRTC_EN_EN;
+    SYSRTC0->EN_SET = SYSRTC_EN_EN;
 
     /* Debug run enable (keep counting when halted). */
-    SYSRTC->CFG = SYSRTC_CFG_DEBUGRUN_ENABLE;
+    SYSRTC0->CFG = SYSRTC_CFG_DEBUGRUN_ENABLE;
 
     /* Clear group 0: disable all channels, clear flags. */
-    SYSRTC->GRP0_CTRL = 0U;
-    SYSRTC->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
-    SYSRTC->GRP0_IEN = 0U;
+    SYSRTC0->GRP0_CTRL = 0U;
+    SYSRTC0->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
+    SYSRTC0->GRP0_IEN = 0U;
 
     /* Start counter. */
-    SYSRTC->CMD_SET = SYSRTC_CMD_START;
-    while ((SYSRTC->SYNCBUSY & _SYSRTC_SYNCBUSY_MASK) != 0U) {}
+    SYSRTC0->CMD_SET = SYSRTC_CMD_START;
+    while ((SYSRTC0->SYNCBUSY & _SYSRTC_SYNCBUSY_MASK) != 0U) {}
 
     /* Enable SEQ interrupt. */
     nvicEnableVector(EFR32_SYSRTC_SEQ_NUMBER, EFR32_SYSRTC_IRQ_PRIORITY);
@@ -133,14 +133,14 @@ void sysrtc_lld_start(SYSRTCDriver *drvp, efr32_sysrtc_cb_t cb, void *arg) {
  */
 void sysrtc_lld_stop(SYSRTCDriver *drvp) {
   if (drvp->state == 1U) {
-    SYSRTC->CMD_SET = SYSRTC_CMD_STOP;
-    while ((SYSRTC->SYNCBUSY & _SYSRTC_SYNCBUSY_MASK) != 0U) {}
+    SYSRTC0->CMD_SET = SYSRTC_CMD_STOP;
+    while ((SYSRTC0->SYNCBUSY & _SYSRTC_SYNCBUSY_MASK) != 0U) {}
 
-    SYSRTC->GRP0_IEN = 0U;
-    SYSRTC->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
+    SYSRTC0->GRP0_IEN = 0U;
+    SYSRTC0->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
     nvicDisableVector(EFR32_SYSRTC_SEQ_NUMBER);
 
-    SYSRTC->EN_CLR = SYSRTC_EN_EN;
+    SYSRTC0->EN_CLR = SYSRTC_EN_EN;
     CMU->CLKEN0_CLR = CMU_CLKEN0_SYSRTC0;
 
     drvp->state = 0U;
@@ -155,7 +155,7 @@ void sysrtc_lld_stop(SYSRTCDriver *drvp) {
  * @notapi
  */
 uint32_t sysrtc_lld_get_counter(void) {
-  return SYSRTC->CNT;
+  return SYSRTC0->CNT;
 }
 
 /**
@@ -166,8 +166,8 @@ uint32_t sysrtc_lld_get_counter(void) {
  * @notapi
  */
 void sysrtc_lld_set_counter(uint32_t value) {
-  SYSRTC->CNT = value;
-  while ((SYSRTC->SYNCBUSY & _SYSRTC_SYNCBUSY_CNT_MASK) != 0U) {}
+  SYSRTC0->CNT = value;
+  while ((SYSRTC0->SYNCBUSY & _SYSRTC_SYNCBUSY_CNT_MASK) != 0U) {}
 }
 
 /**
@@ -184,9 +184,9 @@ void sysrtc_lld_set_compare(SYSRTCDriver *drvp, uint32_t channel, uint32_t value
   osalDbgCheck(channel < EFR32_SYSRTC_NUM_COMPARE);
 
   if (channel == 0U) {
-    SYSRTC->GRP0_CMP0VALUE = value;
+    SYSRTC0->GRP0_CMP0VALUE = value;
   } else {
-    SYSRTC->GRP0_CMP1VALUE = value;
+    SYSRTC0->GRP0_CMP1VALUE = value;
   }
 }
 
@@ -203,7 +203,7 @@ uint32_t sysrtc_lld_get_compare(SYSRTCDriver *drvp, uint32_t channel) {
   (void)drvp;
   osalDbgCheck(channel < EFR32_SYSRTC_NUM_COMPARE);
 
-  return (channel == 0U) ? SYSRTC->GRP0_CMP0VALUE : SYSRTC->GRP0_CMP1VALUE;
+  return (channel == 0U) ? SYSRTC0->GRP0_CMP0VALUE : SYSRTC0->GRP0_CMP1VALUE;
 }
 
 /**
@@ -223,9 +223,9 @@ void sysrtc_lld_enable_compare(SYSRTCDriver *drvp, uint32_t channel) {
   uint32_t if_bit   = (channel == 0U) ? SYSRTC_GRP0_IF_CMP0
                                        : SYSRTC_GRP0_IF_CMP1;
 
-  SYSRTC->GRP0_IF_CLR = if_bit;
-  SYSRTC->GRP0_CTRL_SET = ctrl_bit;
-  SYSRTC->GRP0_IEN_SET = if_bit;
+  SYSRTC0->GRP0_IF_CLR = if_bit;
+  SYSRTC0->GRP0_CTRL_SET = ctrl_bit;
+  SYSRTC0->GRP0_IEN_SET = if_bit;
 }
 
 /**
@@ -245,9 +245,9 @@ void sysrtc_lld_disable_compare(SYSRTCDriver *drvp, uint32_t channel) {
   uint32_t if_bit   = (channel == 0U) ? SYSRTC_GRP0_IF_CMP0
                                        : SYSRTC_GRP0_IF_CMP1;
 
-  SYSRTC->GRP0_CTRL_CLR = ctrl_bit;
-  SYSRTC->GRP0_IEN_CLR = if_bit;
-  SYSRTC->GRP0_IF_CLR = if_bit;
+  SYSRTC0->GRP0_CTRL_CLR = ctrl_bit;
+  SYSRTC0->GRP0_IEN_CLR = if_bit;
+  SYSRTC0->GRP0_IF_CLR = if_bit;
 }
 
 /**
@@ -262,9 +262,9 @@ void sysrtc_lld_enable_capture(SYSRTCDriver *drvp, uint32_t channel) {
   (void)drvp;
   osalDbgCheck(channel < EFR32_SYSRTC_NUM_CAPTURE);
 
-  SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_CAP0;
-  SYSRTC->GRP0_CTRL_SET = _SYSRTC_GRP0_CTRL_CAP0EN_MASK;
-  SYSRTC->GRP0_IEN_SET = SYSRTC_GRP0_IF_CAP0;
+  SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CAP0;
+  SYSRTC0->GRP0_CTRL_SET = _SYSRTC_GRP0_CTRL_CAP0EN_MASK;
+  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IF_CAP0;
 }
 
 /**
@@ -279,9 +279,9 @@ void sysrtc_lld_disable_capture(SYSRTCDriver *drvp, uint32_t channel) {
   (void)drvp;
   osalDbgCheck(channel < EFR32_SYSRTC_NUM_CAPTURE);
 
-  SYSRTC->GRP0_CTRL_CLR = _SYSRTC_GRP0_CTRL_CAP0EN_MASK;
-  SYSRTC->GRP0_IEN_CLR = SYSRTC_GRP0_IF_CAP0;
-  SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_CAP0;
+  SYSRTC0->GRP0_CTRL_CLR = _SYSRTC_GRP0_CTRL_CAP0EN_MASK;
+  SYSRTC0->GRP0_IEN_CLR = SYSRTC_GRP0_IF_CAP0;
+  SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CAP0;
 }
 
 /**
@@ -297,7 +297,7 @@ uint32_t sysrtc_lld_get_capture(SYSRTCDriver *drvp, uint32_t channel) {
   (void)drvp;
   osalDbgCheck(channel < EFR32_SYSRTC_NUM_CAPTURE);
 
-  return SYSRTC->GRP0_CAP0VALUE;
+  return SYSRTC0->GRP0_CAP0VALUE;
 }
 
 /**
@@ -309,8 +309,8 @@ uint32_t sysrtc_lld_get_capture(SYSRTCDriver *drvp, uint32_t channel) {
  */
 void sysrtc_lld_enable_ovf_irq(SYSRTCDriver *drvp) {
   (void)drvp;
-  SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
-  SYSRTC->GRP0_IEN_SET = SYSRTC_GRP0_IF_OVF;
+  SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
+  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IF_OVF;
 }
 
 /**
@@ -322,8 +322,8 @@ void sysrtc_lld_enable_ovf_irq(SYSRTCDriver *drvp) {
  */
 void sysrtc_lld_disable_ovf_irq(SYSRTCDriver *drvp) {
   (void)drvp;
-  SYSRTC->GRP0_IEN_CLR = SYSRTC_GRP0_IF_OVF;
-  SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
+  SYSRTC0->GRP0_IEN_CLR = SYSRTC_GRP0_IF_OVF;
+  SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
 }
 
 /**
@@ -336,33 +336,33 @@ void sysrtc_lld_disable_ovf_irq(SYSRTCDriver *drvp) {
  * @notapi
  */
 void sysrtc_lld_serve_interrupt(SYSRTCDriver *drvp) {
-  uint32_t isr = SYSRTC->GRP0_IF;
+  uint32_t isr = SYSRTC0->GRP0_IF;
 
   if ((isr & SYSRTC_GRP0_IF_OVF) != 0U) {
-    SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
+    SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_OVF;
     if (drvp->callback != NULL) {
       drvp->callback(EFR32_SYSRTC_EVT_OVF, 0U, drvp->callback_arg);
     }
   }
 
   if ((isr & SYSRTC_GRP0_IF_CMP0) != 0U) {
-    SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP0;
+    SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP0;
     if (drvp->callback != NULL) {
-      drvp->callback(EFR32_SYSRTC_EVT_CMP0, SYSRTC->GRP0_CMP0VALUE, drvp->callback_arg);
+      drvp->callback(EFR32_SYSRTC_EVT_CMP0, SYSRTC0->GRP0_CMP0VALUE, drvp->callback_arg);
     }
   }
 
   if ((isr & SYSRTC_GRP0_IF_CMP1) != 0U) {
-    SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP1;
+    SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP1;
     if (drvp->callback != NULL) {
-      drvp->callback(EFR32_SYSRTC_EVT_CMP1, SYSRTC->GRP0_CMP1VALUE, drvp->callback_arg);
+      drvp->callback(EFR32_SYSRTC_EVT_CMP1, SYSRTC0->GRP0_CMP1VALUE, drvp->callback_arg);
     }
   }
 
   if ((isr & SYSRTC_GRP0_IF_CAP0) != 0U) {
-    SYSRTC->GRP0_IF_CLR = SYSRTC_GRP0_IF_CAP0;
+    SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CAP0;
     if (drvp->callback != NULL) {
-      drvp->callback(EFR32_SYSRTC_EVT_CAP0, SYSRTC->GRP0_CAP0VALUE, drvp->callback_arg);
+      drvp->callback(EFR32_SYSRTC_EVT_CAP0, SYSRTC0->GRP0_CAP0VALUE, drvp->callback_arg);
     }
   }
 }

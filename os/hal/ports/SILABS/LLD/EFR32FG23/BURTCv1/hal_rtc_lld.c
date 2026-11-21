@@ -640,6 +640,8 @@ void rtc_lld_set_callback(RTCDriver* rtcp, rtccb_t callback) {
   osalSysRestoreStatusX(sts);
 }
 
+#endif /* HAL_USE_RTC && HAL_USE_BURAM */
+
 #endif /* HAL_USE_RTC */
 
 /** @} */
