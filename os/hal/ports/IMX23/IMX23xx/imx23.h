@@ -50,6 +50,48 @@
 #define IMX23_EMI_BASE          0x80020000U
 #define IMX23_APBX_BASE         0x80024000U
 #define IMX23_DCP_BASE          0x80028000U
+
+/* DCP (Data Co-Path crypto engine) registers. */
+#define IMX23_DCP_CTRL          (IMX23_DCP_BASE + 0x000U)
+#define IMX23_DCP_CTRL_SFTRST   (1U << 31)
+#define IMX23_DCP_CTRL_CLKGATE  (1U << 30)
+#define IMX23_DCP_CTRL_GATHER_RESIDUAL_WRITES   (1U << 23)
+#define IMX23_DCP_CTRL_ENABLE_CONTEXT_CACHING   (1U << 22)
+#define IMX23_DCP_STAT          (IMX23_DCP_BASE + 0x010U)
+#define IMX23_DCP_STAT_CLR      (IMX23_DCP_BASE + 0x018U)
+#define IMX23_DCP_CHANNELCTRL   (IMX23_DCP_BASE + 0x020U)
+#define IMX23_DCP_KEY           (IMX23_DCP_BASE + 0x030U)
+#define IMX23_DCP_CAPABILITY1   (IMX23_DCP_BASE + 0x040U)
+#define IMX23_DCP_CONTEXT       (IMX23_DCP_BASE + 0x050U)
+#define IMX23_DCP_CH_CMDPTR(n)  (IMX23_DCP_BASE + 0x100U + (n) * 0x40U)
+#define IMX23_DCP_CH_SEMA(n)    (IMX23_DCP_BASE + 0x110U + (n) * 0x40U)
+#define IMX23_DCP_CH_STAT(n)    (IMX23_DCP_BASE + 0x120U + (n) * 0x40U)
+#define IMX23_DCP_CH_STAT_CLR(n) (IMX23_DCP_BASE + 0x128U + (n) * 0x40U)
+
+/* DCP DMA descriptor control0 bits. */
+#define IMX23_DCP_C0_INTERRUPT          (1U << 0)
+#define IMX23_DCP_C0_DECR_SEMAPHORE     (1U << 1)
+#define IMX23_DCP_C0_ENABLE_CIPHER      (1U << 5)
+#define IMX23_DCP_C0_ENABLE_HASH        (1U << 6)
+#define IMX23_DCP_C0_CIPHER_ENCRYPT     (1U << 8)
+#define IMX23_DCP_C0_CIPHER_INIT        (1U << 9)
+#define IMX23_DCP_C0_OTP_KEY            (1U << 10)
+#define IMX23_DCP_C0_PAYLOAD_KEY        (1U << 11)
+#define IMX23_DCP_C0_HASH_INIT          (1U << 12)
+#define IMX23_DCP_C0_HASH_TERM          (1U << 13)
+
+/* DCP DMA descriptor control1 bits. */
+#define IMX23_DCP_C1_CIPHER_SELECT_AES128   (0U << 0)
+#define IMX23_DCP_C1_CIPHER_MODE_ECB        (0U << 4)
+#define IMX23_DCP_C1_CIPHER_MODE_CBC        (1U << 4)
+#define IMX23_DCP_C1_KEY_SELECT_SHIFT       8
+#define IMX23_DCP_C1_HASH_SELECT_SHA1       (0U << 16)
+#define IMX23_DCP_C1_HASH_SELECT_SHA256     (2U << 16)
+
+/* Key select values for control1 KEY_SELECT (and the OTP_KEY bit). */
+#define IMX23_DCP_KEY_SLOT(n)   (n)         /* slots 0..3, key via DCP_KEY  */
+#define IMX23_DCP_KEY_UNIQUE    0xFEU       /* device-unique key (from OTP) */
+#define IMX23_DCP_KEY_OTP       0xFFU       /* raw OTP key, needs C0_OTP_KEY */
 #define IMX23_PXP_BASE          0x8002A000U
 #define IMX23_OCOTP_BASE        0x8002C000U
 #define IMX23_AXI_BASE          0x8002E000U

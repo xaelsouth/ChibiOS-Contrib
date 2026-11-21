@@ -309,6 +309,8 @@ static void cmd_mac(BaseSequentialStream *chp, int argc, char *argv[]) {
 }
 #endif /* BOARD_ENC28J60 */
 
+#include "imx23_dcp.h"
+
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_gpmi_nand.h"
 #include "nand_lfs.h"
@@ -568,6 +570,121 @@ static void cmd_lfs(BaseSequentialStream *chp, int argc, char *argv[]) {
 }
 #endif /* BOARD_IMX23_EVK */
 
+/*
+ * "dcp ..." - DCP hardware crypto: info | sha256 <text> | aes selftest |
+ *             unique roundtrip | reencrypt (zero-key -> device-unique key).
+ */
+static void cmd_dcp(BaseSequentialStream *chp, int argc, char *argv[]) {
+  static const uint8_t fips_key[16] = {
+    0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,
+    0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f
+  };
+  static const uint8_t fips_pt[16] = {
+    0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,
+    0x88,0x99,0xaa,0xbb,0xcc,0xdd,0xee,0xff
+  };
+  static const uint8_t fips_ct[16] = {
+    0x69,0xc4,0xe0,0xd8,0x6a,0x7b,0x04,0x30,
+    0xd8,0xcd,0xb7,0x80,0x70,0xb4,0xc5,0x5a
+  };
+  /* SHA-256("abc") */
+  static const uint8_t sha_abc[32] = {
+    0xba,0x78,0x16,0xbf,0x8f,0x01,0xcf,0xea,0x41,0x41,0x40,0xde,0x5d,0xae,
+    0x22,0x23,0xb0,0x03,0x61,0xa3,0x96,0x17,0x7a,0x9c,0xb4,0x10,0xff,0x61,
+    0xf2,0x00,0x15,0xad
+  };
+  uint8_t buf[64U];
+  int rc;
+  unsigned i;
+
+  if (imx23_dcp_init(&IMX23DCP1) != IMX23_DCP_OK) {
+    chprintf(chp, "dcp init failed\r\n");
+    return;
+  }
+
+  if (argc < 1U) {
+    chprintf(chp, "usage: dcp info|sha256 <text>|aes|aes-enc <hexkey> <hexdata>|unique|reencrypt\r\n");
+    return;
+  }
+
+  if (strcmp(argv[0], "info") == 0) {
+    chprintf(chp, "DCP capability1 = 0x%08lx (AES128=%lu SHA1=%lu SHA256=%lu)\r\n",
+             (unsigned long)IMX23_REG(IMX23_DCP_CAPABILITY1),
+             (unsigned long)(IMX23_REG(IMX23_DCP_CAPABILITY1) & 1U),
+             (unsigned long)((IMX23_REG(IMX23_DCP_CAPABILITY1) >> 16) & 1U),
+             (unsigned long)((IMX23_REG(IMX23_DCP_CAPABILITY1) >> 16) & 4U));
+    return;
+  }
+
+  if (strcmp(argv[0], "sha256") == 0) {
+    const char *msg = (argc >= 2U) ? argv[1] : "abc";
+    rc = imx23_dcp_sha256(&IMX23DCP1, (const uint8_t *)msg, strlen(msg), buf);
+    chprintf(chp, "sha256(\"%s\") rc=%d: ", msg, rc);
+    for (i = 0U; i < 32U; i++) {
+      chprintf(chp, "%02x", buf[i]);
+    }
+    chprintf(chp, "\r\n%s\r\n",
+             (memcmp(buf, sha_abc, 32U) == 0 && strcmp(msg, "abc") == 0)
+             ? "SELFTEST OK" : "");
+    return;
+  }
+
+  if (strcmp(argv[0], "aes") == 0) {
+    uint8_t ct[16], pt[16];
+    rc = imx23_dcp_aes128(&IMX23DCP1, fips_pt, ct, 16U, fips_key, 0U,
+                          true, false, NULL);
+    if (rc != IMX23_DCP_OK || memcmp(ct, fips_ct, 16U) != 0U) {
+      chprintf(chp, "AES-128-ECB encrypt FAILED rc=%d\r\n", rc);
+      return;
+    }
+    rc = imx23_dcp_aes128(&IMX23DCP1, ct, pt, 16U, fips_key, 0U,
+                          false, false, NULL);
+    chprintf(chp, "AES-128-ECB %s\r\n",
+             (rc == IMX23_DCP_OK && memcmp(pt, fips_pt, 16U) == 0U)
+             ? "SELFTEST OK" : "FAILED");
+    return;
+  }
+
+  if (strcmp(argv[0], "unique") == 0) {
+    uint8_t ct[16], pt[16];
+    memcpy(buf, fips_pt, 16U);
+    rc = imx23_dcp_aes128(&IMX23DCP1, buf, ct, 16U, NULL,
+                          IMX23_DCP_KEY_UNIQUE, true, false, NULL);
+    if (rc != IMX23_DCP_OK) {
+      chprintf(chp, "unique-key encrypt FAILED rc=%d\r\n", rc);
+      return;
+    }
+    rc = imx23_dcp_aes128(&IMX23DCP1, ct, pt, 16U, NULL,
+                          IMX23_DCP_KEY_UNIQUE, false, false, NULL);
+    chprintf(chp, "device-unique-key roundtrip %s\r\n",
+             (rc == IMX23_DCP_OK && memcmp(pt, buf, 16U) == 0U)
+             ? "OK" : "FAILED");
+    return;
+  }
+
+  if (strcmp(argv[0], "reencrypt") == 0) {
+    /* Decrypt with the all-zero distribution key, re-encrypt with the
+       device-unique DCP key (CBC, zero IV). */
+    static const uint8_t zero_key[16] = { 0 };
+    static const uint8_t iv[16] = { 0 };
+    uint8_t ct[16], pt[16];
+    memcpy(ct, fips_pt, 16U);   /* pretend this is the zero-key ciphertext */
+    rc = imx23_dcp_aes128(&IMX23DCP1, ct, pt, 16U, zero_key, 0U,
+                          false, true, iv);
+    if (rc != IMX23_DCP_OK) {
+      chprintf(chp, "zero-key decrypt FAILED rc=%d\r\n", rc);
+      return;
+    }
+    rc = imx23_dcp_aes128(&IMX23DCP1, pt, ct, 16U, NULL,
+                          IMX23_DCP_KEY_UNIQUE, true, true, iv);
+    chprintf(chp, "reencrypt zero->unique %s (rc=%d)\r\n",
+             rc == IMX23_DCP_OK ? "OK" : "FAILED", rc);
+    return;
+  }
+
+  chprintf(chp, "unknown dcp command\r\n");
+}
+
 static const ShellCommand commands[] = {
   { "freq", cmd_freq },
   { "tone", cmd_tone },
@@ -580,6 +697,7 @@ static const ShellCommand commands[] = {
   { "nand", cmd_nand },
   { "lfs", cmd_lfs },
 #endif
+  { "dcp", cmd_dcp },
   { NULL, NULL }
 };
 
