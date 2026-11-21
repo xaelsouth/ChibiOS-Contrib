@@ -15,15 +15,16 @@
 */
 
 /**
- * @file    devices_lib/ethernet/enc28j60_hw.h
- * @brief   ENC28J60 register definitions (from Linux enc28j60_hw.h).
+ * @file    devices_lib/ethernet/enc28j60_lld.h
+ * @brief   ENC28J60 low level driver header: chip register definitions
+ *          (from Linux enc28j60_hw.h) plus the driver private API.
  *
  * @addtogroup ETHERNET
  * @{
  */
 
-#ifndef ENC28J60_HW_H
-#define ENC28J60_HW_H
+#ifndef ENC28J60_LLD_H
+#define ENC28J60_LLD_H
 
 /* SPI opcodes. */
 #define ENC28J60_READ_CTRL_REG    0x00U
@@ -190,12 +191,16 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* Optional INT pin routing for the RX fast path (active low, 0 = none). */
-void enc28j60_set_irq_line(uint32_t line);
+/* Optional INT pin routing for the RX poll fast path (active low).
+   Stored in the driver structure (enc_irq_line field). When the MAC
+   callbacks are enabled the framework irq_line from ETHSPIConfig is
+   used instead. @p macp is a (MACDriver *), forward-declared here to
+   avoid pulling hal_mac.h in. */
+void enc28j60_set_irq_line(struct hal_mac_driver *macp, uint32_t line);
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* ENC28J60_HW_H */
+#endif /* ENC28J60_LLD_H */
 
 /** @} */

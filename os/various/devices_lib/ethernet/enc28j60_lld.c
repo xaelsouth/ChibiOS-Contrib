@@ -25,7 +25,7 @@
 
 #include "hal.h"
 #include "hal_mac.h"
-#include "enc28j60_hw.h"
+#include "enc28j60_lld.h"
 
 #if (HAL_USE_MAC == TRUE) && (PLATFORM_MAC_USE_MAC1 == TRUE) || defined(__DOXYGEN__)
 
@@ -38,11 +38,9 @@
 /*===========================================================================*/
 /* Module local variables.                                                   */
 /*===========================================================================*/
-
-static uint8_t  enc_bank;        /* currently selected register bank      */
-static uint16_t enc_rx_pkt;      /* address of the packet being received  */
-static uint16_t enc_rx_next;     /* next-packet pointer of that packet    */
-static ioline_t enc_irq_line;    /* optional INT pin (active low), 0=none */
+/* All driver state lives in the MACDriver / descriptor structures (see
+   mac_lld_driver_fields and mac_lld_receive_descriptor_fields in
+   hal_mac_lld.h), so no module local variables are needed here.           */
 
 /*===========================================================================*/
 /* Module local functions.                                                   */
@@ -73,19 +71,19 @@ static void enc_set_bank(MACDriver *macp, uint8_t addr) {
   if ((addr >= EIE) && (addr <= ECON1)) {
     return;
   }
-  if ((b & ECON1_BSEL0) != (enc_bank & ECON1_BSEL0)) {
+  if ((b & ECON1_BSEL0) != (macp->enc_bank & ECON1_BSEL0)) {
     cmd[0] = (b & ECON1_BSEL0) ? (ENC28J60_BIT_FIELD_SET | ECON1)
                                : (ENC28J60_BIT_FIELD_CLR | ECON1);
     cmd[1] = ECON1_BSEL0;
     enc_xfer(macp, cmd, NULL, 2U);
   }
-  if ((b & ECON1_BSEL1) != (enc_bank & ECON1_BSEL1)) {
+  if ((b & ECON1_BSEL1) != (macp->enc_bank & ECON1_BSEL1)) {
     cmd[0] = (b & ECON1_BSEL1) ? (ENC28J60_BIT_FIELD_SET | ECON1)
                                : (ENC28J60_BIT_FIELD_CLR | ECON1);
     cmd[1] = ECON1_BSEL1;
     enc_xfer(macp, cmd, NULL, 2U);
   }
-  enc_bank = b;
+  macp->enc_bank = b;
 }
 
 static uint8_t enc_read8(MACDriver *macp, uint8_t addr) {
@@ -209,8 +207,9 @@ static void enc_write_buf(MACDriver *macp, const uint8_t *buf, size_t n) {
 
 void mac_lld_init(void) {
 
-  enc_bank = 0U;
-  enc_irq_line = 0U;
+  /* Nothing to do: enc_bank/enc_irq_line live in the MACDriver structure
+     and are zero-initialized with the application-defined ETHD1 object.
+     mac_lld_start() re-initializes them anyway. */
 }
 
 /**
@@ -221,9 +220,10 @@ void mac_lld_init(void) {
  *
  * @notapi
  */
-void enc28j60_set_irq_line(ioline_t line) {
+void enc28j60_set_irq_line(struct hal_mac_driver *macp, uint32_t line) {
+  MACDriver *mp = (MACDriver *)macp;
 
-  enc_irq_line = line;
+  mp->enc_irq_line = (ioline_t)line;
 }
 
 void mac_lld_start(MACDriver *macp) {
@@ -250,18 +250,18 @@ void mac_lld_start(MACDriver *macp) {
   }
 
   /* INT pin as input (active low, with pull-up) when provided. */
-  if (enc_irq_line != 0U) {
-    palSetLineMode(enc_irq_line, PAL_MODE_INPUT_PULLUP);
+  if (macp->enc_irq_line != 0U) {
+    palSetLineMode(macp->enc_irq_line, PAL_MODE_INPUT_PULLUP);
   }
 
 #if ETH_USE_CALLBACKS == TRUE
   /* IRQ-driven mode: register the framework irq_line on the INT pin
      (falling edge), same as the w5500 driver does. */
   if (macp->spi_config->irq_line != 0U) {
-    enc_irq_line = macp->spi_config->irq_line;
-    palSetLineMode(enc_irq_line, PAL_MODE_INPUT_PULLUP);
-    palSetLineCallbackI(enc_irq_line, enc28j60_isr, macp);
-    palEnableLineEventI(enc_irq_line, PAL_EVENT_MODE_FALLING_EDGE);
+    macp->enc_irq_line = macp->spi_config->irq_line;
+    palSetLineMode(macp->enc_irq_line, PAL_MODE_INPUT_PULLUP);
+    palSetLineCallbackI(macp->enc_irq_line, enc28j60_isr, macp);
+    palEnableLineEventI(macp->enc_irq_line, PAL_EVENT_MODE_FALLING_EDGE);
   }
 #endif
 
@@ -272,7 +272,7 @@ void mac_lld_start(MACDriver *macp) {
     }
     chThdSleepMilliseconds(1);
   }
-  enc_bank = 0U;
+  macp->enc_bank = 0U;
 
   enc_write8(macp, ECON1, 0x00U);
 
@@ -381,7 +381,8 @@ msg_t mac_lld_get_receive_descriptor(MACDriver *macp,
   uint16_t len;
 
   /* INT pin fast path: high = no pending interrupt, skip the SPI read. */
-  if ((enc_irq_line != 0U) && (palReadLine(enc_irq_line) != PAL_LOW)) {
+  if ((macp->enc_irq_line != 0U) &&
+      (palReadLine(macp->enc_irq_line) != PAL_LOW)) {
     return MSG_TIMEOUT;
   }
 
@@ -389,9 +390,9 @@ msg_t mac_lld_get_receive_descriptor(MACDriver *macp,
     return MSG_TIMEOUT;
   }
 
-  enc_rx_pkt = enc_read16(macp, ERXRDPTL);
-  enc_read_buf(macp, enc_rx_pkt, hdr, sizeof(hdr));
-  enc_rx_next = (uint16_t)hdr[0] | ((uint16_t)hdr[1] << 8);
+  rdp->enc_rx_pkt = enc_read16(macp, ERXRDPTL);
+  enc_read_buf(macp, rdp->enc_rx_pkt, hdr, sizeof(hdr));
+  rdp->enc_rx_next = (uint16_t)hdr[0] | ((uint16_t)hdr[1] << 8);
   len         = (uint16_t)hdr[2] | ((uint16_t)hdr[3] << 8);
   /* hdr[4..5] = receive status; len includes the 4-byte CRC. */
   if (len < 4U) {
@@ -407,7 +408,7 @@ msg_t mac_lld_get_receive_descriptor(MACDriver *macp,
 
 void mac_lld_release_receive_descriptor(MACReceiveDescriptor *rdp) {
   MACDriver *macp = rdp->macp;
-  uint16_t next = enc_rx_next;
+  uint16_t next = rdp->enc_rx_next;
 
   /* Wrap the read pointer as the datasheet requires. */
   if (next == ENC28J60_RXSTART) {
@@ -458,7 +459,7 @@ size_t mac_lld_read_receive_descriptor(MACReceiveDescriptor *rdp,
     size = rdp->size;
   }
   /* Packet data starts right after the 6-byte receive header. */
-  enc_read_buf(rdp->macp, enc_rx_pkt + ENC28J60_RSV_SIZE, buf, size);
+  enc_read_buf(rdp->macp, rdp->enc_rx_pkt + ENC28J60_RSV_SIZE, buf, size);
   rdp->offset += size;
   rdp->size   -= size;
 

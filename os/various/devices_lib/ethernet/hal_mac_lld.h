@@ -166,11 +166,25 @@ typedef struct {
 /**
  * @brief   Low level fields of the MAC driver structure.
  */
+/**
+ * @brief   Low level fields of the MAC driver structure.
+ * @note    The chip-specific fields (@p enc_bank, @p enc_irq_line, used by
+ *          the ENC28J60 driver only) are always present so that any mix of
+ *          SPI-attached MAC drivers can be compiled into one build and
+ *          every MACDriver instance carries its own state (no module
+ *          static variables anywhere in the LLDs).
+ *          @p enc_bank caches the currently selected register bank,
+ *          @p enc_irq_line is the optional INT pin for the RX poll fast
+ *          path (0 = none); with ETH_USE_CALLBACKS the framework
+ *          irq_line from ETHSPIConfig is used instead.
+ */
 #define mac_lld_driver_fields                                               \
   const ETHSPIConfig            *spi_config;                                \
   const ETHPhyConfig            *phy_config;                                \
   /* Link status flag.*/                                                    \
-  bool                          link_up;
+  bool                          link_up;                                    \
+  uint8_t                       enc_bank;                                   \
+  ioline_t                      enc_irq_line;
 
 /**
  * @brief   Low level fields of the MAC configuration structure.
@@ -188,8 +202,18 @@ typedef struct {
 /**
  * @brief   Low level fields of the MAC receive descriptor structure.
  */
+/**
+ * @brief   Low level fields of the MAC receive descriptor structure.
+ * @note    @p enc_rx_pkt is the chip buffer address of the packet being
+ *          received, @p enc_rx_next its next-packet pointer (ENC28J60
+ *          only); both are valid between mac_lld_get_receive_descriptor()
+ *          and mac_lld_release_receive_descriptor(). Always present so any
+ *          mix of SPI-attached MAC drivers can be compiled into one build.
+ */
 #define mac_lld_receive_descriptor_fields                                   \
-  MACDriver                     *macp;
+  MACDriver                     *macp;                                      \
+  uint16_t                      enc_rx_pkt;                                 \
+  uint16_t                      enc_rx_next;
 
 /*===========================================================================*/
 /* External declarations.                                                    */
