@@ -24,6 +24,7 @@
 
 #include "hal.h"
 
+#include "lwip/opt.h"
 #include "lwip/sio.h"
 #include "sio_sio.h"
 

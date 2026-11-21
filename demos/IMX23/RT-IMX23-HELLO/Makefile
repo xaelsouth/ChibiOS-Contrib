@@ -76,10 +76,16 @@ include $(CHIBIOS)/os/various/newlib_bindings/newlib.mk
 # USB RNDIS gadget (devices_lib/usb_net) for USB networking.
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/usb_net/usb_net.mk
 
-# lwIP (TCP/IP stack): TFTP server app + altcp_tls via mbedTLS (HTTPS).
+# lwIP (TCP/IP stack): TFTP server app + altcp_tls via mbedTLS (HTTPS),
+# SNTP client (ntp cmd). slipif.c comes with NETIFFILES; PPP (netif/ppp)
+# is appended below without the bundled polarssl copies (their md5.o/
+# sha1.o object names clash with mbedTLS's).
 USE_LWIP := yes
-LWSRC_EXTRAS = $(TFTPFILES) $(MBEDTLS_FILES)
+LWSRC_EXTRAS = $(TFTPFILES) $(MBEDTLS_FILES) $(SNTPFILES)
 include $(CHIBIOS)/os/various/lwip_bindings/lwip.mk
+ALLCSRC += $(filter-out $(CHIBIOS)/ext/lwip/src/netif/ppp/polarssl/% \
+                        $(CHIBIOS)/ext/lwip/src/netif/ppp/mppe.c \
+                        $(CHIBIOS)/ext/lwip/src/netif/ppp/ecp.c,$(PPPFILES))
 
 # mbedTLS (TLS for the HTTPS server). Our mbedtls/*.h shims (in the project
 # dir, on the include path via -I.) cover the headers lwIP 2.1.2 expects

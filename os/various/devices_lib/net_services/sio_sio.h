@@ -40,8 +40,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-  void      sio_sio_register(u8_t devnum, SIODriver *siop);
-  SIODriver *sio_sio_lookup(u8_t devnum);
+  void      sio_sio_register(uint8_t devnum, SIODriver *siop);
+  SIODriver *sio_sio_lookup(uint8_t devnum);
 #ifdef __cplusplus
 }
 #endif

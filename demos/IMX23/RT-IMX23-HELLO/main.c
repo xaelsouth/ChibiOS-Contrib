@@ -37,6 +37,8 @@
 #include "telnetd.h"
 #include "tftpd_lfs.h"
 #include "httpsd.h"
+#include "net_shell.h"
+#include "sio_sio.h"
 #include "lwip/ip4_addr.h"
 #endif
 
@@ -698,6 +700,15 @@ static const ShellCommand commands[] = {
   { "lfs", cmd_lfs },
 #endif
   { "dcp", cmd_dcp },
+#if HAL_USE_USB
+  /* lwIP network commands (also reachable over telnetd). */
+  { "ifconfig", net_shell_cmd_ifconfig },
+  { "dhcpc",    net_shell_cmd_dhcpc },
+  { "ping",     net_shell_cmd_ping },
+  { "arp",      net_shell_cmd_arp },
+  { "ntp",      net_shell_cmd_ntp },
+  { "slip",     net_shell_cmd_slip },
+#endif
   { NULL, NULL }
 };
 
@@ -727,6 +738,14 @@ static void usb_net_start(void) {
   usbObjectInit(&USBD1);
   usb_net_lwip_init(&usbnet1, &rndis1, &USBD1, usb_mac, &ip, &nm, &gw);
   log_line("USB RNDIS gadget started, lwIP netif 192.168.7.2");
+
+  /* Register the application UARTs as lwIP sio devices (for "slip"). */
+#if defined(IMX23_SIO_USE_AUART0) && (IMX23_SIO_USE_AUART0 == TRUE)
+  sio_sio_register(1U, &SIOD2);
+#endif
+#if defined(IMX23_SIO_USE_AUART1) && (IMX23_SIO_USE_AUART1 == TRUE)
+  sio_sio_register(2U, &SIOD3);
+#endif
 }
 #endif
 

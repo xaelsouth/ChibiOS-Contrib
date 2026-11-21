@@ -23,6 +23,7 @@
  */
 
 #include "hal.h"
+#include "chprintf.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -36,6 +37,8 @@
 #include "lwip/netif.h"
 #include "lwip/netifapi.h"
 #include "lwip/etharp.h"
+#include "lwip/dhcp.h"
+#include "lwip/ip4.h"
 #include "lwip/raw.h"
 #include "lwip/pbuf.h"
 #include "lwip/inet_chksum.h"
@@ -68,7 +71,6 @@ static bool              sntp_started;
 /* Single SLIP interface instance (shell glue, started on demand). */
 static struct netif      slip_netif;
 static bool              slip_active;
-static u8_t              slip_devnum;
 
 /*===========================================================================*/
 /* Module local functions.                                                   */
@@ -103,55 +105,69 @@ static void print_netif(BaseSequentialStream *chp, struct netif *n) {
   sys_prot_t lev;
   char flags[64];
   unsigned f = 0U;
+  char name0, name1;
+  int num;
+  unsigned mtu;
+  u8_t hwaddr[6];
+  u8_t hwaddr_len;
+  ip4_addr_t ip, nm, gw;
+#if LWIP_NETIF_HOSTNAME
+  const char *hostname;
+#endif
+  bool dhcp_active;
 
-  SYS_ARCH_PROTECT(lev);
-
+  /* Snapshot under the lwIP protect (chprintf may block, so print after). */
   flags[0] = '\0';
-  if (n->flags & NETIF_FLAG_UP) {
-    strcat(flags, "UP "); f = 1U;
+  SYS_ARCH_PROTECT(lev);
+  name0 = (char)n->name[0];
+  name1 = (char)n->name[1];
+  num   = (int)n->num;
+  mtu   = (unsigned)n->mtu;
+  hwaddr_len = n->hwaddr_len;
+  if (hwaddr_len != 0U) {
+    memcpy(hwaddr, n->hwaddr, 6U);
   }
-  if (n->flags & NETIF_FLAG_LINK_UP) {
-    strcat(flags, "LINK "); f = 1U;
-  }
-  if (n->flags & NETIF_FLAG_BROADCAST) {
-    strcat(flags, "BROADCAST "); f = 1U;
-  }
-  if (n->flags & NETIF_FLAG_ETHARP) {
-    strcat(flags, "ETHARP "); f = 1U;
-  }
-  if (n->flags & NETIF_FLAG_ETHERNET) {
-    strcat(flags, "ETHERNET "); f = 1U;
-  }
-  if (n->dhcp != NULL) {
-    strcat(flags, "DHCP "); f = 1U;
-  }
+  ip = n->ip_addr;
+  nm = n->netmask;
+  gw = n->gw;
+#if LWIP_NETIF_HOSTNAME
+  hostname = n->hostname;
+#endif
+#if LWIP_DHCP
+  dhcp_active = (netif_dhcp_data(n) != NULL);
+#else
+  dhcp_active = false;
+#endif
+  if (n->flags & NETIF_FLAG_UP)          { strcat(flags, "UP "); f = 1U; }
+  if (n->flags & NETIF_FLAG_LINK_UP)     { strcat(flags, "LINK "); f = 1U; }
+  if (n->flags & NETIF_FLAG_BROADCAST)   { strcat(flags, "BROADCAST "); f = 1U; }
+  if (n->flags & NETIF_FLAG_ETHARP)      { strcat(flags, "ETHARP "); f = 1U; }
+  if (n->flags & NETIF_FLAG_ETHERNET)    { strcat(flags, "ETHERNET "); f = 1U; }
+  if (dhcp_active)                       { strcat(flags, "DHCP "); f = 1U; }
+  SYS_ARCH_UNPROTECT(lev);
+
   if (f == 0U) {
     strcat(flags, "-");
   }
-
   chprintf(chp, "%c%c%d: flags=[%s] mtu=%u\r\n",
-           n->name[0], n->name[1], (int)n->num, flags, (unsigned)n->mtu);
-  if (n->hwaddr_len != 0U) {
+           name0, name1, num, flags, mtu);
+  if (hwaddr_len != 0U) {
     chprintf(chp, "  hwaddr %02x:%02x:%02x:%02x:%02x:%02x\r\n",
-             n->hwaddr[0], n->hwaddr[1], n->hwaddr[2],
-             n->hwaddr[3], n->hwaddr[4], n->hwaddr[5]);
+             hwaddr[0], hwaddr[1], hwaddr[2],
+             hwaddr[3], hwaddr[4], hwaddr[5]);
   }
   chprintf(chp, "  inet %s  netmask %s  gw %s\r\n",
-           ip4addr_ntoa(&n->ip_addr),
-           ip4addr_ntoa(&n->netmask),
-           ip4addr_ntoa(&n->gw));
+           ip4addr_ntoa(&ip), ip4addr_ntoa(&nm), ip4addr_ntoa(&gw));
 #if LWIP_NETIF_HOSTNAME
-  if (n->hostname != NULL) {
-    chprintf(chp, "  hostname %s\r\n", n->hostname);
+  if (hostname != NULL) {
+    chprintf(chp, "  hostname %s\r\n", hostname);
   }
 #endif
 #if LWIP_DHCP
-  if (n->dhcp != NULL) {
+  if (dhcp_active) {
     chprintf(chp, "  dhcp client running\r\n");
   }
 #endif
-
-  SYS_ARCH_UNPROTECT(lev);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -253,12 +269,21 @@ void net_shell_cmd_dhcpc(BaseSequentialStream *chp, int argc, char *argv[]) {
   }
   else if (strcmp(argv[1], "status") == 0) {
     sys_prot_t lev;
+    bool active;
+    ip4_addr_t ip;
+    char name0, name1;
+    int num;
+
     SYS_ARCH_PROTECT(lev);
-    chprintf(chp, "%c%c%d: dhcp %s, inet %s\r\n",
-             n->name[0], n->name[1], (int)n->num,
-             (n->dhcp != NULL) ? "active" : "inactive",
-             ip4addr_ntoa(&n->ip_addr));
+    active = (netif_dhcp_data(n) != NULL);
+    ip = n->ip_addr;
+    name0 = (char)n->name[0];
+    name1 = (char)n->name[1];
+    num   = (int)n->num;
     SYS_ARCH_UNPROTECT(lev);
+    chprintf(chp, "%c%c%d: dhcp %s, inet %s\r\n",
+             name0, name1, num, active ? "active" : "inactive",
+             ip4addr_ntoa(&ip));
   }
 #else
   chprintf(chp, "LWIP_DHCP is disabled\r\n");
@@ -347,7 +372,7 @@ void net_shell_cmd_ping(BaseSequentialStream *chp, int argc, char *argv[]) {
     size = 1024U;
   }
 
-  chSemObjectInit(&ctx.sem);
+  chSemObjectInit(&ctx.sem, 0);
   ctx.id      = htons((u16_t)(sys_now() & 0xFFFFU));
   ctx.replied = false;
 
@@ -452,16 +477,28 @@ void net_shell_cmd_arp(BaseSequentialStream *chp, int argc, char *argv[]) {
       struct netif *n;
       struct eth_addr *eth;
       int ok;
+      /* Local copies: the table may change once unprotected. */
+      ip4_addr_t ip_c;
+      struct eth_addr eth_c;
+      char name0, name1;
+      int num;
 
       SYS_ARCH_PROTECT(lev);
       ok = etharp_get_entry(i, &ip, &n, &eth);
+      if (ok != 0) {
+        ip_c  = *ip;
+        eth_c = *eth;
+        name0 = (char)n->name[0];
+        name1 = (char)n->name[1];
+        num   = (int)n->num;
+      }
       SYS_ARCH_UNPROTECT(lev);
       if (ok != 0) {
         chprintf(chp, "  %s at %02x:%02x:%02x:%02x:%02x:%02x on %c%c%d\r\n",
-                 ip4addr_ntoa(ip),
-                 eth->addr[0], eth->addr[1], eth->addr[2],
-                 eth->addr[3], eth->addr[4], eth->addr[5],
-                 n->name[0], n->name[1], (int)n->num);
+                 ip4addr_ntoa(&ip_c),
+                 eth_c.addr[0], eth_c.addr[1], eth_c.addr[2],
+                 eth_c.addr[3], eth_c.addr[4], eth_c.addr[5],
+                 name0, name1, num);
         shown++;
       }
     }
@@ -484,16 +521,25 @@ void net_shell_cmd_arp(BaseSequentialStream *chp, int argc, char *argv[]) {
       struct eth_addr *eth;
       const ip4_addr_t *eip;
       ssize_t idx;
+      struct eth_addr eth_c;
+      char name0, name1;
+      int num;
 
       SYS_ARCH_PROTECT(lev);
       idx = etharp_find_addr(n, &ip, &eth, &eip);
+      if (idx >= 0) {
+        eth_c = *eth;
+        name0 = (char)n->name[0];
+        name1 = (char)n->name[1];
+        num   = (int)n->num;
+      }
       SYS_ARCH_UNPROTECT(lev);
       if (idx >= 0) {
         chprintf(chp, "%s at %02x:%02x:%02x:%02x:%02x:%02x on %c%c%d\r\n",
                  ip4addr_ntoa(&ip),
-                 eth->addr[0], eth->addr[1], eth->addr[2],
-                 eth->addr[3], eth->addr[4], eth->addr[5],
-                 n->name[0], n->name[1], (int)n->num);
+                 eth_c.addr[0], eth_c.addr[1], eth_c.addr[2],
+                 eth_c.addr[3], eth_c.addr[4], eth_c.addr[5],
+                 name0, name1, num);
         return;
       }
     }
@@ -519,16 +565,24 @@ void net_shell_cmd_ntp(BaseSequentialStream *chp, int argc, char *argv[]) {
   }
 
   if (strcmp(argv[0], "stop") == 0) {
+    sys_prot_t lev;
+    SYS_ARCH_PROTECT(lev);
     sntp_stop();
+    SYS_ARCH_UNPROTECT(lev);
     sntp_started = false;
     chprintf(chp, "sntp stopped\r\n");
     return;
   }
 
   if (strcmp(argv[0], "status") == 0) {
+    sys_prot_t lev;
+    u8_t en, reach;
+    SYS_ARCH_PROTECT(lev);
+    en    = sntp_enabled();
+    reach = sntp_getreachability(0U);
+    SYS_ARCH_UNPROTECT(lev);
     chprintf(chp, "sntp %s, reachability 0x%02x\r\n",
-             sntp_enabled() ? "running" : "stopped",
-             sntp_getreachability(0U));
+             en ? "running" : "stopped", (unsigned)reach);
     if (ntp_got) {
       time_t t = (time_t)ntp_last_sec;
       struct tm *tm = gmtime(&t);
@@ -548,34 +602,40 @@ void net_shell_cmd_ntp(BaseSequentialStream *chp, int argc, char *argv[]) {
   }
 
   /* ntp <server>: configure server 0 and (re)start polling. */
-  sntp_setoperatingmode(SNTP_OPMODE_POLL);
-  if (!sntp_started) {
-    sntp_init();
-    sntp_started = true;
-  }
-#if SNTP_SERVER_DNS
   {
-    ip4_addr_t a4;
-    if (ip4addr_aton(argv[0], &a4) != 0) {
+    sys_prot_t lev;
+    SYS_ARCH_PROTECT(lev);
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    if (!sntp_started) {
+      sntp_init();
+      sntp_started = true;
+    }
+#if SNTP_SERVER_DNS
+    {
+      ip4_addr_t a4;
+      if (ip4addr_aton(argv[0], &a4) != 0) {
+        ip_addr_t a;
+        ip_addr_set_ip4_u32(&a, ip4_addr_get_u32(&a4));
+        sntp_setserver(0U, &a);
+      }
+      else {
+        sntp_setservername(0U, argv[0]);
+      }
+    }
+#else
+    {
       ip_addr_t a;
-      ip_addr_set_ip4_u32(&a, ip4_addr_get_u32(&a4));
+      if (ipaddr_aton(argv[0], &a) == 0) {
+        SYS_ARCH_UNPROTECT(lev);
+        chprintf(chp, "ntp: '%s' is not an IP and SNTP_SERVER_DNS is off\r\n",
+                 argv[0]);
+        return;
+      }
       sntp_setserver(0U, &a);
     }
-    else {
-      sntp_setservername(0U, argv[0]);
-    }
-  }
-#else
-  {
-    ip_addr_t a;
-    if (ipaddr_aton(argv[0], &a) == 0) {
-      chprintf(chp, "ntp: '%s' is not an IP and SNTP_SERVER_DNS is off\r\n",
-               argv[0]);
-      return;
-    }
-    sntp_setserver(0U, &a);
-  }
 #endif
+    SYS_ARCH_UNPROTECT(lev);
+  }
   chprintf(chp, "ntp server 0 set to '%s', polling...\r\n", argv[0]);
 }
 
@@ -587,10 +647,8 @@ void net_shell_cmd_slip(BaseSequentialStream *chp, int argc, char *argv[]) {
 
   if ((argc >= 1) && (strcmp(argv[0], "stop") == 0)) {
     if (slip_active) {
-      sys_prot_t lev;
-      SYS_ARCH_PROTECT(lev);
-      netif_remove(&slip_netif);
-      SYS_ARCH_UNPROTECT(lev);
+      /* netifapi posts to the tcpip thread: must NOT hold the protect. */
+      netifapi_netif_remove(&slip_netif);
       slip_active = false;
       chprintf(chp, "slip interface removed\r\n");
     }
@@ -615,7 +673,6 @@ void net_shell_cmd_slip(BaseSequentialStream *chp, int argc, char *argv[]) {
     ip4_addr_t ip, nm, gw;
     SIODriver *siop;
     SIOConfig cfg;
-    sys_prot_t lev;
     err_t err;
 
     siop = sio_sio_lookup(devnum);
@@ -647,16 +704,14 @@ void net_shell_cmd_slip(BaseSequentialStream *chp, int argc, char *argv[]) {
     sioStart(siop, &cfg);
 
     memset(&slip_netif, 0, sizeof(slip_netif));
-    slip_devnum = devnum;
-    SYS_ARCH_PROTECT(lev);
-    /* slipif_init() reads the sio device number from netif->state. */
+    /* slipif_init() reads the sio device number from netif->state.
+       netifapi posts to the tcpip thread and waits: no protect held. */
     err = netifapi_netif_add(&slip_netif, &ip, &nm, &gw,
                              (void *)(uintptr_t)devnum,
                              slipif_init, ip4_input);
     if (err == ERR_OK) {
-      netif_set_up(&slip_netif);
+      netifapi_netif_set_up(&slip_netif);
     }
-    SYS_ARCH_UNPROTECT(lev);
 
     if (err != ERR_OK) {
       chprintf(chp, "slip: netif add failed err %d\r\n", (int)err);
