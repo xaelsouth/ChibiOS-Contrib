@@ -53,6 +53,15 @@
    samples on the falling edge. */
 #define IMX23_LCD_FLAGS         IMX23_LCDIF_FLAG_DE_HIGH
 
+/* ENC28J60 SPI ethernet on SSP0 (shares pads with SSP1, bank2 pins 0,2-6).
+   CS is a GPIO (adjust to your wiring), IRQ = GPIO bank2 pin3 (ETHNINT). */
+#define BOARD_ENC28J60              1
+#define BOARD_ENC28J60_CS_BANK      1U
+#define BOARD_ENC28J60_CS_PIN       20U
+#define BOARD_ENC28J60_IRQ_BANK     2U
+#define BOARD_ENC28J60_IRQ_PIN      3U
+#define BOARD_ENC28J60_SPI_CLK_HZ   6000000U
+
 /*
  * The rest of the file is plain C and is hidden when board.h is preprocessed
  * into the linker script (the demo Makefile defines __IMX23_LDSCRIPT__).

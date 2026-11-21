@@ -444,6 +444,14 @@
 #define EFR32_VDAC_HANDLER              Vector11C
 #define EFR32_VDAC_NUMBER               VDAC_IRQn
 
+/* VectorEC = Vector(40 + 4*WDOG0_IRQn) */
+#define EFR32_WDOG1_HANDLER             VectorEC
+#define EFR32_WDOG1_NUMBER              WDOG0_IRQn
+
+/* VectorF0 = Vector(40 + 4*WDOG1_IRQn) */
+#define EFR32_WDOG2_HANDLER             VectorF0
+#define EFR32_WDOG2_NUMBER              WDOG1_IRQn
+
 /* Vector88 = Vector(40 + 4*BURTC_IRQn) */
 #define EFR32_BURTC_HANDLER             Vector88
 #define EFR32_BURTC_NUMBER              BURTC_IRQn

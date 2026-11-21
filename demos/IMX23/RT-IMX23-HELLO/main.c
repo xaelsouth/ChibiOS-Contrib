@@ -26,6 +26,10 @@
 #include "imx23_clock.h"
 #include "imx23_audioout.h"
 
+#if defined(BOARD_ENC28J60)
+#include "hal_mac.h"
+#endif
+
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_lcdif.h"
 #include "imx23_pxp.h"
@@ -248,9 +252,56 @@ static void cmd_tone(BaseSequentialStream *chp, int argc, char *argv[]) {
   log_line("tone %u Hz %u ms %s", hz, ms, (msg == MSG_OK) ? "done" : "FAILED");
 }
 
+#if defined(BOARD_ENC28J60)
+/*
+ * ENC28J60 on SSP0 (SPID1), CS = GPIO pad from board.h.
+ */
+static const SPIConfig enc_spi_cfg = {
+  .ssport = GPIOB,                 /* BOARD_ENC28J60_CS_BANK -> GPIOB (bank1) */
+  .sspad  = BOARD_ENC28J60_CS_PIN,
+  .clock  = BOARD_ENC28J60_SPI_CLK_HZ,
+  .mode   = 0U,                    /* SPI mode 0 */
+};
+
+static const ETHSPIConfig eth_spi_cfg = {
+  .driver             = &SPID1,    /* SSP0 */
+  .config             = &enc_spi_cfg,
+  .reset_trc_delay_ms = 1U,
+  .reset_tpl_delay_ms = 10U,
+  .reset_line         = PAL_LINE(GPIOB, BOARD_ENC28J60_CS_PIN),
+};
+
+static const ETHPhyConfig eth_phy_cfg = {
+  .conf_by = ETH_PHY_CONF_BY_SW,
+  .mode    = ETH_PHY_MODE_AUTO,
+  .speed   = ETH_PHY_SPEED_100,
+  .duplex  = ETH_PHY_DUPLEX_FULL,
+};
+
+MACDriver ETHD1 = {
+  .spi_config = &eth_spi_cfg,
+  .phy_config = &eth_phy_cfg,
+};
+
+static const uint8_t mac_addr[6] = { 0x02U, 0x00U, 0x00U, 0x00U, 0x00U, 0x01U };
+
+static const MACConfig mac_cfg = {
+  .mac_address = mac_addr,
+};
+
+static void cmd_mac(BaseSequentialStream *chp, int argc, char *argv[]) {
+  (void)argc; (void)argv;
+  chprintf(chp, "ENC28J60 link: %s\r\n",
+           mac_lld_poll_link_status(&ETHD1) ? "UP" : "DOWN");
+}
+#endif /* BOARD_ENC28J60 */
+
 static const ShellCommand commands[] = {
   { "freq", cmd_freq },
   { "tone", cmd_tone },
+#if defined(BOARD_ENC28J60)
+  { "mac", cmd_mac },
+#endif
 #if defined(BOARD_IMX23_EVK)
   { "backlight", cmd_backlight },
   { "pxp", cmd_pxp },
@@ -294,6 +345,26 @@ int main(void) {
                    BOARD_BACKLIGHT_PWM_PERIOD / 2U);   /* 50% */
   log_line("LCD up: %ux%u @ %lu Hz pixclk", IMX23_LCD_WIDTH, IMX23_LCD_HEIGHT,
            (unsigned long)IMX23_LCD_PIXCLK_HZ);
+#endif
+
+#if defined(BOARD_ENC28J60)
+  /* ENC28J60 on SSP0: pinmux SSP0 pads (bank2 pins 0,2-6 func0) + CS gpio. */
+  {
+    static const struct { uint32_t bank, pin, func; } ssp0_pins[] = {
+      { 2U, 0U, 0U }, { 2U, 2U, 0U }, { 2U, 3U, 0U }, { 2U, 4U, 0U },
+      { 2U, 5U, 0U }, { 2U, 6U, 0U },
+    };
+    unsigned i;
+    for (i = 0U; i < sizeof(ssp0_pins) / sizeof(ssp0_pins[0]); i++) {
+      imx23_iomux_set_pad(ssp0_pins[i].bank, ssp0_pins[i].pin,
+                          ssp0_pins[i].func, 0x4U);
+    }
+    palSetPadMode(GPIOB, BOARD_ENC28J60_CS_PIN, PAL_MODE_OUTPUT_PUSHPULL);
+    palSetPad(GPIOB, BOARD_ENC28J60_CS_PIN);   /* CS idle high */
+  }
+  spiStart(&SPID1, &enc_spi_cfg);
+  macStart(&ETHD1, &mac_cfg);
+  log_line("ENC28J60 started on SSP0");
 #endif
 
   /* xshell on the debug serial port. */

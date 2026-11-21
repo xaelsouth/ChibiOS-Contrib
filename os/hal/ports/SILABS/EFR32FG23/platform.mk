@@ -41,6 +41,7 @@ include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/TIMERv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/I2Cv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SPIv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSRTCv1/driver.mk
+include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/WDOGv1/driver.mk
 
 # Shared variables
 ALLCSRC += $(PLATFORMSRC_CONTRIB)

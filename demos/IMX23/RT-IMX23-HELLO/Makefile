@@ -38,6 +38,10 @@ include $(CHIBIOS)/tools/mk/autobuild.mk
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 include $(CHIBIOS)/os/various/shell/shell.mk
 
+# ENC28J60 SPI Ethernet MAC LLD (devices_lib).
+ALLCSRC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet/enc28j60_lld.c
+ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet
+
 ##############################################################################
 # Project, sources and paths
 ##############################################################################

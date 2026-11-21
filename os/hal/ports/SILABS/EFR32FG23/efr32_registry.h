@@ -101,6 +101,12 @@
 #define EFR32_ADVANCED_DMA                  TRUE
 #define EFR32_DMA_SUPPORTS_DMAMUX           TRUE
 
+/*
+ * WDG driver system settings.
+ */
+#define EFR32_HAS_WDOG0                     TRUE
+#define EFR32_HAS_WDOG1                     TRUE
+
 /*===========================================================================*/
 /* Common.                                                                   */
 /*===========================================================================*/

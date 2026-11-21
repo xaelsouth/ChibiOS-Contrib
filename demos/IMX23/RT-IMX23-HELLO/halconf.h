@@ -121,7 +121,7 @@
  * @brief   Enables the MAC subsystem.
  */
 #if !defined(HAL_USE_MAC) || defined(__DOXYGEN__)
-#define HAL_USE_MAC                         FALSE
+#define HAL_USE_MAC                         TRUE
 #endif
 
 /**
@@ -349,7 +349,7 @@
  * @brief   Enables an event sources for incoming packets.
  */
 #if !defined(MAC_USE_EVENTS) || defined(__DOXYGEN__)
-#define MAC_USE_EVENTS                      TRUE
+#define MAC_USE_EVENTS                      FALSE
 #endif
 
 /*===========================================================================*/
