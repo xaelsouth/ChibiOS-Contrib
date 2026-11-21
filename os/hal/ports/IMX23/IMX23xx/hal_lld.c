@@ -28,6 +28,7 @@
 
 #include "hal.h"
 #include "board.h"
+#include "imx23_dma.h"
 
 /*===========================================================================*/
 /* Module local definitions.                                                 */
@@ -95,6 +96,9 @@ void hal_lld_init(void) {
 
   /* Interrupt collector: vector table + IRQ routing to the CPU. */
   icoll_init();
+
+  /* APBH/APBX DMA engines (LCDIF, PXP, audio, ...). */
+  imx23_dma_init();
 }
 
 /** @} */

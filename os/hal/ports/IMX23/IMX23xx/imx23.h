@@ -282,6 +282,119 @@ typedef struct {
 #define IMX23_REG_CLR(addr, v)  IMX23_REG((addr) + 8U)  = (uint32_t)(v)
 #define IMX23_REG_TOG(addr, v)  IMX23_REG((addr) + 12U) = (uint32_t)(v)
 
-#endif /* IMX23_H */
-
 /** @} */
+
+/*===========================================================================*/
+/* SSP (Sync Serial Port, SPI mode) registers - i.MX23 "old" layout.         */
+/*===========================================================================*/
+
+typedef struct {
+  volatile uint32_t CTRL0;        /* 0x00 */
+  volatile uint32_t CMD0;         /* 0x10 */
+  volatile uint32_t CMD1;         /* 0x20 */
+  volatile uint32_t COMPREF;      /* 0x30 */
+  volatile uint32_t COMPMASK;     /* 0x40 */
+  volatile uint32_t TIMING;       /* 0x50 */
+  volatile uint32_t CTRL1;        /* 0x60 */
+  volatile uint32_t DATA;         /* 0x70 */
+  volatile uint32_t SDRESP0;      /* 0x80 */
+  volatile uint32_t SDRESP1;      /* 0x90 */
+  volatile uint32_t SDRESP2;      /* 0xA0 */
+  volatile uint32_t SDRESP3;      /* 0xB0 */
+  volatile uint32_t STATUS;       /* 0xC0 */
+} imx23_ssp_t;
+
+#define IMX23_SSP0              ((imx23_ssp_t *)IMX23_SSP0_BASE)
+#define IMX23_SSP1              ((imx23_ssp_t *)IMX23_SSP1_BASE)
+
+#define IMX23_SSP_CTRL0_SFTRST          (1U << 31)
+#define IMX23_SSP_CTRL0_CLKGATE         (1U << 30)
+#define IMX23_SSP_CTRL0_RUN             (1U << 29)
+#define IMX23_SSP_CTRL0_IGNORE_CRC      (1U << 26)
+#define IMX23_SSP_CTRL0_READ            (1U << 25)
+#define IMX23_SSP_CTRL0_DATA_XFER       (1U << 24)
+#define IMX23_SSP_CTRL0_BUS_WIDTH_8BIT  (2U << 22)
+#define IMX23_SSP_CTRL0_ENABLE          (1U << 16)
+#define IMX23_SSP_CTRL0_XFER_COUNT_MASK 0xFFFFU
+
+#define IMX23_SSP_CTRL1_DMA_ENABLE      (1U << 13)
+#define IMX23_SSP_CTRL1_PHASE           (1U << 10)  /* CPHA */
+#define IMX23_SSP_CTRL1_POLARITY        (1U << 9)   /* CPOL */
+#define IMX23_SSP_CTRL1_WORD_LENGTH_8   (7U << 4)
+#define IMX23_SSP_CTRL1_SSP_MODE_SPI    0x0U
+
+#define IMX23_SSP_TIMING_TIMEOUT_MASK   (0xFFFFU << 16)
+#define IMX23_SSP_TIMING_CLOCK_DIVIDE   (0xFFU << 8)
+#define IMX23_SSP_TIMING_CLOCK_RATE     0xFFU
+
+#define IMX23_SSP_STATUS_CMD_BUSY       (1U << 0)
+#define IMX23_SSP_STATUS_DATA_BUSY      (1U << 1)
+#define IMX23_SSP_STATUS_FIFO_FULL      (1U << 8)
+#define IMX23_SSP_STATUS_FIFO_EMPTY     (1U << 5)
+
+/* CLKCTRL SSP clock control (0x70): gate bit31, divider bits 8:0. */
+#define IMX23_CLKCTRL_SSP0      (IMX23_CLKCTRL_BASE + 0x070U)
+#define IMX23_CLKCTRL_SSP_CLKGATE   (1U << 31)
+#define IMX23_CLKCTRL_SSP_DIV_MASK  0x1FFU
+/* SSP clock select mux in CLKSEQ bit 5: 0 = ref_io, 1 = ref_xtal (24MHz). */
+#define IMX23_CLKCTRL_CLKSEQ_BYPASS_SSP0  (1U << 5)
+#define IMX23_CLKCTRL_CLKSEQ_SSP_SEL_XTAL (1U << 5)
+
+/* SSP clock: 24MHz XTAL / divider (default 1). */
+#if !defined(IMX23_SSP_CLK_HZ) || defined(__DOXYGEN__)
+#define IMX23_SSP_CLK_HZ        24000000U
+#endif
+
+/*===========================================================================*/
+/* APBH/APBX DMA engines.                                                     */
+/*===========================================================================*/
+
+#define IMX23_DMA_APBH          0U      /* LCDIF, SSP, NAND... */
+#define IMX23_DMA_APBX          1U      /* audio, PXP, AUART... */
+
+#define IMX23_DMA_APBH_CHANNELS 8U
+#define IMX23_DMA_APBX_CHANNELS 16U
+
+/* Engine registers. */
+#define IMX23_APBH_CTRL0        (IMX23_APBH_BASE + 0x000U)
+#define IMX23_APBH_CTRL1        (IMX23_APBH_BASE + 0x010U)
+#define IMX23_APBH_CTRL2        (IMX23_APBH_BASE + 0x020U)
+#define IMX23_APBX_CTRL0        (IMX23_APBX_BASE + 0x000U)
+#define IMX23_APBX_CTRL1        (IMX23_APBX_BASE + 0x010U)
+#define IMX23_APBX_CTRL2        (IMX23_APBX_BASE + 0x020U)
+
+#define IMX23_DMA_CTRL0_SFTRST          (1U << 31)
+#define IMX23_DMA_CTRL0_CLKGATE         (1U << 30)
+#define IMX23_DMA_CTRL0_RESET_CHANNEL(n) (1U << (16U + (n)))
+
+/* Per-channel registers: APBH channel block at 0x40 + n*0x70,
+   APBX channel block at 0x100 + n*0x70. */
+#define IMX23_DMA_CH_BASE(bus, n)                                               \
+  (((bus) == IMX23_DMA_APBH ? IMX23_APBH_BASE : IMX23_APBX_BASE) +             \
+   (((bus) == IMX23_DMA_APBH ? 0x40U : 0x100U) + (n) * 0x70U))
+#define IMX23_DMA_CH_CURCMDAR(bus, n)   (IMX23_DMA_CH_BASE(bus, n) + 0x00U)
+#define IMX23_DMA_CH_NXTCMDAR(bus, n)   (IMX23_DMA_CH_BASE(bus, n) + 0x10U)
+#define IMX23_DMA_CH_CMD(bus, n)        (IMX23_DMA_CH_BASE(bus, n) + 0x20U)
+#define IMX23_DMA_CH_BAR(bus, n)        (IMX23_DMA_CH_BASE(bus, n) + 0x30U)
+#define IMX23_DMA_CH_SEMA(bus, n)       (IMX23_DMA_CH_BASE(bus, n) + 0x40U)
+
+/* Channel command word (CCW) bits. */
+#define IMX23_CCW_COMMAND_NO_XFER   0x0U
+#define IMX23_CCW_COMMAND_WRITE     0x1U    /* memory -> peripheral */
+#define IMX23_CCW_COMMAND_READ      0x2U    /* peripheral -> memory */
+#define IMX23_CCW_CHAIN             (1U << 2)
+#define IMX23_CCW_IRQ               (1U << 3)
+#define IMX23_CCW_SEMAPHORE         (1U << 6)
+#define IMX23_CCW_WAIT4END          (1U << 7)
+#define IMX23_CCW_HALTONTERMINATE   (1U << 8)
+#define IMX23_CCW_PIO_NUM(n)        (((n) & 0xFU) << 12)
+
+/* DMA descriptor (CCW) in memory, 16-byte aligned, in SDRAM. */
+typedef struct {
+  volatile uint32_t next;             /* phys addr of next CCW, 0 = last   */
+  volatile uint16_t bits;             /* CCW bits                          */
+  volatile uint16_t xfer;             /* transfer byte count (<= 0xFF00)   */
+  volatile uint32_t bufaddr;          /* memory buffer address             */
+  volatile uint32_t pio[16];          /* PIO words written to the periph.  */
+} imx23_dma_ccw_t;
+#endif /* IMX23_H */
