@@ -504,4 +504,43 @@ typedef struct {
 #define IMX23_SIO_AUART_8E1     (IMX23_SIO_AUART_8N1 | IMX23_AUART_LINECTRL_PEN | IMX23_AUART_LINECTRL_EPS)
 #define IMX23_SIO_AUART_8O1     (IMX23_SIO_AUART_8N1 | IMX23_AUART_LINECTRL_PEN)
 
+/*===========================================================================*/
+/* PWM block (5 channels, fixed 24MHz clock CLK_PWM24M).                     */
+/*===========================================================================*/
+
+typedef struct {
+  volatile uint32_t CTRL;        /* 0x00, SET 0x04, CLR 0x08, TOG 0x0C       */
+  volatile uint32_t CTRL_SET;
+  volatile uint32_t CTRL_CLR;
+  volatile uint32_t CTRL_TOG;
+  volatile uint32_t CH[5][8];    /* CH[n][0]=ACTIVE @0x10+n*0x20 (INACTIVE[31:16]
+                                    |ACTIVE[15:0]), CH[n][4]=PERIOD @0x20+n*0x20 */
+} imx23_pwm_t;
+
+#define IMX23_PWM               ((imx23_pwm_t *)IMX23_PWM_BASE)
+#define IMX23_PWM_ACTIVE(pwm,n)    ((pwm)->CH[n][0])
+#define IMX23_PWM_PERIODREG(pwm,n) ((pwm)->CH[n][4])
+
+#define IMX23_PWM_CTRL_SFTRST           (1U << 31)
+#define IMX23_PWM_CTRL_CLKGATE          (1U << 30)
+#define IMX23_PWM_CTRL_PWM_EN(n)        (1U << (n))
+
+#define IMX23_PWM_PERIOD_PERIOD(p)      ((uint32_t)(p) & 0xFFFFU)
+#define IMX23_PWM_PERIOD_ACTIVE_HIGH    (3U << 16)
+#define IMX23_PWM_PERIOD_ACTIVE_LOW     (2U << 16)
+#define IMX23_PWM_PERIOD_INACTIVE_HIGH  (3U << 18)
+#define IMX23_PWM_PERIOD_INACTIVE_LOW   (2U << 18)
+#define IMX23_PWM_PERIOD_POLARITY_NORMAL   (IMX23_PWM_PERIOD_ACTIVE_HIGH | IMX23_PWM_PERIOD_INACTIVE_LOW)
+#define IMX23_PWM_PERIOD_POLARITY_INVERSE  (IMX23_PWM_PERIOD_ACTIVE_LOW | IMX23_PWM_PERIOD_INACTIVE_HIGH)
+#define IMX23_PWM_PERIOD_CDIV(div)      (((uint32_t)(div) & 0x7U) << 20)
+
+/* Divider shifts for CDIV 0..7 (24MHz / 2^shift). */
+extern const uint8_t imx23_pwm_cdiv_shift[8];
+
+/* Ungate the fixed 24MHz PWM clock (CLKCTRL_XTAL bit 29, 0 = on). */
+#define IMX23_CLKCTRL_XTAL_PWM_CLK24M_GATE  (1U << 29)
+
+#define IMX23_PWM_CHANNELS      5
+#define IMX23_PWM_CLK_HZ        24000000U
+
 #endif /* IMX23_H */

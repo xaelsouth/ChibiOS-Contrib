@@ -7,7 +7,8 @@ PLATFORMSRC_CONTRIB := \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/icoll.c \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_st_lld.c \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_sio_lld.c \
-  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_pal_lld.c
+  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_pal_lld.c \
+  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_pwm_lld.c
 
 PLATFORMASM_CONTRIB := \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/icoll_tramp.S
