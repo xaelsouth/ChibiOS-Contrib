@@ -636,6 +636,67 @@ static void cmd_nand(BaseSequentialStream *chp, int argc, char *argv[]) {
   chprintf(chp, "usage: nand info|erase <blk>|read <addr> <blk> <page> [len] [raw]|write <addr> <blk> <page> [len] [raw]\r\n");
 }
 
+/* "exec <lfs path> <loadaddr> [entry_off]" - load a flat binary from the
+   ramdisk/LittleFS into SDRAM and jump to it. The binary must be linked for
+   exactly <loadaddr> (objcopy -O binary); entry = loadaddr + entry_off
+   (default 0). Caches are disabled in this port, so no cache maintenance is
+   needed. The loaded code runs on the current stack and normally never
+   returns. */
+static void cmd_exec(BaseSequentialStream *chp, int argc, char *argv[]) {
+  lfs_t *lfs;
+  lfs_file_t f;
+  lfs_ssize_t sz, n;
+  uint32_t addr, entry_off = 0U, done = 0U;
+  uint8_t buf[512U];
+  void (*entry)(void);
+
+  if (argc < 3U) {
+    chprintf(chp, "usage: exec <lfs path> <loadaddr hex> [entry_off]\r\n");
+    return;
+  }
+  if (!nand_lfs.mounted) {
+    chprintf(chp, "lfs not mounted\r\n");
+    return;
+  }
+  lfs = nand_lfs_handle(&nand_lfs);
+  addr = (uint32_t)strtoul(argv[2], NULL, 0);
+  if (argc >= 4U) {
+    entry_off = (uint32_t)strtoul(argv[3], NULL, 0);
+  }
+  /* Safety: target must be inside SDRAM and below the stack top. */
+  if (addr < 0x40000000U || addr >= 0x40000000U + IMX23_RAM_SIZE) {
+    chprintf(chp, "exec: 0x%08lx outside SDRAM\r\n", (unsigned long)addr);
+    return;
+  }
+  if (lfs_file_open(lfs, &f, argv[1], LFS_O_RDONLY) != LFS_ERR_OK) {
+    chprintf(chp, "exec: cannot open %s\r\n", argv[1]);
+    return;
+  }
+  sz = lfs_file_size(lfs, &f);
+  if (addr + (uint32_t)sz > 0x40000000U + IMX23_RAM_SIZE) {
+    chprintf(chp, "exec: image too big for SDRAM\r\n");
+    lfs_file_close(lfs, &f);
+    return;
+  }
+  while (done < (uint32_t)sz) {
+    n = lfs_file_read(lfs, &f, buf, sizeof(buf));
+    if (n <= 0) {
+      break;
+    }
+    memcpy((void *)(uintptr_t)(addr + done), buf, (size_t)n);
+    done += (uint32_t)n;
+  }
+  lfs_file_close(lfs, &f);
+  chprintf(chp, "exec: loaded %lu bytes at 0x%08lx, jumping to 0x%08lx\r\n",
+           (unsigned long)done, (unsigned long)addr,
+           (unsigned long)(addr + entry_off));
+  /* Drain the console TX so the message is out before we jump. */
+  sioSynchronizeTXEnd(&SIOD1, TIME_INFINITE);
+  entry = (void (*)(void))(uintptr_t)(addr + entry_off);
+  entry();
+  chprintf(chp, "exec: target returned\r\n");
+}
+
 /* lfs mount [format] | lfs ls [path] | lfs cat <path> | lfs write <path> <text> |
    lfs rm <path> | lfs unmount                                             */
 static void cmd_lfs(BaseSequentialStream *chp, int argc, char *argv[]) {
@@ -866,6 +927,7 @@ static const ShellCommand commands[] = {
   { "pxp", cmd_pxp },
   { "nand", cmd_nand },
   { "lfs", cmd_lfs },
+  { "exec", cmd_exec },
   { "adc", cmd_adc },
   { "keypad", cmd_keypad },
 #endif
