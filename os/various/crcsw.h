@@ -1,5 +1,6 @@
 /*
     ChibiOS - Copyright (C) 2015 Michael D. Spradling
+    ChibiOS - Copyright (C) 2026 Xael South
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -16,15 +17,103 @@
 
 /**
  * @file    crcsw.h
- * @brief   CRC software driver.
+ * @brief   CRC software driver + standalone software CRC algorithms.
+ *
+ * @details The first part of this file is always available and provides a
+ *          generic table-driven CRC engine (crcsw_calc/crcsw_update) with
+ *          ready-made configurations for common algorithms (CRC-8, CRC-16
+ *          CCITT, CRC-16 IEC 870 FT3 / M-Bus, CRC-16 MODBUS, CRC-32).
+ *          The second part is the HAL CRC low level driver (CRCDriver),
+ *          compiled only when HAL_USE_CRC is enabled.
  *
  * @addtogroup CRC
  * @{
  */
 
+#ifndef CRCSW_H
+#define CRCSW_H
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*===========================================================================*/
+/* Standalone software CRC algorithms (always available).                    */
+/*===========================================================================*/
+
+/**
+ * @brief   CRC algorithm configuration (Rocksoft^tm model).
+ */
+typedef struct {
+  uint8_t           width;    /**< CRC width in bits: 8, 16 or 32.          */
+  uint32_t          poly;     /**< Polynomial, normal (non-reflected) form.  */
+  uint32_t          init;     /**< Initial remainder value.                  */
+  uint32_t          xorout;   /**< Value XORed with the final remainder.     */
+  bool              refin;    /**< Reflect each input byte.                  */
+  bool              refout;   /**< Reflect the final remainder.              */
+  const uint32_t   *table;    /**< Lookup table (256 entries), or NULL to
+                                   use the bitwise fallback.                */
+} crcsw_config_t;
+
+/* Ready-made algorithm configurations. */
+extern const crcsw_config_t crcsw_crc8_cfg;           /**< CRC-8/SMBUS (0x07).        */
+extern const crcsw_config_t crcsw_crc16ccitt_cfg;     /**< CRC-16/CCITT-FALSE (0x1021). */
+extern const crcsw_config_t crcsw_crc16iec870ft3_cfg; /**< CRC-16 IEC 870 FT3, M-Bus (0x3D65). */
+extern const crcsw_config_t crcsw_crc16modbus_cfg;    /**< CRC-16/MODBUS (0x8005, reflected). */
+extern const crcsw_config_t crcsw_crc32_cfg;          /**< CRC-32/ISO-HDLC (0x04C11DB7, reflected). */
+
+/**
+ * @brief   Feed a data blob into a running CRC.
+ * @note    The @p crc parameter and the return value are the raw remainder
+ *          (before final reflection/XOR); start with @p cfg->init.
+ *
+ * @param[in] cfg       pointer to a @p crcsw_config_t
+ * @param[in] crc       current raw remainder
+ * @param[in] blob      pointer to the data
+ * @param[in] bloblen   length of the data in bytes
+ *
+ * @return              The updated raw remainder.
+ */
+uint32_t crcsw_update(const crcsw_config_t *cfg, uint32_t crc,
+                      const void *blob, size_t bloblen);
+
+/**
+ * @brief   Calculate a CRC over a data blob in one shot.
+ *
+ * @param[in] cfg       pointer to a @p crcsw_config_t
+ * @param[in] blob      pointer to the data
+ * @param[in] bloblen   length of the data in bytes
+ *
+ * @return              The computed CRC value (finalized: reflected and
+ *                      XORed as configured, masked to cfg->width bits).
+ */
+uint32_t crcsw_calc(const crcsw_config_t *cfg, const void *blob, size_t bloblen);
+
+/** One-shot CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF). */
+static inline uint16_t crc16ccitt(const void *blob, size_t bloblen) {
+  return (uint16_t)crcsw_calc(&crcsw_crc16ccitt_cfg, blob, bloblen);
+}
+
+/** One-shot CRC-16 IEC 870 FT3 (M-Bus long frame checksum). */
+static inline uint16_t crc16iec870ft3(const void *blob, size_t bloblen) {
+  return (uint16_t)crcsw_calc(&crcsw_crc16iec870ft3_cfg, blob, bloblen);
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+/*===========================================================================*/
+/* HAL CRC low level driver (software fallback for CRCDriver).               */
+/*===========================================================================*/
+
 #include "hal.h"
 
-#if HAL_USE_CRC || defined(__DOXYGEN__)
+#if (defined(HAL_USE_CRC) && (HAL_USE_CRC == TRUE)) || defined(__DOXYGEN__)
 
 #if CRCSW_USE_CRC1 || defined(__DOXYGEN__)
 
@@ -211,5 +300,7 @@ extern "C" {
 #endif /* CRCSW_USE_CRC1 */
 
 #endif /* HAL_USE_CRC */
+
+#endif /* CRCSW_H */
 
 /** @} */
