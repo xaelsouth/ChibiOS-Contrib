@@ -222,6 +222,9 @@ typedef uint32_t imx23_iomux_t;
 #define IMX23_CLKCTRL_XTAL      (IMX23_CLKCTRL_BASE + 0x050U)
 #define IMX23_CLKCTRL_CLKSEQ    (IMX23_CLKCTRL_BASE + 0x110U)
 
+/* HW_CLKCTRL_PLL0CTRL0 bits. */
+#define IMX23_CLKCTRL_PLL0CTRL0_EN_USB_CLKS (1U << 18)   /* usb_phy 480MHz gate */
+
 /* HW_CLKCTRL_CPU bits. */
 #define IMX23_CLKCTRL_CPU_BUSY_REF_XTAL     (1U << 29)
 #define IMX23_CLKCTRL_CPU_BUSY_REF_CPU      (1U << 28)
@@ -890,6 +893,84 @@ typedef struct {
 
 /* HW_GPMI_TIMING1 fields. */
 #define IMX23_GPMI_TIMING1_BUSY_TIMEOUT(n)  (((n) & 0xFFFFU) << 16)
+
+/*===========================================================================*/
+/* USB OTG controller (ci13xxx) + PHY.                                       */
+/*===========================================================================*/
+
+#define IMX23_DIGCTRL_BASE      0x8001C000U
+#define IMX23_DIGCTRL_CTRL      (IMX23_DIGCTRL_BASE + 0x000U)
+#define IMX23_DIGCTRL_CTRL_USB_CLKGATE      (1U << 2)   /* "usb" clock gate   */
+
+/* USB PHY (0x8007C000). */
+#define IMX23_USBPHY_PWD        (IMX23_USBPHY0_BASE + 0x00U)
+#define IMX23_USBPHY_TX         (IMX23_USBPHY0_BASE + 0x10U)
+#define IMX23_USBPHY_RX         (IMX23_USBPHY0_BASE + 0x20U)
+#define IMX23_USBPHY_CTRL       (IMX23_USBPHY0_BASE + 0x30U)
+#define IMX23_USBPHY_STATUS     (IMX23_USBPHY0_BASE + 0x40U)
+#define IMX23_USBPHY_DEBUG      (IMX23_USBPHY0_BASE + 0x50U)
+#define IMX23_USBPHY_PLL_SIC    (IMX23_USBPHY0_BASE + 0xA0U)
+#define IMX23_USBPHY_CTRL_SFTRST            (1U << 31)
+#define IMX23_USBPHY_CTRL_CLKGATE           (1U << 30)
+#define IMX23_USBPHY_CTRL_ENAUTOSET_USBCLKS (1U << 26)
+#define IMX23_USBPHY_CTRL_ENAUTOCLR_USBCLKGATE (1U << 25)
+#define IMX23_USBPHY_CTRL_ENAUTOCLR_PHY_PWD (1U << 20)
+#define IMX23_USBPHY_CTRL_ENAUTOCLR_CLKGATE (1U << 19)
+#define IMX23_USBPHY_CTRL_ENAUTO_PWRON_PLL  (1U << 18)
+#define IMX23_USBPHY_CTRL_ENUTMILEVEL3      (1U << 15)
+#define IMX23_USBPHY_CTRL_ENUTMILEVEL2      (1U << 14)
+#define IMX23_USBPHY_PLL_LOCK               (1U << 31)
+
+/* USB controller capability registers (0x80080000 + 0x000..0x124). */
+#define IMX23_USBC_ID           (IMX23_USBCTRL0_BASE + 0x000U)
+#define IMX23_USBC_CAPLENGTH    (IMX23_USBCTRL0_BASE + 0x100U)
+#define IMX23_USBC_DCCPARAMS    (IMX23_USBCTRL0_BASE + 0x124U)
+
+/* USB controller operational registers (0x80080000 + 0x140..). */
+#define IMX23_USBC_USBCMD       (IMX23_USBCTRL0_BASE + 0x140U)
+#define IMX23_USBC_USBSTS       (IMX23_USBCTRL0_BASE + 0x144U)
+#define IMX23_USBC_USBINTR      (IMX23_USBCTRL0_BASE + 0x148U)
+#define IMX23_USBC_FRINDEX      (IMX23_USBCTRL0_BASE + 0x14CU)
+#define IMX23_USBC_DEVICEADDR   (IMX23_USBCTRL0_BASE + 0x154U)
+#define IMX23_USBC_ENDPTLISTADDR (IMX23_USBCTRL0_BASE + 0x158U)
+#define IMX23_USBC_PORTSC1      (IMX23_USBCTRL0_BASE + 0x184U)
+#define IMX23_USBC_OTGSC        (IMX23_USBCTRL0_BASE + 0x1A4U)
+#define IMX23_USBC_USBMODE      (IMX23_USBCTRL0_BASE + 0x1A8U)
+#define IMX23_USBC_ENDPTSETUPSTAT (IMX23_USBCTRL0_BASE + 0x1ACU)
+#define IMX23_USBC_ENDPTPRIME   (IMX23_USBCTRL0_BASE + 0x1B0U)
+#define IMX23_USBC_ENDPTFLUSH   (IMX23_USBCTRL0_BASE + 0x1B4U)
+#define IMX23_USBC_ENDPTSTAT    (IMX23_USBCTRL0_BASE + 0x1B8U)
+#define IMX23_USBC_ENDPTCOMPLETE (IMX23_USBCTRL0_BASE + 0x1BCU)
+#define IMX23_USBC_ENDPTCTRL(n) (IMX23_USBCTRL0_BASE + 0x1C0U + (n) * 4U)
+
+/* HW_USBC_USBCMD bits. */
+#define IMX23_USBCMD_RUN        (1U << 0)
+#define IMX23_USBCMD_RST        (1U << 1)
+#define IMX23_USBCMD_FS2        (1U << 15)
+#define IMX23_USBCMD_ITC(n)     (((n) & 0xFFU) << 16)
+
+/* HW_USBC_USBSTS / HW_USBC_USBINTR bits. */
+#define IMX23_USBSTS_UI         (1U << 0)
+#define IMX23_USBSTS_UEI        (1U << 1)
+#define IMX23_USBSTS_PCI        (1U << 2)
+#define IMX23_USBSTS_URI        (1U << 6)
+#define IMX23_USBSTS_SLI        (1U << 8)
+
+/* HW_USBC_USBMODE values. */
+#define IMX23_USBMODE_DEVICE    2U
+#define IMX23_USBMODE_CM_MASK   0x3U
+
+/* HW_USBC_ENDPTCTRLn bits. */
+#define IMX23_ENDPTCTRL_TXE     (1U << 23)
+#define IMX23_ENDPTCTRL_TXR     (1U << 22)
+#define IMX23_ENDPTCTRL_TXT(t)  (((t) & 0x3U) << 18)
+#define IMX23_ENDPTCTRL_RXE     (1U << 7)
+#define IMX23_ENDPTCTRL_RXR     (1U << 6)
+#define IMX23_ENDPTCTRL_RXT(t)  (((t) & 0x3U) << 2)
+
+/* Endpoint prime/flush/complete: RX bit = ep, TX bit = ep+16. */
+#define IMX23_EPT_RX(n)         (1U << (n))
+#define IMX23_EPT_TX(n)         (1U << (16U + (n)))
 
 /*===========================================================================*/
 /* BCH ECC accelerator (0x8000A000).                                         */
