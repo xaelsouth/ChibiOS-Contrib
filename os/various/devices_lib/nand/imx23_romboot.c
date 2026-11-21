@@ -358,10 +358,13 @@ void imx23_romboot_init(imx23_romboot_t *rb, IMX23NANDDriver *np) {
   rb->np = np;
 }
 
-uint32_t imx23_romboot_bootstream_block(const imx23_nand_geo_t *g) {
+uint32_t imx23_romboot_bootstream_block(const imx23_nand_geo_t *g,
+                                        uint32_t slot) {
 
-  /* 6 search areas, each STRIDES_PER_AREA erase blocks. */
-  return 6U * IMX23_ROMBOOT_STRIDES_PER_AREA;
+  /* 6 search areas (24 blocks) hold NCB/LDLB/DBBT, then the bootstream
+     slots follow. */
+  return 6U * IMX23_ROMBOOT_STRIDES_PER_AREA +
+         slot * IMX23_ROMBOOT_SLOT_BLOCKS;
 }
 
 uint32_t imx23_romboot_lfs_base(IMX23NANDDriver *np, uint32_t reserve_blocks) {
@@ -379,7 +382,7 @@ uint32_t imx23_romboot_lfs_base(IMX23NANDDriver *np, uint32_t reserve_blocks) {
 }
 
 int imx23_romboot_write_sb(imx23_romboot_t *rb, imx23_romboot_read_fn rd,
-                           void *ctx, uint32_t sb_len) {
+                           void *ctx, uint32_t sb_len, uint32_t slot) {
   IMX23NANDDriver *np = rb->np;
   const imx23_nand_geo_t *g = imx23_nand_geo(np);
   romboot_bcb_t bcb;
@@ -387,7 +390,7 @@ int imx23_romboot_write_sb(imx23_romboot_t *rb, imx23_romboot_read_fn rd,
   uint32_t sb_sectors, boot_blk, nbad, ppb, area_strides;
   int rc;
 
-  if (!np->ready || sb_len == 0U) {
+  if (!np->ready || sb_len == 0U || slot >= IMX23_ROMBOOT_SLOTS) {
     return IMX23_NAND_ERR_PARAM;
   }
   if (g->page_size != 2048U && g->page_size != 4096U) {
@@ -396,7 +399,7 @@ int imx23_romboot_write_sb(imx23_romboot_t *rb, imx23_romboot_read_fn rd,
 
   sb_sectors  = (sb_len + 2047U) / 2048U;
   area_strides = IMX23_ROMBOOT_STRIDES_PER_AREA;
-  boot_blk    = imx23_romboot_bootstream_block(g);
+  boot_blk    = imx23_romboot_bootstream_block(g, slot);
 
   /* 1) NCB: Hamming-encoded, raw page at block 0..7, page 0. */
   build_ncb(&bcb, g);
@@ -441,8 +444,27 @@ int imx23_romboot_write_sb(imx23_romboot_t *rb, imx23_romboot_read_fn rd,
     }
   }
 
-  /* 4) Bootstream image from block 24, skipping bad blocks. */
+  /* 4) Bootstream image into the requested slot, skipping bad blocks. */
   return write_bootstream(rb, rd, ctx, sb_len, boot_blk);
+}
+
+int imx23_romboot_set_boot_slot(imx23_romboot_t *rb, uint32_t slot,
+                                uint32_t sb_sectors) {
+  IMX23NANDDriver *np = rb->np;
+  const imx23_nand_geo_t *g = imx23_nand_geo(np);
+  romboot_bcb_t bcb;
+  uint32_t boot_blk;
+  int rc;
+
+  if (!np->ready || slot >= IMX23_ROMBOOT_SLOTS) {
+    return IMX23_NAND_ERR_PARAM;
+  }
+  boot_blk = imx23_romboot_bootstream_block(g, slot);
+  build_ldlb(&bcb, g, boot_blk * g->block_size, sb_sectors);
+  memset(rb->page_buf, 0, g->page_size + g->oob_size);
+  memcpy(rb->page_buf, &bcb, sizeof(bcb));
+  rc = write_bcb_pages(rb, 2U * IMX23_ROMBOOT_STRIDES_PER_AREA, 2U, false);
+  return rc;
 }
 
 /** @} */

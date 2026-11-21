@@ -459,17 +459,33 @@ static void cmd_nand(BaseSequentialStream *chp, int argc, char *argv[]) {
   g = imx23_nand_geo(&IMX23NAND1);
 
   if (argc < 1U) {
-    chprintf(chp, "usage: nand info|erase <blk>|read <addr> <blk> <page> [len] [raw]|write <addr> <blk> <page> [len] [raw]|bootwrite <lfs .sb file>\r\n");
+    chprintf(chp, "usage: nand info|erase <blk>|read <addr> <blk> <page> [len] [raw]|write <addr> <blk> <page> [len] [raw]|bootwrite <lfs .sb file> [slot 0|1]|bootslot <0|1> <sectors>\r\n");
+    return;
+  }
+
+  /* Re-point the LDLB at an existing boot slot (roll back / switch). */
+  if (strcmp(argv[0], "bootslot") == 0 && argc >= 3U) {
+    uint32_t slot = (uint32_t)strtoul(argv[1], NULL, 0);
+    uint32_t sect = (uint32_t)strtoul(argv[2], NULL, 0);
+    int rc2;
+
+    imx23_romboot_init(&romboot, &IMX23NAND1);
+    rc2 = imx23_romboot_set_boot_slot(&romboot, slot, sect);
+    chprintf(chp, "bootslot %lu (%lu sectors): %s (%d)\r\n",
+             (unsigned long)slot, (unsigned long)sect,
+             rc2 == IMX23_NAND_OK ? "OK" : "FAILED", rc2);
     return;
   }
 
   /* Write an SB bootstream image from LittleFS into the ROM boot area:
-     NCB (Hamming) at blocks 0-7, LDLB at 8-15, DBBT at 16-23, image from
-     block 24. The .sb is produced on the host by elftosb. */
+     NCB (Hamming) at blocks 0-7, LDLB at 8-15, DBBT at 16-23, image into
+     slot 0 (block 24) or slot 1 (block 40). The .sb is produced on the
+     host by elftosb. */
   if (strcmp(argv[0], "bootwrite") == 0 && argc >= 2U) {
     bw_ctx_t ctx;
     lfs_file_t f;
     lfs_ssize_t sz;
+    uint32_t slot = (argc >= 3U) ? (uint32_t)strtoul(argv[2], NULL, 0) : 0U;
     int rc2;
 
     if (!nand_lfs.mounted) {
@@ -489,10 +505,11 @@ static void cmd_nand(BaseSequentialStream *chp, int argc, char *argv[]) {
       return;
     }
     imx23_romboot_init(&romboot, &IMX23NAND1);
-    chprintf(chp, "bootwrite: writing %ld bytes of %s (NCB/LDLB/DBBT + image from block %lu)...\r\n",
-             (long)sz, argv[1],
-             (unsigned long)imx23_romboot_bootstream_block(g));
-    rc2 = imx23_romboot_write_sb(&romboot, bw_lfs_read, &ctx, (uint32_t)sz);
+    chprintf(chp, "bootwrite: writing %ld bytes of %s to slot %lu (NCB/LDLB/DBBT + image from block %lu)...\r\n",
+             (long)sz, argv[1], (unsigned long)slot,
+             (unsigned long)imx23_romboot_bootstream_block(g, slot));
+    rc2 = imx23_romboot_write_sb(&romboot, bw_lfs_read, &ctx, (uint32_t)sz,
+                                  slot);
     lfs_file_close(ctx.lfs, &f);
     chprintf(chp, "bootwrite: %s (%d)\r\n",
              rc2 == IMX23_NAND_OK ? "OK - reset to boot from NAND" : "FAILED",

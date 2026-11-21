@@ -52,7 +52,10 @@
 #define IMX23_ROMBOOT_STRIDES_PER_AREA  (1U << IMX23_ROMBOOT_SEARCH_EXPONENT)
 /* Physical blocks reserved for ROM structures + bootstream image. LittleFS
    must start past this (see imx23_romboot_lfs_base()). */
-#define IMX23_ROMBOOT_RESERVE_BLOCKS    32U
+#define IMX23_ROMBOOT_RESERVE_BLOCKS    48U
+/* Two bootstream slots of 16 blocks (8 MiB) each after the BCB area. */
+#define IMX23_ROMBOOT_SLOT_BLOCKS       16U
+#define IMX23_ROMBOOT_SLOTS             2U
 
 /* Fingerprints (little-endian ASCII). */
 #define ROMBOOT_FP_STMP   0x504D5453U   /* 'STMP' */
@@ -95,10 +98,17 @@ typedef int (*imx23_romboot_read_fn)(void *ctx, uint32_t offset,
 extern "C" {
 #endif
   void     imx23_romboot_init(imx23_romboot_t *rb, IMX23NANDDriver *np);
-  uint32_t imx23_romboot_bootstream_block(const imx23_nand_geo_t *g);
+  uint32_t imx23_romboot_bootstream_block(const imx23_nand_geo_t *g,
+                                           uint32_t slot);
   uint32_t imx23_romboot_lfs_base(IMX23NANDDriver *np, uint32_t reserve_blocks);
+  /* Write NCB/LDLB/DBBT + the SB image into boot slot (0 or 1); the LDLB
+     is updated to point at that slot, so after reset the BootROM boots it. */
   int      imx23_romboot_write_sb(imx23_romboot_t *rb, imx23_romboot_read_fn rd,
-                                  void *ctx, uint32_t sb_len);
+                                  void *ctx, uint32_t sb_len, uint32_t slot);
+  /* Re-point the LDLB at an already-written slot without rewriting the
+     image (used to roll back / switch slots). */
+  int      imx23_romboot_set_boot_slot(imx23_romboot_t *rb, uint32_t slot,
+                                       uint32_t sb_sectors);
 #ifdef __cplusplus
 }
 #endif
