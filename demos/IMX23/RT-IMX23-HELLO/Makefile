@@ -34,6 +34,10 @@ include $(CHIBIOS)/os/common/ports/ARM/compilers/GCC/mk/port_generic.mk
 # Other files.
 include $(CHIBIOS)/tools/mk/autobuild.mk
 
+# chprintf (used by the timestamped log) and xshell on the debug serial.
+include $(CHIBIOS)/os/various/chprintf/chprintf.mk
+include $(CHIBIOS)/os/various/shell/shell.mk
+
 ##############################################################################
 # Project, sources and paths
 ##############################################################################
