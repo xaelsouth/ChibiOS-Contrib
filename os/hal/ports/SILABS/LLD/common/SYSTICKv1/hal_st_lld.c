@@ -30,14 +30,12 @@
 /* Driver local definitions.                                                 */
 /*===========================================================================*/
 
-#if OSAL_ST_MODE == OSAL_ST_MODE_FREERUNNING
-#error "OSAL_ST_MODE_FREERUNNING is not supported by SYSTICKv1"
-#endif /* OSAL_ST_MODE == OSAL_ST_MODE_FREERUNNING */
-
 #if OSAL_ST_MODE == OSAL_ST_MODE_PERIODIC
 #define SYSTICK_CK_MAX                      0x00FFFFFFU
 #define ST_HANDLER                          SysTick_Handler
 #define SYSTICK_CK                          EFR32_HCLK
+#else
+#error "SYSTICKv1 supports only OSAL_ST_MODE_PERIODIC"
 #endif /* OSAL_ST_MODE == OSAL_ST_MODE_PERIODIC */
 
 #if (SYSTICK_CK / OSAL_ST_FREQUENCY) - 1 > SYSTICK_CK_MAX

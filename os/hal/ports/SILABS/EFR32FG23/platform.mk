@@ -44,7 +44,8 @@ else
 endif
 
 # Drivers compatible with the platform.
-#include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/common/SYSTICKv1/driver.mk
+# NOTE: SYSTICKv1 (Cortex-M SysTick) is NOT included here — FG23 uses SYSTICKv3
+# (LETIMER0-based, supports EM2 low-power). SYSTICKv1 is only for FG14P.
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv3/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/GPIOv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/EUSARTv1/driver.mk
@@ -66,7 +67,6 @@ include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/RAILv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/LCDv1/driver.mk
 # emlib binding (optional, for apps that use emlib directly without RAIL).
 # When EFR32_RAIL_USE_RAIL=TRUE, RAILv1 already provides the same shims.
-include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/common/emlib_binding/driver.mk
 
 # Shared variables
 ALLCSRC += $(PLATFORMSRC_CONTRIB)
