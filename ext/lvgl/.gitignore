@@ -1,0 +1,12 @@
+# Heavy non-library parts of the upstream release tarball (kept on disk
+# for reference, not tracked): test suite, examples, demos, docs, env.
+/tests/
+/examples/
+/demos/
+/docs/
+/env_support/
+/.github/
+/.ci/
+/.devcontainer/
+/.vscode/
+/.idea/

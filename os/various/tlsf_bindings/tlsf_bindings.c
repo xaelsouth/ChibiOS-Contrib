@@ -38,6 +38,9 @@
 static uint8_t tlsf_pool[TLSF_POOL_SIZE] __attribute__((aligned(8)));
 static tlsf_t  tlsf_heap;
 static bool    tlsf_ready;
+/* The heap is shared between users on different threads (lwIP mem,
+   LVGL, littlefs, ...), so serialize all pool operations. */
+static mutex_t tlsf_lock;
 
 /*===========================================================================*/
 /* Module exported functions.                                                */
@@ -49,21 +52,30 @@ static bool    tlsf_ready;
  */
 void tlsfHeapInit(void) {
 
+  chMtxObjectInit(&tlsf_lock);
   tlsf_heap = tlsf_create_with_pool(tlsf_pool, sizeof(tlsf_pool));
   osalDbgAssert(tlsf_heap != NULL, "tlsf_create_with_pool failed");
   tlsf_ready = true;
 }
 
 void *tlsfHeapAlloc(size_t size) {
+  void *p;
 
   osalDbgCheck(tlsf_ready);
-  return tlsf_malloc(tlsf_heap, size);
+  chMtxLock(&tlsf_lock);
+  p = tlsf_malloc(tlsf_heap, size);
+  chMtxUnlock(&tlsf_lock);
+  return p;
 }
 
 void *tlsfHeapAllocAligned(size_t size, size_t align) {
+  void *p;
 
   osalDbgCheck(tlsf_ready);
-  return tlsf_memalign(tlsf_heap, align, size);
+  chMtxLock(&tlsf_lock);
+  p = tlsf_memalign(tlsf_heap, align, size);
+  chMtxUnlock(&tlsf_lock);
+  return p;
 }
 
 void *tlsfHeapCalloc(size_t count, size_t size) {
@@ -75,10 +87,22 @@ void *tlsfHeapCalloc(size_t count, size_t size) {
   return p;
 }
 
+void *tlsfHeapRealloc(void *p, size_t size) {
+  void *np;
+
+  osalDbgCheck(tlsf_ready);
+  chMtxLock(&tlsf_lock);
+  np = tlsf_realloc(tlsf_heap, p, size);
+  chMtxUnlock(&tlsf_lock);
+  return np;
+}
+
 void tlsfHeapFree(void *p) {
 
   if (p != NULL) {
+    chMtxLock(&tlsf_lock);
     tlsf_free(tlsf_heap, p);
+    chMtxUnlock(&tlsf_lock);
   }
 }
 

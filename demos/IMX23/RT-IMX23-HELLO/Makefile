@@ -95,6 +95,12 @@ include $(CHIBIOS_CONTRIB)/os/various/mbedtls_bindings/mbedtls.mk
 # Network services: telnetd (TCP/23), TFTP + HTTPS on LittleFS.
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/net_services/net_services.mk
 
+# LVGL + i.MX23 LCDIF/PXP port layer (EVK has the 4.3" LCD).
+ifeq ($(BOARD),IMX23_EVK)
+include $(CHIBIOS_CONTRIB)/os/various/lvgl_bindings/lvgl.mk
+include $(CHIBIOS_CONTRIB)/os/various/devices_lib/lvgl_imx23/lvgl_imx23.mk
+endif
+
 ##############################################################################
 # Project, sources and paths
 ##############################################################################

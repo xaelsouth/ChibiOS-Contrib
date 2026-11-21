@@ -45,6 +45,8 @@
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_lcdif.h"
 #include "imx23_pxp.h"
+#include "imx23_lvgl.h"
+#include "lvgl/lvgl.h"
 #endif
 
 /*
@@ -121,17 +123,53 @@ static const imx23_lcdif_timing_t lcd_timing = {
   .flags      = IMX23_LCD_FLAGS,
 };
 
-static void lcd_test_pattern(void) {
-  uint32_t x, y;
+/*
+ * LVGL port object + partial draw buffer (RGB565, one full-width band of
+ * 40 lines). The flush callback blits through the PXP into lcd_fb.
+ */
+static imx23_lvgl_t lvgl1;
+static uint16_t lvgl_draw_buf[IMX23_LCD_WIDTH * 40U];
 
-  for (y = 0U; y < IMX23_LCD_HEIGHT; y++) {
-    for (x = 0U; x < IMX23_LCD_WIDTH; x++) {
-      uint32_t r = (x * 255U) / IMX23_LCD_WIDTH;
-      uint32_t g = (y * 255U) / IMX23_LCD_HEIGHT;
-      uint32_t b = ((x + y) * 255U) / (IMX23_LCD_WIDTH + IMX23_LCD_HEIGHT);
-      lcd_fb[y * IMX23_LCD_WIDTH + x] = 0xFF000000U | (r << 16) | (g << 8) | b;
-    }
+static void btn_event_cb(lv_event_t *e) {
+  static unsigned count;
+  lv_obj_t *label = (lv_obj_t *)lv_event_get_user_data(e);
+
+  count++;
+  lv_label_set_text_fmt(label, "clicked %u times", count);
+}
+
+static void lvgl_ui_init(void) {
+  lv_obj_t *scr = lv_screen_active();
+  lv_obj_t *label, *btn, *btn_label, *slider;
+
+  lv_obj_set_style_bg_color(scr, lv_color_hex(0x003a57), 0);
+
+  label = lv_label_create(scr);
+  lv_label_set_text_fmt(label, "ChibiOS/RT on i.MX23 EVK\nLVGL %d.%d.%d",
+                        LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR,
+                        LVGL_VERSION_PATCH);
+  lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
+  lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+
+  btn = lv_button_create(scr);
+  lv_obj_set_size(btn, 160, 50);
+  lv_obj_align(btn, LV_ALIGN_CENTER, 0, -10);
+  btn_label = lv_label_create(btn);
+  lv_label_set_text(btn_label, "click me");
+  lv_obj_center(btn_label);
+
+  {
+    lv_obj_t *cnt = lv_label_create(scr);
+    lv_obj_align(cnt, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_set_style_text_color(cnt, lv_color_hex(0xFFD700), 0);
+    lv_label_set_text(cnt, "clicked 0 times");
+    lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_CLICKED, cnt);
   }
+
+  slider = lv_slider_create(scr);
+  lv_obj_set_width(slider, 200);
+  lv_obj_align(slider, LV_ALIGN_BOTTOM_MID, 0, -20);
+  lv_slider_set_value(slider, 60, LV_ANIM_OFF);
 }
 
 /*
@@ -765,10 +803,9 @@ int main(void) {
   palClearPad(BOARD_LED_PORT, BOARD_LED_PAD);
 
 #if defined(BOARD_IMX23_EVK)
-  /* LCD: framebuffer + LCDIF + backlight PWM2 on GPIO_1_28. */
-  lcd_test_pattern();
-  imx23_pxp_init();
-  imx23_lcdif_init(&lcd_timing, lcd_fb);
+  /* LCD: LVGL port over LCDIF + PXP, backlight PWM2 on GPIO_1_28. */
+  imx23_lvgl_init(&lvgl1, &lcd_timing, lcd_fb, lvgl_draw_buf,
+                  IMX23_LCD_WIDTH * 40U, true);
   imx23_lcdif_set_vsync_callback(lcd_vsync_cb);
   imx23_iomux_set_pad(1U, 28U, 0U, 0x4U);
   pwmStart(&PWMD1, &pwm_backlight_cfg);
@@ -776,6 +813,10 @@ int main(void) {
                    BOARD_BACKLIGHT_PWM_PERIOD / 2U);   /* 50% */
   log_line("LCD up: %ux%u @ %lu Hz pixclk", IMX23_LCD_WIDTH, IMX23_LCD_HEIGHT,
            (unsigned long)IMX23_LCD_PIXCLK_HZ);
+  lvgl_ui_init();
+  imx23_lvgl_start(&lvgl1);
+  log_line("LVGL %d.%d.%d started, flushes via PXP",
+           LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
 #endif
 
 #if defined(BOARD_ENC28J60)
