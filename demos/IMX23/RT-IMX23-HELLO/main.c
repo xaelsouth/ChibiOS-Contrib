@@ -48,6 +48,7 @@
 #include "imx23_lradc.h"
 #include "imx23_lvgl.h"
 #include "lvgl/lvgl.h"
+#include "keypad.h"
 #endif
 
 /*
@@ -266,6 +267,26 @@ static void cmd_adc(BaseSequentialStream *chp, int argc, char *argv[]) {
     return;
   }
   chprintf(chp, "usage: adc <pad 0-7> | adc touch\r\n");
+}
+
+/* "keypad" - scan the matrix keypad (rows GPIO, cols via LRADC). */
+static uint32_t keypad_adc_cb(void *ctx, uint8_t ch, sysinterval_t to) {
+
+  (void)ctx;
+  return imx23_lradc_read(ch, to);
+}
+
+static void cmd_keypad(BaseSequentialStream *chp, int argc, char *argv[]) {
+  static const ioline_t rows[4] = BOARD_KEYPAD_ROWS;
+  static const uint8_t cols[4] = BOARD_KEYPAD_COLS;
+  static Keypad kp;
+  char k;
+
+  (void)argc; (void)argv;
+  keypadInit(&kp, keypad_adc_cb, NULL, rows, 4U, cols, 4U,
+             BOARD_KEYPAD_MAP, BOARD_KEYPAD_THRESHOLD);
+  k = keypadScan(&kp);
+  chprintf(chp, "keypad: %c\r\n", k != 0 ? k : '-');
 }
 #endif /* BOARD_IMX23_EVK */
 
@@ -846,6 +867,7 @@ static const ShellCommand commands[] = {
   { "nand", cmd_nand },
   { "lfs", cmd_lfs },
   { "adc", cmd_adc },
+  { "keypad", cmd_keypad },
 #endif
   { "dcp", cmd_dcp },
 #if HAL_USE_USB

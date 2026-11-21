@@ -58,6 +58,9 @@ include $(CHIBIOS)/os/various/shell/shell.mk
 ALLCSRC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet/enc28j60_lld.c
 ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet
 
+# Generic matrix keypad (devices_lib/keypad).
+include $(CHIBIOS_CONTRIB)/os/various/devices_lib/keypad/keypad.mk
+
 # GPMI+BCH NAND driver (devices_lib/nand) + bitmap + LittleFS.
 ALLCSRC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/imx23_gpmi_nand.c \
            $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/imx23_romboot.c \

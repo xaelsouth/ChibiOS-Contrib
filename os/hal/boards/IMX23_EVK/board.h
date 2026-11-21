@@ -61,6 +61,14 @@
 #define BOARD_TOUCH_RAW_MIN     0x2000U /* raw ADC at screen origin        */
 #define BOARD_TOUCH_RAW_MAX     0x3A000U/* raw ADC at far edge             */
 
+/* Optional 4x4 matrix keypad (see devices_lib/keypad/readme.md):
+   rows on GPIO bank1 pins 0-3, columns on LRADC pads 4-7. */
+#define BOARD_KEYPAD_ROWS       { PAL_LINE(GPIOB, 0U), PAL_LINE(GPIOB, 1U), \
+                                  PAL_LINE(GPIOB, 2U), PAL_LINE(GPIOB, 3U) }
+#define BOARD_KEYPAD_COLS       { 4U, 5U, 6U, 7U }
+#define BOARD_KEYPAD_MAP        "123A456B789C*0#D"
+#define BOARD_KEYPAD_THRESHOLD  0x8000U
+
 /* ENC28J60 SPI ethernet on SSP0 (shares pads with SSP1, bank2 pins 0,2-6).
    CS is a GPIO (adjust to your wiring), IRQ = GPIO bank2 pin3 (ETHNINT). */
 #define BOARD_ENC28J60              1
