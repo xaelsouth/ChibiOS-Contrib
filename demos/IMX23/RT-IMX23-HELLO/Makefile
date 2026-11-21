@@ -58,6 +58,16 @@ include $(CHIBIOS)/os/various/shell/shell.mk
 ALLCSRC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet/enc28j60_lld.c
 ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet
 
+# GPMI+BCH NAND driver (devices_lib/nand) + bitmap + LittleFS.
+ALLCSRC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/imx23_gpmi_nand.c \
+           $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/nand_lfs.c \
+           $(CHIBIOS_CONTRIB)/os/various/bitmap.c \
+           $(CHIBIOS)/ext/littlefs/lfs.c \
+           $(CHIBIOS)/ext/littlefs/lfs_util.c
+ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand \
+          $(CHIBIOS_CONTRIB)/os/various \
+          $(CHIBIOS)/ext/littlefs
+
 ##############################################################################
 # Project, sources and paths
 ##############################################################################
@@ -139,7 +149,7 @@ AOPT =
 TOPT = -marm -DTHUMB
 CWARN = -Wall -Wextra -Wundef -Wstrict-prototypes
 CPPWARN = -Wall -Wextra -Wundef
-UDEFS = -DSHELL_CMD_TEST_ENABLED=FALSE
+UDEFS = -DSHELL_CMD_TEST_ENABLED=FALSE -DLFS_THREADSAFE=0 -DLFS_NO_DEBUG=1 -DLFS_NO_WARN=1 -DLFS_CONFIG=nand_lfs_config.h
 UADEFS =
 UINCDIR =
 ULIBDIR =

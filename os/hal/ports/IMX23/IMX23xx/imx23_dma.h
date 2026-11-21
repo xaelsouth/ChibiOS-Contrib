@@ -40,6 +40,8 @@ extern "C" {
   void imx23_dma_init(void);
   void imx23_dma_reset(unsigned bus, unsigned ch);
   void imx23_dma_start(unsigned bus, unsigned ch, imx23_dma_ccw_t *ccw);
+  void imx23_dma_start_chain(unsigned bus, unsigned ch, imx23_dma_ccw_t *ccw,
+                             unsigned ndesc);
   void imx23_dma_stop(unsigned bus, unsigned ch);
   bool imx23_dma_done(unsigned bus, unsigned ch);
   void imx23_dma_wait(unsigned bus, unsigned ch);

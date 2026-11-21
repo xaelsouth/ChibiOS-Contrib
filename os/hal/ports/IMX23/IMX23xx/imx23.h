@@ -234,6 +234,13 @@ typedef uint32_t imx23_iomux_t;
 /* HW_CLKCTRL_CLKSEQ bypass bits. */
 #define IMX23_CLKCTRL_CLKSEQ_BYPASS_CPU     (1U << 7)
 #define IMX23_CLKCTRL_CLKSEQ_BYPASS_EMI     (1U << 6)
+#define IMX23_CLKCTRL_CLKSEQ_BYPASS_GPMI    (1U << 4)
+
+/* HW_CLKCTRL_GPMI (CLKCTRL + 0x80): GPMI NAND clock divider. */
+#define IMX23_CLKCTRL_GPMI        (IMX23_CLKCTRL_BASE + 0x80U)
+#define IMX23_CLKCTRL_GPMI_CLKGATE          (1U << 31)
+#define IMX23_CLKCTRL_GPMI_BUSY             (1U << 29)
+#define IMX23_CLKCTRL_GPMI_DIV_MASK         0x3FFU
 
 /* PLL0 runs at a fixed 480MHz from the 24MHz XTAL on i.MX23. */
 #define IMX23_PLL0_HZ               480000000U
@@ -413,6 +420,7 @@ typedef struct {
 #define IMX23_CCW_COMMAND_READ      0x2U    /* memory -> peripheral (RM DMA_READ)  */
 #define IMX23_CCW_CHAIN             (1U << 2)
 #define IMX23_CCW_IRQ               (1U << 3)
+#define IMX23_CCW_WAIT4READY        (1U << 5)    /* NAND: wait for RDY before next */
 #define IMX23_CCW_SEMAPHORE         (1U << 6)
 #define IMX23_CCW_WAIT4END          (1U << 7)
 #define IMX23_CCW_HALTONTERMINATE   (1U << 8)
@@ -818,5 +826,106 @@ typedef struct {
 
 /* APBX DMA channel bound to the DAC (audio-dac). */
 #define IMX23_DMA_CH_AUDIO_DAC              1U
+
+/* APBH DMA channels bound to the GPMI NAND chip selects. */
+#define IMX23_DMA_CH_GPMI0                  0U
+#define IMX23_DMA_CH_GPMI1                  1U
+#define IMX23_DMA_CH_GPMI2                  2U
+#define IMX23_DMA_CH_GPMI3                  3U
+
+/*===========================================================================*/
+/* GPMI NAND controller (0x8000C000).                                        */
+/*===========================================================================*/
+
+/* GPMI registers (each is an mxs_reg_32: REG/SET/CLR/TOG at +0/+4/+8/+12). */
+#define IMX23_GPMI_CTRL0        (IMX23_GPMI_BASE + 0x00U)
+#define IMX23_GPMI_COMPARE      (IMX23_GPMI_BASE + 0x10U)
+#define IMX23_GPMI_ECCCTRL      (IMX23_GPMI_BASE + 0x20U)
+#define IMX23_GPMI_ECCCOUNT     (IMX23_GPMI_BASE + 0x30U)
+#define IMX23_GPMI_PAYLOAD      (IMX23_GPMI_BASE + 0x40U)
+#define IMX23_GPMI_AUXILIARY    (IMX23_GPMI_BASE + 0x50U)
+#define IMX23_GPMI_CTRL1        (IMX23_GPMI_BASE + 0x60U)
+#define IMX23_GPMI_TIMING0      (IMX23_GPMI_BASE + 0x70U)
+#define IMX23_GPMI_TIMING1      (IMX23_GPMI_BASE + 0x80U)
+#define IMX23_GPMI_DATA         (IMX23_GPMI_BASE + 0xA0U)
+#define IMX23_GPMI_STAT         (IMX23_GPMI_BASE + 0xB0U)
+#define IMX23_GPMI_DEBUG        (IMX23_GPMI_BASE + 0xC0U)
+#define IMX23_GPMI_VERSION      (IMX23_GPMI_BASE + 0xD0U)
+
+/* HW_GPMI_CTRL0 bits. */
+#define IMX23_GPMI_CTRL0_SFTRST             (1U << 31)
+#define IMX23_GPMI_CTRL0_CLKGATE            (1U << 30)
+#define IMX23_GPMI_CTRL0_RUN                (1U << 29)
+#define IMX23_GPMI_CTRL0_DEV_IRQ_EN         (1U << 28)
+#define IMX23_GPMI_CTRL0_LOCK_CS            (1U << 27)
+#define IMX23_GPMI_CTRL0_UDMA               (1U << 26)
+#define IMX23_GPMI_CTRL0_CMD_MODE_WRITE     (0x0U << 24)
+#define IMX23_GPMI_CTRL0_CMD_MODE_READ      (0x1U << 24)
+#define IMX23_GPMI_CTRL0_CMD_MODE_WAITRDY   (0x3U << 24)
+#define IMX23_GPMI_CTRL0_WORD_LENGTH        (1U << 23)
+#define IMX23_GPMI_CTRL0_CS(n)              (((n) & 0x7U) << 20)
+#define IMX23_GPMI_CTRL0_ADDR_DATA          (0x0U << 17)
+#define IMX23_GPMI_CTRL0_ADDR_CLE           (0x1U << 17)
+#define IMX23_GPMI_CTRL0_ADDR_ALE           (0x2U << 17)
+#define IMX23_GPMI_CTRL0_ADDR_INCREMENT     (1U << 16)
+#define IMX23_GPMI_CTRL0_XFER_COUNT(n)      ((n) & 0xFFFFU)
+
+/* HW_GPMI_CTRL1 bits. */
+#define IMX23_GPMI_CTRL1_GPMI_MODE          (1U << 0)
+#define IMX23_GPMI_CTRL1_ATA_IRQRDY_POL     (1U << 2)
+#define IMX23_GPMI_CTRL1_DEV_RESET          (1U << 3)
+#define IMX23_GPMI_CTRL1_BCH_MODE           (1U << 18)
+
+/* HW_GPMI_ECCCTRL bits. */
+#define IMX23_GPMI_ECCCTRL_ENABLE_ECC       (1U << 12)
+#define IMX23_GPMI_ECCCTRL_ECC_CMD_DECODE   (0x0U << 13)
+#define IMX23_GPMI_ECCCTRL_ECC_CMD_ENCODE   (0x1U << 13)
+#define IMX23_GPMI_ECCCTRL_BCH_AUXONLY      0x100U
+#define IMX23_GPMI_ECCCTRL_BCH_PAGE         0x1FFU
+
+/* HW_GPMI_TIMING0 fields. */
+#define IMX23_GPMI_TIMING0_ADDR_SETUP(n)    (((n) & 0xFFU) << 16)
+#define IMX23_GPMI_TIMING0_DATA_HOLD(n)     (((n) & 0xFFU) << 8)
+#define IMX23_GPMI_TIMING0_DATA_SETUP(n)    ((n) & 0xFFU)
+
+/* HW_GPMI_TIMING1 fields. */
+#define IMX23_GPMI_TIMING1_BUSY_TIMEOUT(n)  (((n) & 0xFFFFU) << 16)
+
+/*===========================================================================*/
+/* BCH ECC accelerator (0x8000A000).                                         */
+/*===========================================================================*/
+
+#define IMX23_BCH_CTRL          (IMX23_BCH_BASE + 0x00U)
+#define IMX23_BCH_STATUS0       (IMX23_BCH_BASE + 0x10U)
+#define IMX23_BCH_MODE          (IMX23_BCH_BASE + 0x20U)
+#define IMX23_BCH_LAYOUTSELECT  (IMX23_BCH_BASE + 0x70U)
+#define IMX23_BCH_FLASH0LAYOUT0 (IMX23_BCH_BASE + 0x80U)
+#define IMX23_BCH_FLASH0LAYOUT1 (IMX23_BCH_BASE + 0x90U)
+#define IMX23_BCH_VERSION       (IMX23_BCH_BASE + 0xE0U)
+
+/* HW_BCH_CTRL bits. */
+#define IMX23_BCH_CTRL_SFTRST           (1U << 31)
+#define IMX23_BCH_CTRL_CLKGATE          (1U << 30)
+#define IMX23_BCH_CTRL_COMPLETE_IRQ_EN  (1U << 8)
+#define IMX23_BCH_CTRL_COMPLETE_IRQ     (1U << 0)
+
+/* HW_BCH_STATUS0 fields. */
+#define IMX23_BCH_STATUS0_BLK0(s)       (((s) >> 8) & 0xFFU)
+#define IMX23_BCH_STATUS_BLK_OK         0x00U
+#define IMX23_BCH_STATUS_BLK_ERASED     0xFFU
+#define IMX23_BCH_STATUS_BLK_UNCORR     0xFEU
+
+/* HW_BCH_FLASH0LAYOUT0 fields (i.MX23: ECC0 at bits 15:12, GF at bit 10). */
+#define IMX23_BCH_LAYOUT0_NBLOCKS(n)    (((n) & 0xFFU) << 24)
+#define IMX23_BCH_LAYOUT0_META_SIZE(n)  (((n) & 0xFFU) << 16)
+#define IMX23_BCH_LAYOUT0_ECC0(n)       (((n) & 0xFU) << 12)
+#define IMX23_BCH_LAYOUT0_GF14          (1U << 10)
+#define IMX23_BCH_LAYOUT0_CHUNK0(n)     ((n) & 0x3FFU)
+
+/* HW_BCH_FLASH0LAYOUT1 fields. */
+#define IMX23_BCH_LAYOUT1_PAGE_SIZE(n)  (((n) & 0xFFFFU) << 16)
+#define IMX23_BCH_LAYOUT1_ECCN(n)       (((n) & 0xFU) << 12)
+#define IMX23_BCH_LAYOUT1_GF14          (1U << 10)
+#define IMX23_BCH_LAYOUT1_CHUNKN(n)     ((n) & 0x3FFU)
 
 #endif /* IMX23_H */

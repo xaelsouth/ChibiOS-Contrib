@@ -116,6 +116,21 @@ void imx23_dma_start(unsigned bus, unsigned ch, imx23_dma_ccw_t *ccw) {
 }
 
 /**
+ * @brief   Starts a chain of ndesc CCW descriptors on a channel.
+ * @note    Each descriptor must have the SEMAPHORE bit set; the channel
+ *          semaphore is kicked ndesc times.
+ *
+ * @notapi
+ */
+void imx23_dma_start_chain(unsigned bus, unsigned ch, imx23_dma_ccw_t *ccw,
+                           unsigned ndesc) {
+
+  IMX23_REG(IMX23_DMA_CH_NXTCMDAR(bus, ch)) = (uint32_t)(uintptr_t)ccw;
+  /* Kick the channel: one semaphore increment per pending command. */
+  IMX23_REG(IMX23_DMA_CH_SEMA(bus, ch) + 4U) = ndesc;   /* SEMA_SET */
+}
+
+/**
  * @brief   Stops a channel (aborts pending commands).
  *
  * @notapi

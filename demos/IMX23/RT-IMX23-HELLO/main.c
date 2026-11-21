@@ -299,6 +299,265 @@ static void cmd_mac(BaseSequentialStream *chp, int argc, char *argv[]) {
 }
 #endif /* BOARD_ENC28J60 */
 
+#if defined(BOARD_IMX23_EVK)
+#include "imx23_gpmi_nand.h"
+#include "nand_lfs.h"
+
+static bool nand_ready;
+static nand_lfs_t nand_lfs;
+
+/* Lazily initialize the GPMI NAND (the BBT scan takes a moment). */
+static int nand_ensure(void) {
+
+  if (!nand_ready) {
+    int rc = imx23_nand_init(&IMX23NAND1, 0U);
+    if (rc != IMX23_NAND_OK) {
+      return rc;
+    }
+    nand_ready = true;
+  }
+  return IMX23_NAND_OK;
+}
+
+static void hexdump(BaseSequentialStream *chp, const uint8_t *p, uint32_t len) {
+  uint32_t i;
+
+  for (i = 0U; i < len; i += 16U) {
+    uint32_t j;
+    chprintf(chp, "%08lx: ", (unsigned long)(i));
+    for (j = 0U; j < 16U; j++) {
+      if (i + j < len) {
+        chprintf(chp, "%02x ", p[i + j]);
+      }
+      else {
+        chprintf(chp, "   ");
+      }
+    }
+    chprintf(chp, "\r\n");
+  }
+}
+
+/* U-Boot-style: nand info | nand erase <block> |
+   nand read <addr> <block> <page> [len] [raw] |
+   nand write <addr> <block> <page> [len] [raw]                        */
+static void cmd_nand(BaseSequentialStream *chp, int argc, char *argv[]) {
+  const imx23_nand_geo_t *g;
+  int rc;
+
+  rc = nand_ensure();
+  if (rc != IMX23_NAND_OK) {
+    chprintf(chp, "nand init failed: %d\r\n", rc);
+    return;
+  }
+  g = imx23_nand_geo(&IMX23NAND1);
+
+  if (argc < 1U) {
+    chprintf(chp, "usage: nand info|erase <blk>|read <addr> <blk> <page> [len] [raw]|write <addr> <blk> <page> [len] [raw]\r\n");
+    return;
+  }
+
+  if (strcmp(argv[0], "info") == 0) {
+    uint32_t b, bad = 0U;
+    chprintf(chp, "NAND: %s\r\n", g->name);
+    chprintf(chp, "JEDEC ID: %02x %02x %02x %02x %02x\r\n",
+             g->id[0], g->id[1], g->id[2], g->id[3], g->id[4]);
+    chprintf(chp, "page %lu + oob %lu, block %lu (%lu pages), %lu blocks (%lu pages)\r\n",
+             (unsigned long)g->page_size, (unsigned long)g->oob_size,
+             (unsigned long)g->block_size, (unsigned long)g->pages_per_block,
+             (unsigned long)g->blocks, (unsigned long)g->pages);
+    chprintf(chp, "BCH: ecc %u bits/512B, %u chunks, layout0=0x%08lx layout1=0x%08lx\r\n",
+             g->ecc_strength, g->ecc_chunks,
+             (unsigned long)g->layout0, (unsigned long)g->layout1);
+    for (b = 0U; b < g->blocks; b++) {
+      if (imx23_nand_is_bad(&IMX23NAND1, b)) {
+        bad++;
+      }
+    }
+    chprintf(chp, "BBT: %lu bad of %lu blocks, %lu good (logical) blocks\r\n",
+             (unsigned long)bad, (unsigned long)g->blocks,
+             (unsigned long)g->good_blocks);
+    for (b = 0U; b < g->blocks; b++) {
+      if (imx23_nand_is_bad(&IMX23NAND1, b)) {
+        chprintf(chp, "  bad block %lu\r\n", (unsigned long)b);
+      }
+    }
+    return;
+  }
+
+  if (strcmp(argv[0], "erase") == 0 && argc >= 2U) {
+    uint32_t blk = (uint32_t)strtoul(argv[1], NULL, 0);
+    rc = imx23_nand_erase_block(&IMX23NAND1, blk);
+    chprintf(chp, "erase block %lu: %s\r\n", (unsigned long)blk,
+             rc == IMX23_NAND_OK ? "OK" : "FAILED");
+    if (rc == IMX23_NAND_ERR_ERASE) {
+      imx23_nand_mark_bad(&IMX23NAND1, blk);
+      chprintf(chp, "block %lu marked bad in BBT\r\n", (unsigned long)blk);
+    }
+    return;
+  }
+
+  if ((strcmp(argv[0], "read") == 0 || strcmp(argv[0], "write") == 0) &&
+      argc >= 4U) {
+    int writing = (strcmp(argv[0], "write") == 0);
+    uint8_t *addr = (uint8_t *)(uintptr_t)strtoul(argv[1], NULL, 0);
+    uint32_t blk   = (uint32_t)strtoul(argv[2], NULL, 0);
+    uint32_t page  = (uint32_t)strtoul(argv[3], NULL, 0);
+    uint32_t len   = (argc >= 5U) ? (uint32_t)strtoul(argv[4], NULL, 0)
+                                  : g->page_size;
+    int raw = 0;
+    uint32_t i, done = 0U;
+    uint8_t tmp[IMX23_NAND_MAX_PAGE_SIZE];
+
+    if (argc >= 6U && strcmp(argv[5], "raw") == 0) {
+      raw = 1;
+    }
+    if (blk >= g->blocks || page >= g->pages_per_block ||
+        len == 0U || len > 64U * 1024U) {
+      chprintf(chp, "bad args\r\n");
+      return;
+    }
+    while (done < len) {
+      uint32_t pp = blk * g->pages_per_block + page + (done / g->page_size);
+      uint32_t chunk = g->page_size;
+      if (chunk > len - done) {
+        chunk = len - done;
+      }
+      if (writing) {
+        memcpy(tmp, addr + done, chunk);
+        rc = raw ? imx23_nand_write_page_raw(&IMX23NAND1, pp, tmp, NULL)
+                 : imx23_nand_write_page(&IMX23NAND1, pp, tmp, NULL);
+      }
+      else {
+        rc = raw ? imx23_nand_read_page_raw(&IMX23NAND1, pp, tmp, NULL)
+                 : imx23_nand_read_page(&IMX23NAND1, pp, tmp, NULL, NULL);
+        if (rc == IMX23_NAND_OK) {
+          memcpy(addr + done, tmp, chunk);
+        }
+      }
+      if (rc != IMX23_NAND_OK) {
+        chprintf(chp, "%s page %lu failed: %d\r\n",
+                 writing ? "write" : "read", (unsigned long)pp, rc);
+        return;
+      }
+      done += chunk;
+    }
+    chprintf(chp, "%s %lu bytes %s block %lu page %lu%s: OK\r\n",
+             writing ? "wrote" : "read", (unsigned long)len,
+             writing ? "to" : "from", (unsigned long)blk, (unsigned long)page,
+             raw ? " (raw)" : "");
+    if (!writing) {
+      hexdump(chp, addr, len > 64U ? 64U : len);
+    }
+    return;
+  }
+
+  chprintf(chp, "usage: nand info|erase <blk>|read <addr> <blk> <page> [len] [raw]|write <addr> <blk> <page> [len] [raw]\r\n");
+}
+
+/* lfs mount [format] | lfs ls [path] | lfs cat <path> | lfs write <path> <text> |
+   lfs rm <path> | lfs unmount                                             */
+static void cmd_lfs(BaseSequentialStream *chp, int argc, char *argv[]) {
+  lfs_t *lfs;
+  int rc;
+
+  if (argc < 1U) {
+    chprintf(chp, "usage: lfs mount [format]|ls [path]|cat <path>|write <path> <text>|rm <path>|unmount\r\n");
+    return;
+  }
+
+  if (strcmp(argv[0], "mount") == 0) {
+    bool format = (argc >= 2U && strcmp(argv[1], "format") == 0);
+    rc = nand_ensure();
+    if (rc != IMX23_NAND_OK) {
+      chprintf(chp, "nand init failed: %d\r\n", rc);
+      return;
+    }
+    rc = nand_lfs_mount(&nand_lfs, &IMX23NAND1, 0U, format);
+    chprintf(chp, "lfs mount: %s (%d)\r\n",
+             rc == LFS_ERR_OK ? "OK" : "FAILED", rc);
+    return;
+  }
+
+  if (!nand_lfs.mounted) {
+    chprintf(chp, "lfs not mounted\r\n");
+    return;
+  }
+  lfs = nand_lfs_handle(&nand_lfs);
+
+  if (strcmp(argv[0], "ls") == 0) {
+    const char *path = (argc >= 2U) ? argv[1] : "/";
+    lfs_dir_t dir;
+    struct lfs_info info;
+    rc = lfs_dir_open(lfs, &dir, path);
+    if (rc != LFS_ERR_OK) {
+      chprintf(chp, "ls %s: %d\r\n", path, rc);
+      return;
+    }
+    chprintf(chp, "%s:\r\n", path);
+    while ((rc = lfs_dir_read(lfs, &dir, &info)) > 0) {
+      chprintf(chp, "  %s %s %lu bytes\r\n",
+               info.type == LFS_TYPE_DIR ? "dir " : "file",
+               info.name, (unsigned long)info.size);
+    }
+    lfs_dir_close(lfs, &dir);
+    return;
+  }
+
+  if (strcmp(argv[0], "cat") == 0 && argc >= 2U) {
+    lfs_file_t f;
+    uint8_t buf[128];
+    lfs_ssize_t n;
+    rc = lfs_file_open(lfs, &f, argv[1], LFS_O_RDONLY);
+    if (rc != LFS_ERR_OK) {
+      chprintf(chp, "cat %s: %d\r\n", argv[1], rc);
+      return;
+    }
+    while ((n = lfs_file_read(lfs, &f, buf, sizeof(buf))) > 0) {
+      streamWrite(chp, buf, (size_t)n);
+    }
+    chprintf(chp, "\r\n");
+    lfs_file_close(lfs, &f);
+    return;
+  }
+
+  if (strcmp(argv[0], "write") == 0 && argc >= 3U) {
+    lfs_file_t f;
+    rc = lfs_file_open(lfs, &f, argv[1], LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC);
+    if (rc != LFS_ERR_OK) {
+      chprintf(chp, "write %s: %d\r\n", argv[1], rc);
+      return;
+    }
+    {
+      int i;
+      for (i = 2; i < argc; i++) {
+        lfs_file_write(lfs, &f, argv[i], (lfs_size_t)strlen(argv[i]));
+        if (i + 1 < argc) {
+          lfs_file_write(lfs, &f, " ", 1U);
+        }
+      }
+      lfs_file_write(lfs, &f, "\r\n", 2U);
+    }
+    lfs_file_close(lfs, &f);
+    chprintf(chp, "wrote %s\r\n", argv[1]);
+    return;
+  }
+
+  if (strcmp(argv[0], "rm") == 0 && argc >= 2U) {
+    rc = lfs_remove(lfs, argv[1]);
+    chprintf(chp, "rm %s: %d\r\n", argv[1], rc);
+    return;
+  }
+
+  if (strcmp(argv[0], "unmount") == 0) {
+    rc = nand_lfs_unmount(&nand_lfs);
+    chprintf(chp, "lfs unmount: %d\r\n", rc);
+    return;
+  }
+
+  chprintf(chp, "usage: lfs mount [format]|ls [path]|cat <path>|write <path> <text>|rm <path>|unmount\r\n");
+}
+#endif /* BOARD_IMX23_EVK */
+
 static const ShellCommand commands[] = {
   { "freq", cmd_freq },
   { "tone", cmd_tone },
@@ -308,6 +567,8 @@ static const ShellCommand commands[] = {
 #if defined(BOARD_IMX23_EVK)
   { "backlight", cmd_backlight },
   { "pxp", cmd_pxp },
+  { "nand", cmd_nand },
+  { "lfs", cmd_lfs },
 #endif
   { NULL, NULL }
 };
