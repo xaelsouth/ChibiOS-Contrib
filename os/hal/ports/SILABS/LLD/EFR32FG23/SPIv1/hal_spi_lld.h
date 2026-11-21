@@ -51,50 +51,65 @@
 #define EFR32_SPI_EUSART3_IRQ_PRIORITY  4
 #endif
 
+/* DMA stream assignments. Set to EFR32_DMA_STREAM_ID_ANY for auto-alloc,
+   or to a specific stream number (0-7) to pin it. Set to -1 to disable DMA
+   for that direction. */
+#if !defined(EFR32_SPI_EUSART1_TX_DMA_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART1_TX_DMA_STREAM    EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_SPI_EUSART1_RX_DMA_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART1_RX_DMA_STREAM    EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_SPI_EUSART2_TX_DMA_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART2_TX_DMA_STREAM    EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_SPI_EUSART2_RX_DMA_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART2_RX_DMA_STREAM    EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_SPI_EUSART3_TX_DMA_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART3_TX_DMA_STREAM    EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_SPI_EUSART3_RX_DMA_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART3_RX_DMA_STREAM    EFR32_DMA_STREAM_ID_ANY
+#endif
+
+#if !defined(EFR32_SPI_EUSART1_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART1_DMA_IRQ_PRIORITY  5
+#endif
+#if !defined(EFR32_SPI_EUSART2_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART2_DMA_IRQ_PRIORITY  5
+#endif
+#if !defined(EFR32_SPI_EUSART3_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_SPI_EUSART3_DMA_IRQ_PRIORITY  5
+#endif
+
 /*===========================================================================*/
 /* Driver data structures and types.                                         */
 /*===========================================================================*/
 
 /**
- * @brief   SPI driver configuration structure.
+ * @brief   Low level fields of the SPI driver configuration structure.
  */
-typedef struct {
-  /**
-   * @brief   Bit rate in Hz.
-   */
-  uint32_t                  bitrate;
-  /**
-   * @brief   EUSART CFG0 register value (clock mode, oversampling).
-   */
-  uint32_t                  cfg0;
-  /**
-   * @brief   EUSART FRAMECFG register value (frame format).
-   */
-  uint32_t                  framecfg;
-  /**
-   * @brief   Callback for end-of-transfer, or NULL.
-   */
-  spicallback_t             end_cb;
-  /**
-   * @brief   Callback argument.
-   */
-  void                      *end_cb_param;
-} SPIConfig;
+#define spi_lld_config_fields                                               \
+  /* Bit rate in Hz. */                                                     \
+  uint32_t                  bitrate;                                       \
+  /* EUSART CFG0 register value (clock mode, oversampling). */             \
+  uint32_t                  cfg0;                                          \
+  /* EUSART FRAMECFG register value (frame format). */                     \
+  uint32_t                  framecfg
 
 /**
- * @brief   SPI driver structure fields.
+ * @brief   Low level fields of the SPI driver structure.
  */
 #define spi_lld_driver_fields                                               \
   /* Pointer to EUSART registers. */                                        \
   EUSART_TypeDef            *eusart;                                        \
   /* EUSART index (0,1,2). */                                               \
   uint32_t                  index;                                         \
-  /* Current config. */                                                     \
-  const SPIConfig           *config;                                       \
-  /* CS port index. */                                                      \
-  ioportid_t                cs_port;                                       \
-  /* CS pad. */                                                             \
-  iopadid_t                 cs_pad
+  /* DMA TX stream (NULL if not allocated). */                             \
+  const void               *dma_tx;                                        \
+  /* DMA RX stream (NULL if not allocated). */                             \
+  const void               *dma_rx
 
 /*===========================================================================*/
 /* External declarations.                                                    */
@@ -114,7 +129,7 @@ extern SPIDriver SPID3;
 extern "C" {
 #endif
   void spi_lld_init(void);
-  void spi_lld_start(SPIDriver *spip, const SPIConfig *config);
+  void spi_lld_start(SPIDriver *spip);
   void spi_lld_stop(SPIDriver *spip);
   void spi_lld_select(SPIDriver *spip);
   void spi_lld_unselect(SPIDriver *spip);
@@ -122,6 +137,9 @@ extern "C" {
   void spi_lld_exchange(SPIDriver *spip, size_t n, const void *txbuf, void *rxbuf);
   void spi_lld_send(SPIDriver *spip, size_t n, const void *txbuf);
   void spi_lld_receive(SPIDriver *spip, size_t n, void *rxbuf);
+  void spi_lld_exchange_dma(SPIDriver *spip, size_t n, const void *txbuf, void *rxbuf);
+  void spi_lld_send_dma(SPIDriver *spip, size_t n, const void *txbuf);
+  void spi_lld_receive_dma(SPIDriver *spip, size_t n, void *rxbuf);
   uint16_t spi_lld_polled_exchange(SPIDriver *spip, uint16_t frame);
 #ifdef __cplusplus
 }

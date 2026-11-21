@@ -30,12 +30,44 @@
 /* Driver local definitions.                                                 */
 /*===========================================================================*/
 
+#if !defined(EFR32_DMA_REQUIRED)
+#define EFR32_DMA_REQUIRED
+#endif
+
 static EUSART_TypeDef * const efr32_spi_eusart[3] = { EUSART0, EUSART1, EUSART2 };
 static const uint32_t efr32_spi_clken[3] = {
   CMU_CLKEN1_EUSART0, CMU_CLKEN1_EUSART1, CMU_CLKEN1_EUSART2
 };
 static const uint32_t efr32_spi_clk[3] = {
   EFR32_EUSART1CLK, EFR32_EUSART23CLK, EFR32_EUSART23CLK
+};
+
+/* DMA request source (SOURCESEL field) per EUSART index. */
+static const uint32_t efr32_spi_dma_src[3] = {
+  LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART0 >> 16,
+  LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART1 >> 16,
+  LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART2 >> 16
+};
+
+/* SIGSEL for TX (TXFL=1) and RX (RXFL=0). */
+#define EFR32_SPI_DMA_SIG_TX   1U
+#define EFR32_SPI_DMA_SIG_RX   0U
+
+/* DMA stream config per instance. */
+static const int32_t efr32_spi_tx_dma_stream[3] = {
+  EFR32_SPI_EUSART1_TX_DMA_STREAM,
+  EFR32_SPI_EUSART2_TX_DMA_STREAM,
+  EFR32_SPI_EUSART3_TX_DMA_STREAM
+};
+static const int32_t efr32_spi_rx_dma_stream[3] = {
+  EFR32_SPI_EUSART1_RX_DMA_STREAM,
+  EFR32_SPI_EUSART2_RX_DMA_STREAM,
+  EFR32_SPI_EUSART3_RX_DMA_STREAM
+};
+static const uint32_t efr32_spi_dma_prio[3] = {
+  EFR32_SPI_EUSART1_DMA_IRQ_PRIORITY,
+  EFR32_SPI_EUSART2_DMA_IRQ_PRIORITY,
+  EFR32_SPI_EUSART3_DMA_IRQ_PRIORITY
 };
 
 /*===========================================================================*/
@@ -71,42 +103,54 @@ void spi_lld_init(void) {
 #if EFR32_SPI_USE_EUSART1
   spiObjectInit(&SPID1);
   SPID1.eusart = EUSART0; SPID1.index = 0;
+  SPID1.dma_tx = NULL; SPID1.dma_rx = NULL;
 #endif
 #if EFR32_SPI_USE_EUSART2
   spiObjectInit(&SPID2);
   SPID2.eusart = EUSART1; SPID2.index = 1;
+  SPID2.dma_tx = NULL; SPID2.dma_rx = NULL;
 #endif
 #if EFR32_SPI_USE_EUSART3
   spiObjectInit(&SPID3);
   SPID3.eusart = EUSART2; SPID3.index = 2;
+  SPID3.dma_tx = NULL; SPID3.dma_rx = NULL;
 #endif
 }
 
-void spi_lld_start(SPIDriver *spip, const SPIConfig *config) {
+void spi_lld_start(SPIDriver *spip) {
   EUSART_TypeDef *u = spip->eusart;
   uint32_t idx = spip->index;
+  const SPIConfig *cfg = spip->config;
   uint32_t clkdiv;
 
   if (spip->state == SPI_STOP) {
     CMU->CLKEN1_SET = efr32_spi_clken[idx];
 
-    /* SPI mode: synchronous, MSB first, 8-bit frames. */
-    u->CFG0 = config->cfg0 | EUSART_CFG0_SYNC;
-    u->FRAMECFG = config->framecfg;
+    /* SPI mode: synchronous, MSB first. */
+    u->CFG0 = cfg->cfg0 | EUSART_CFG0_SYNC;
+    u->FRAMECFG = cfg->framecfg;
 
     u->EN_SET = EUSART_EN_EN;
 
-    clkdiv = spi_lld_clkdiv(efr32_spi_clk[idx], config->bitrate);
+    clkdiv = spi_lld_clkdiv(efr32_spi_clk[idx], cfg->bitrate);
     u->CLKDIV = clkdiv;
 
     u->IF_CLR = u->IF;
     u->CMD_SET = EUSART_CMD_RXEN | EUSART_CMD_TXEN | EUSART_CMD_CLEARTX;
     while ((u->SYNCBUSY & _EUSART_SYNCBUSY_MASK) != 0U) {}
 
-    /* Polling-based driver: no IRQ handlers needed. */
+    /* Allocate DMA streams if configured. */
+#if defined(EFR32_DMA_REQUIRED)
+    if (efr32_spi_tx_dma_stream[idx] >= 0 && spip->dma_tx == NULL) {
+      spip->dma_tx = dmaStreamAlloc((uint32_t)efr32_spi_tx_dma_stream[idx],
+                                     efr32_spi_dma_prio[idx], NULL, NULL);
+    }
+    if (efr32_spi_rx_dma_stream[idx] >= 0 && spip->dma_rx == NULL) {
+      spip->dma_rx = dmaStreamAlloc((uint32_t)efr32_spi_rx_dma_stream[idx],
+                                     efr32_spi_dma_prio[idx], NULL, NULL);
+    }
+#endif
   }
-
-  spip->config = config;
 }
 
 void spi_lld_stop(SPIDriver *spip) {
@@ -114,6 +158,16 @@ void spi_lld_stop(SPIDriver *spip) {
   uint32_t idx = spip->index;
 
   if (spip->state == SPI_READY) {
+#if defined(EFR32_DMA_REQUIRED)
+    if (spip->dma_tx != NULL) {
+      dmaStreamFree(spip->dma_tx);
+      spip->dma_tx = NULL;
+    }
+    if (spip->dma_rx != NULL) {
+      dmaStreamFree(spip->dma_rx);
+      spip->dma_rx = NULL;
+    }
+#endif
     u->CMD_CLR = EUSART_CMD_RXEN | EUSART_CMD_TXEN | EUSART_CMD_CLEARTX;
     while ((u->SYNCBUSY & _EUSART_SYNCBUSY_MASK) != 0U) {}
     u->IF_CLR = u->IF;
@@ -124,13 +178,25 @@ void spi_lld_stop(SPIDriver *spip) {
 }
 
 void spi_lld_select(SPIDriver *spip) {
-  palClearPad(spip->cs_port, spip->cs_pad);
+#if (SPI_SELECT_MODE == SPI_SELECT_MODE_PAD) || defined(__DOXYGEN__)
+  palClearPad(spip->config->ssport, spip->config->sspad);
+#elif (SPI_SELECT_MODE == SPI_SELECT_MODE_LINE) || defined(__DOXYGEN__)
+  palClearLine(spip->config->ssline);
+#elif (SPI_SELECT_MODE == SPI_SELECT_MODE_PORT) || defined(__DOXYGEN__)
+  palClearPort(spip->config->ssport, spip->config->ssmask);
+#endif
 }
 
 void spi_lld_unselect(SPIDriver *spip) {
-  palSetPad(spip->cs_port, spip->cs_pad);
+#if (SPI_SELECT_MODE == SPI_SELECT_MODE_PAD) || defined(__DOXYGEN__)
+  palSetPad(spip->config->ssport, spip->config->sspad);
+#elif (SPI_SELECT_MODE == SPI_SELECT_MODE_LINE) || defined(__DOXYGEN__)
+  palSetLine(spip->config->ssline);
+#elif (SPI_SELECT_MODE == SPI_SELECT_MODE_PORT) || defined(__DOXYGEN__)
+  palSetPort(spip->config->ssport, spip->config->ssmask);
+#endif
   if (spip->config->end_cb != NULL) {
-    spip->config->end_cb(spip, spip->config->end_cb_param);
+    spip->config->end_cb(spip);
   }
 }
 
@@ -170,6 +236,125 @@ void spi_lld_send(SPIDriver *spip, size_t n, const void *txbuf) {
 void spi_lld_receive(SPIDriver *spip, size_t n, void *rxbuf) {
   spi_lld_exchange(spip, n, NULL, rxbuf);
 }
+
+/*===========================================================================*/
+/* DMA-based transfer functions.                                             */
+/*===========================================================================*/
+
+#if defined(EFR32_DMA_REQUIRED) || defined(__DOXYGEN__)
+
+/**
+ * @brief   DMA SPI full-duplex exchange.
+ */
+void spi_lld_exchange_dma(SPIDriver *spip, size_t n,
+                          const void *txbuf, void *rxbuf) {
+  EUSART_TypeDef *u = spip->eusart;
+  uint32_t idx = spip->index;
+  const efr32_dma_stream_t *tx_st = spip->dma_tx;
+  const efr32_dma_stream_t *rx_st = spip->dma_rx;
+
+  if (tx_st != NULL && rx_st != NULL && n > 0U && txbuf != NULL) {
+    /* Route DMA requests. */
+    dmaStreamSetRequestSource(tx_st, efr32_spi_dma_src[idx],
+                              EFR32_SPI_DMA_SIG_TX);
+    dmaStreamSetRequestSource(rx_st, efr32_spi_dma_src[idx],
+                              EFR32_SPI_DMA_SIG_RX);
+
+    /* Start RX first so it's ready to capture incoming data. */
+    if (rxbuf != NULL) {
+      dmaStartPeriphToMem(rx_st, &u->RXDATA, rxbuf, n,
+                          EFR32_DMA_CH_CTRL_SIZE_BYTE);
+    } else {
+      /* Dummy RX to drain. */
+      static uint8_t dummy_rx[256];
+      size_t dn = (n > sizeof(dummy_rx)) ? sizeof(dummy_rx) : n;
+      dmaStartPeriphToMem(rx_st, &u->RXDATA, dummy_rx, dn,
+                          EFR32_DMA_CH_CTRL_SIZE_BYTE);
+    }
+
+    /* Start TX. */
+    dmaStartMemToPeriph(tx_st, txbuf, &u->TXDATA, n,
+                        EFR32_DMA_CH_CTRL_SIZE_BYTE);
+
+    /* Wait for both transfers. */
+    dmaWaitCompletion(tx_st);
+    dmaStreamDisable(tx_st);
+    dmaWaitCompletion(rx_st);
+    dmaStreamDisable(rx_st);
+
+    /* Wait for TX complete (all bits shifted out). */
+    while ((u->IF & EUSART_IF_TXC) == 0U) {}
+    u->IF_CLR = EUSART_IF_TXC;
+  } else {
+    /* Fallback to polling. */
+    spi_lld_exchange(spip, n, txbuf, rxbuf);
+  }
+}
+
+/**
+ * @brief   DMA SPI send (TX only).
+ */
+void spi_lld_send_dma(SPIDriver *spip, size_t n, const void *txbuf) {
+  EUSART_TypeDef *u = spip->eusart;
+  uint32_t idx = spip->index;
+  const efr32_dma_stream_t *tx_st = spip->dma_tx;
+
+  if (tx_st != NULL && n > 0U && txbuf != NULL) {
+    dmaStreamSetRequestSource(tx_st, efr32_spi_dma_src[idx],
+                              EFR32_SPI_DMA_SIG_TX);
+    dmaStartMemToPeriph(tx_st, txbuf, &u->TXDATA, n,
+                        EFR32_DMA_CH_CTRL_SIZE_BYTE);
+    dmaWaitCompletion(tx_st);
+    dmaStreamDisable(tx_st);
+
+    while ((u->IF & EUSART_IF_TXC) == 0U) {}
+    u->IF_CLR = EUSART_IF_TXC;
+  } else {
+    spi_lld_send(spip, n, txbuf);
+  }
+}
+
+/**
+ * @brief   DMA SPI receive (RX only).
+ */
+void spi_lld_receive_dma(SPIDriver *spip, size_t n, void *rxbuf) {
+  EUSART_TypeDef *u = spip->eusart;
+  uint32_t idx = spip->index;
+  const efr32_dma_stream_t *rx_st = spip->dma_rx;
+  const efr32_dma_stream_t *tx_st = spip->dma_tx;
+
+  if (rx_st != NULL && n > 0U && rxbuf != NULL) {
+    /* If TX DMA is available, use DMA exchange with dummy TX pattern. */
+    if (tx_st != NULL) {
+      static const uint8_t dummy_tx[256] = { [0 ... 255] = 0xFFU };
+      if (n <= sizeof(dummy_tx)) {
+        spi_lld_exchange_dma(spip, n, dummy_tx, rxbuf);
+        return;
+      }
+    }
+
+    /* RX DMA only: clock out via polling TX. */
+    dmaStreamSetRequestSource(rx_st, efr32_spi_dma_src[idx],
+                              EFR32_SPI_DMA_SIG_RX);
+    dmaStartPeriphToMem(rx_st, &u->RXDATA, rxbuf, n,
+                        EFR32_DMA_CH_CTRL_SIZE_BYTE);
+
+    for (size_t i = 0U; i < n; i++) {
+      u->TXDATA = 0xFFU;
+      while ((u->IF & EUSART_IF_TXFL) == 0U) {}
+    }
+
+    dmaWaitCompletion(rx_st);
+    dmaStreamDisable(rx_st);
+
+    while ((u->IF & EUSART_IF_TXC) == 0U) {}
+    u->IF_CLR = EUSART_IF_TXC;
+  } else {
+    spi_lld_receive(spip, n, rxbuf);
+  }
+}
+
+#endif /* EFR32_DMA_REQUIRED */
 
 #endif /* HAL_USE_SPI == TRUE */
 

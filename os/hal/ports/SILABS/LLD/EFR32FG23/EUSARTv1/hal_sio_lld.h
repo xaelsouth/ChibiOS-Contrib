@@ -188,12 +188,18 @@
 
 /* Backward-compatible aliases for SIO IrDA control values. */
 #define EFR32_SIO_IRDA_NONE     EFR32_IRDA_NONE
+#ifndef EFR32_IRDA_HF
 #define EFR32_IRDA_HF       EFR32_IRDA_HF
+#endif
+#ifndef EFR32_IRDA_LF
 #define EFR32_IRDA_LF       EFR32_IRDA_LF
+#endif
 #define EFR32_SIO_IRDA_AUTO     EFR32_IRDA_AUTO
 #define EFR32_SIO_IRDA_PW_1_16  EFR32_IRDA_PW_1_16
 #define EFR32_SIO_IRDA_PW_2_16  EFR32_IRDA_PW_2_16
+#ifndef EFR32_IRDA_PW_3_16
 #define EFR32_IRDA_PW_3_16  EFR32_IRDA_PW_3_16
+#endif
 #define EFR32_SIO_IRDA_PW_4_16  EFR32_IRDA_PW_4_16
 
 /*

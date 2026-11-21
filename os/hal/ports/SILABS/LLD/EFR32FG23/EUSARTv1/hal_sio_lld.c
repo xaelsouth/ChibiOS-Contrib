@@ -479,7 +479,7 @@ void sio_lld_set_baud(SIODriver *siop, uint32_t baud, uint32_t irda_mode) {
         (usart->CTRL & _USART_CTRL_OVS_MASK) >> _USART_CTRL_OVS_SHIFT);
     uint32_t clkdiv = _sio_lld_get_clkdiv(siop->clock, ovs, baud);
     _sio_lld_reg_masked_write(&usart->CLKDIV, _USART_CLKDIV_MASK, clkdiv);
-    while ((usart->SYNCBUSY & _USART_SYNCBUSY_MASK) != 0U);
+    while ((usart->STATUS & USART_STATUS_TXENS) == 0U);
   }
 #endif
 }
