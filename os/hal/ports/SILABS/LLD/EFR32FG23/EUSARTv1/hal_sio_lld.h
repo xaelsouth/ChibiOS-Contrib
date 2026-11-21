@@ -186,35 +186,94 @@
  */
 /* IrDA control values for sio_lld_config_fields.irctrl. */
 #define EFR32_SIO_IRDA_NONE     0U  /**< IrDA disabled (default). */
-#define EFR32_SIO_IRDA_HF       1U  /**< HF IrDA mode (IRHFCFG). */
-#define EFR32_SIO_IRDA_LF       2U  /**< LF IrDA mode (IRLFCFG) - for low baud like M-Bus 2400. */
+#define EFR32_SIO_IRDA_HF       1U  /**< HF IrDA mode (IRHFCFG) - for HFRCO/HFXO clocked EUSART. */
+#define EFR32_SIO_IRDA_LF       2U  /**< LF IrDA mode (IRLFCFG) - for LFXO/LFRCO clocked EUSART in EM2/EM3. */
+#define EFR32_SIO_IRDA_AUTO     3U  /**< Auto: LF if clock <= 40kHz (LFXO/LFRCO), else HF. */
 
 /*
- * M-Bus (Meter-Bus) IrDA preset for 2400 baud, 8E1:
- *   - LF IrDA mode (IRLFCFG_IRLFEN) since 2400 is a low baud rate
- *   - 8 data bits, even parity, 1 stop bit
- *   - 4x oversampling (disable oversampling for LF operation, matching
- *     the SmartMeter app which uses (4U << 5) = OVS disabled)
- *
- * Usage:
- *   static const SIOConfig mbus_cfg = {
- *     .baud     = 2400U,
- *     .cfg0     = (0U << 0) | (4U << 5),   // ASYNC, OVS disabled for LF
- *     .framecfg = EFR32_SIO_LLD_EUSART_8E1,
- *     .irhfcg   = 0,
- *     .irlfcfg  = 0,
- *     .irctrl   = EFR32_SIO_IRDA_LF,
- *   };
+ * IrDA pulse width presets for HF mode (IRHFCFG_IRHFPW field).
+ * Standard IrDA uses 3/16 of a bit time.
  */
-#define EFR32_SIO_LLD_MBUS_2400_8E1                                              \
+#define EFR32_SIO_IRDA_PW_1_16   EUSART_IRHFCFG_IRHFPW_ONE    /**< 1/16 bit time */
+#define EFR32_SIO_IRDA_PW_2_16   EUSART_IRHFCFG_IRHFPW_TWO    /**< 2/16 bit time */
+#define EFR32_SIO_IRDA_PW_3_16   EUSART_IRHFCFG_IRHFPW_THREE  /**< 3/16 bit time (standard IrDA) */
+#define EFR32_SIO_IRDA_PW_4_16   EUSART_IRHFCFG_IRHFPW_FOUR   /**< 4/16 bit time */
+
+/*
+ * M-Bus (Meter-Bus) IrDA preset for 2400 baud, 8E1, LF IrDA mode.
+ *
+ * Use when the EUSART is clocked from LFXO/LFRCO (32768 Hz) — typical
+ * for EM2/EM3 low-power operation. Oversampling is disabled because
+ * 32768/2400 = 13.6 clocks/bit is enough without OVS. The LF IrDA
+ * pulse generator (IRLFCFG_IRLFEN) automatically produces 3/16-bit-time
+ * pulses from the LF clock domain.
+ *
+ * Requires EFR32_EUSART1CLK (or EUSART23CLK) to be LFXO or LFRCO.
+ */
+#define EFR32_SIO_LLD_IRDA_2400_8E1_LF                                           \
   {                                                                             \
     .baud     = 2400U,                                                          \
-    .cfg0     = (0U << 0) | (4U << 5),  /* ASYNC, disable oversampling */       \
+    .cfg0     = (0U << 0) | (4U << 5),  /* ASYNC, OVS disabled for LF clock */  \
     .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
     .irhfcg   = 0,                                                              \
     .irlfcfg  = 0,                                                              \
     .irctrl   = EFR32_SIO_IRDA_LF,                                              \
   }
+
+/*
+ * IrDA preset for 2400 baud, 8E1, HF IrDA mode (3/16 pulse, with RX filter).
+ *
+ * Use when the EUSART is clocked from HFRCO/HFXO (e.g. 19-78 MHz) in
+ * EM0/EM1. Standard 16x oversampling. The HF IrDA modulator generates
+ * 3/16-bit-time pulses; the RX filter rejects short glitches.
+ */
+#define EFR32_SIO_LLD_IRDA_2400_8E1_HF                                           \
+  {                                                                             \
+    .baud     = 2400U,                                                          \
+    .cfg0     = (0U << 0) | (0U << 5),  /* ASYNC, 16x oversampling */           \
+    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
+    .irhfcg   = EFR32_SIO_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                \
+    .irlfcfg  = 0,                                                              \
+    .irctrl   = EFR32_SIO_IRDA_HF,                                              \
+  }
+
+/*
+ * IrDA preset for 9600 baud, 8E1, HF IrDA mode (3/16 pulse, with RX filter).
+ *
+ * 9600 baud is too fast for LF IrDA from a 32768 Hz clock (needs >= 3
+ * clocks/bit, 32768/9600 = 3.4 — marginal). Use HF IrDA with the EUSART
+ * clocked from HFRCO/HFXO. Standard 16x oversampling.
+ * At 9600 baud, 3/16 bit time = 19.5 µs IrDA pulse.
+ */
+#define EFR32_SIO_LLD_IRDA_9600_8E1_HF                                           \
+  {                                                                             \
+    .baud     = 9600U,                                                          \
+    .cfg0     = (0U << 0) | (0U << 5),  /* ASYNC, 16x oversampling */           \
+    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
+    .irhfcg   = EFR32_SIO_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                \
+    .irlfcfg  = 0,                                                              \
+    .irctrl   = EFR32_SIO_IRDA_HF,                                              \
+  }
+
+/*
+ * IrDA preset for 9600 baud, 8E1, LF IrDA mode.
+ *
+ * Usable when EUSART clocked from LFXO (32768 Hz): 32768/9600 = 3.41
+ * clocks/bit — just above the 3-clock minimum. OVS disabled.
+ * Useful for EM2/EM3 operation at 9600 baud with LF IrDA pulses.
+ */
+#define EFR32_SIO_LLD_IRDA_9600_8E1_LF                                           \
+  {                                                                             \
+    .baud     = 9600U,                                                          \
+    .cfg0     = (0U << 0) | (4U << 5),  /* ASYNC, OVS disabled */               \
+    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
+    .irhfcg   = 0,                                                              \
+    .irlfcfg  = 0,                                                              \
+    .irctrl   = EFR32_SIO_IRDA_LF,                                              \
+  }
+
+/* Backward-compatible alias. */
+#define EFR32_SIO_LLD_MBUS_2400_8E1   EFR32_SIO_LLD_IRDA_2400_8E1_LF
 
 #define sio_lld_config_fields                                               \
   uint32_t baud;    /**< Desired baud rate. */                              \
@@ -323,6 +382,19 @@ msg_t sio_lld_get(SIODriver* siop);
 void sio_lld_put(SIODriver* siop, uint_fast16_t data);
 msg_t sio_lld_control(SIODriver* siop, unsigned int operation, void* arg);
 void sio_lld_serve_interrupt(SIODriver* siop);
+
+/**
+ * @brief   Change the baud rate of a running SIO driver at runtime.
+ * @details Useful for M-Bus which may switch between 2400 and 9600 baud.
+ *          Also updates the IrDA mode automatically (LF if clock <= 40kHz).
+ *
+ * @param[in] siop      pointer to the @p SIODriver object
+ * @param[in] baud      new baud rate
+ * @param[in] irda_mode EFR32_SIO_IRDA_NONE/HF/LF/AUTO
+ *
+ * @notapi
+ */
+void sio_lld_set_baud(SIODriver *siop, uint32_t baud, uint32_t irda_mode);
 
 bool _sio_lld_is_rx_empty(SIODriver* siop);
 bool _sio_lld_is_rx_idle(SIODriver* siop);

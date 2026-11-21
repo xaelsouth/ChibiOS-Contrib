@@ -173,17 +173,30 @@ __STATIC_INLINE void _sio_lld_start_eusart(SIODriver* siop) {
 
   _sio_lld_reg_masked_write(&(usart->FRAMECFG), _EUSART_FRAMECFG_MASK, config->framecfg);
 
-  /* IrDA configuration (0 = disabled, default for backward compat). */
-  if (config->irctrl == 1U) {
-    /* HF IrDA mode: IRHFCFG with configurable pulse width + filter. */
-    usart->IRHFCFG = config->irhfcg | EUSART_IRHFCFG_IRHFEN;
-  } else if (config->irctrl == 2U) {
-    /* LF IrDA mode: for low baud rates (e.g. M-Bus 2400 baud).
-       IRLFCFG_IRLFEN enables the LF pulse generator/extender. */
-    usart->IRLFCFG = config->irlfcfg | EUSART_IRLFCFG_IRLFEN;
-  } else {
-    usart->IRHFCFG = 0;
-    usart->IRLFCFG = 0;
+  /* IrDA configuration.
+     irctrl: 0 = none, 1 = HF, 2 = LF, 3 = auto (pick LF if clock <= 40kHz else HF).
+     LF IrDA is needed when the EUSART runs from LFXO/LFRCO (32768 Hz) in
+     EM2/EM3 — the HF pulse generator is unavailable in those energy modes. */
+  {
+    uint32_t irda_mode = config->irctrl;
+    if (irda_mode == 3U) {
+      /* Auto-select: LF clock sources are <= 40 kHz. */
+      irda_mode = (siop->clock <= 40000U) ? 2U : 1U;
+    }
+    if (irda_mode == 1U) {
+      /* HF IrDA mode: IRHFCFG with configurable pulse width + filter. */
+      usart->IRHFCFG = config->irhfcg | EUSART_IRHFCFG_IRHFEN;
+      usart->IRLFCFG = 0;
+    } else if (irda_mode == 2U) {
+      /* LF IrDA mode: for low baud rates clocked from LFXO/LFRCO.
+         IRLFCFG_IRLFEN enables the LF pulse generator/extender which
+         automatically produces 3/16-bit-time pulses. */
+      usart->IRLFCFG = config->irlfcfg | EUSART_IRLFCFG_IRLFEN;
+      usart->IRHFCFG = 0;
+    } else {
+      usart->IRHFCFG = 0;
+      usart->IRLFCFG = 0;
+    }
   }
 
   //_sio_lld_reg_masked_write(&(usart->CFG1), _EUSART_CFG1_MASK, EUSART_CFG1_TXFIW_SIXTEENFRAMES);
@@ -434,6 +447,64 @@ msg_t sio_lld_start(SIODriver* siop) {
  *
  * @notapi
  */
+/**
+ * @brief   Change baud rate (and optionally IrDA mode) at runtime.
+ *
+ * @param[in] siop      pointer to the @p SIODriver object
+ * @param[in] baud      new baud rate
+ * @param[in] irda_mode EFR32_SIO_IRDA_NONE/HF/LF/AUTO (0/1/2/3)
+ *
+ * @notapi
+ */
+void sio_lld_set_baud(SIODriver *siop, uint32_t baud, uint32_t irda_mode) {
+  if (siop->state != SIO_READY)
+    return;
+
+#if EFR32_SIO_USE_EUSART1 == TRUE || EFR32_SIO_USE_EUSART2 == TRUE || EFR32_SIO_USE_EUSART3 == TRUE
+  if (siop->usart != NULL) {
+    EUSART_TypeDef *usart = (EUSART_TypeDef *)siop->usart;
+    uint32_t ovs = _sio_lld_get_ovs(
+        (usart->CFG0 & _EUSART_CFG0_OVS_MASK) >> _EUSART_CFG0_OVS_SHIFT);
+    uint32_t clkdiv = _sio_lld_get_clkdiv(siop->clock, ovs, baud);
+
+    osalDbgAssert((siop->clock / baud >= 3), "invalid baudrate");
+    osalDbgAssert((clkdiv <= _EUSART_CLKDIV_MASK), "invalid clkdiv");
+
+    _sio_lld_reg_masked_write(&usart->CLKDIV, _EUSART_CLKDIV_MASK, clkdiv);
+
+    /* Update IrDA mode if requested. */
+    if (irda_mode != 0xFFU) {  /* 0xFF = keep current */
+      uint32_t mode = irda_mode;
+      if (mode == 3U)  /* AUTO */
+        mode = (siop->clock <= 40000U) ? 2U : 1U;
+      if (mode == 1U) {
+        usart->IRHFCFG = EFR32_SIO_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT |
+                         EUSART_IRHFCFG_IRHFEN;
+        usart->IRLFCFG = 0;
+      } else if (mode == 2U) {
+        usart->IRLFCFG = EUSART_IRLFCFG_IRLFEN;
+        usart->IRHFCFG = 0;
+      } else {
+        usart->IRHFCFG = 0;
+        usart->IRLFCFG = 0;
+      }
+    }
+    while ((usart->SYNCBUSY & _EUSART_SYNCBUSY_MASK) != 0U);
+    return;
+  }
+#endif
+#if EFR32_SIO_USE_USART1 == TRUE
+  if (siop->usart != NULL) {
+    USART_TypeDef *usart = (USART_TypeDef *)siop->usart;
+    uint32_t ovs = _sio_lld_get_ovs(
+        (usart->CTRL & _USART_CTRL_OVS_MASK) >> _USART_CTRL_OVS_SHIFT);
+    uint32_t clkdiv = _sio_lld_get_clkdiv(siop->clock, ovs, baud);
+    _sio_lld_reg_masked_write(&usart->CLKDIV, _USART_CLKDIV_MASK, clkdiv);
+    while ((usart->SYNCBUSY & _USART_SYNCBUSY_MASK) != 0U);
+  }
+#endif
+}
+
 void sio_lld_stop(SIODriver* siop) {
 
   if (siop->state == SIO_READY) {
