@@ -40,7 +40,8 @@
 #define LWIP_TCPIP_TIMEOUT              1
 
 #define TCPIP_THREAD_NAME               "tcpip"
-#define TCPIP_THREAD_STACKSIZE          4096
+/* TLS handshake (mbedTLS) runs on this thread: needs a large stack. */
+#define TCPIP_THREAD_STACKSIZE          8192
 #define TCPIP_THREAD_PRIO               (NORMALPRIO)
 #define DEFAULT_THREAD_STACKSIZE        1024
 #define DEFAULT_THREAD_PRIO             (NORMALPRIO)
@@ -58,6 +59,9 @@
 #define mem_clib_free(p)                tlsfHeapFree(p)
 #define mem_clib_calloc(c, s)           tlsfHeapCalloc((c), (s))
 #define MEM_ALIGNMENT                   4
+/* With MEM_LIBC_MALLOC the heap is TLSF; MEM_SIZE is still used by
+   altcp_tls_mbedtls_mem.c as the max single mbedTLS allocation. */
+#define MEM_SIZE                        (128 * 1024)
 #define MEM_STATS                       0
 #define MEMP_MEM_MALLOC                 0
 #define MEM_USE_POOLS                   0
@@ -139,14 +143,7 @@
 /*--------------------------------------------------------------------------*/
 /* Apps.                                                                    */
 /*--------------------------------------------------------------------------*/
-/* HTTP server with POST support (HTTPS upload UI). */
-#define LWIP_HTTPD                      1
-#define LWIP_HTTPD_CGI                  1
-#define LWIP_HTTPD_SUPPORT_POST         1
-#define LWIP_HTTPD_DYNAMIC_HEADERS      1
-#define LWIP_HTTPD_MAX_TAG_NAME_LEN     8
-
-/* altcp + TLS (HTTPS) via mbedtls. */
+/* altcp + TLS (our own HTTPS server, net_services/httpsd) via mbedtls. */
 #define LWIP_ALTCP                      1
 #define LWIP_ALTCP_TLS                  1
 #define LWIP_ALTCP_TLS_MBEDTLS          1

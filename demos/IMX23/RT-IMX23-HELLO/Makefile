@@ -76,12 +76,17 @@ include $(CHIBIOS)/os/various/newlib_bindings/newlib.mk
 # USB RNDIS gadget (devices_lib/usb_net) for USB networking.
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/usb_net/usb_net.mk
 
-# lwIP (TCP/IP stack) with HTTP server + TFTP server apps.
+# lwIP (TCP/IP stack): TFTP server app + altcp_tls via mbedTLS (HTTPS).
 USE_LWIP := yes
-LWSRC_EXTRAS = $(HTTPFILES) $(TFTPFILES)
+LWSRC_EXTRAS = $(TFTPFILES) $(MBEDTLS_FILES)
 include $(CHIBIOS)/os/various/lwip_bindings/lwip.mk
 
-# Network services: telnetd (xshell over TCP port 23), TFTP on LittleFS.
+# mbedTLS (TLS for the HTTPS server). Our mbedtls/*.h shims (in the project
+# dir, on the include path via -I.) cover the headers lwIP 2.1.2 expects
+# from mbedTLS 2.x but 3.x removed (certs.h, net.h, ssl_internal.h).
+include $(CHIBIOS_CONTRIB)/os/various/mbedtls_bindings/mbedtls.mk
+
+# Network services: telnetd (TCP/23), TFTP + HTTPS on LittleFS.
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/net_services/net_services.mk
 
 ##############################################################################
@@ -95,7 +100,8 @@ LDSCRIPT = $(BUILDDIR)/IMX23.ld
 
 # C sources that can be compiled in ARM or THUMB mode.
 CSRC = $(ALLCSRC) \
-       main.c
+       main.c \
+       mbedtls_platform.c
 
 # C++ sources.
 CPPSRC = $(ALLCPPSRC)
@@ -165,7 +171,9 @@ AOPT =
 TOPT = -marm -DTHUMB
 CWARN = -Wall -Wextra -Wundef -Wstrict-prototypes
 CPPWARN = -Wall -Wextra -Wundef
-UDEFS = -DSHELL_CMD_TEST_ENABLED=FALSE -DLFS_THREADSAFE=0 -DLFS_NO_DEBUG=1 -DLFS_NO_WARN=1 -DLFS_CONFIG=nand_lfs_config.h -DUSE_TLSF_HEAP=1
+# mbedTLS config: force-include cfg/mbedtls_config.h in every TU; its
+# MBEDTLS_CONFIG_H guard then suppresses mbedtls's default config.
+UDEFS = -DSHELL_CMD_TEST_ENABLED=FALSE -DLFS_THREADSAFE=0 -DLFS_NO_DEBUG=1 -DLFS_NO_WARN=1 -DLFS_CONFIG=nand_lfs_config.h -DUSE_TLSF_HEAP=1 -include $(CURDIR)/cfg/mbedtls_config.h
 UADEFS =
 UINCDIR =
 ULIBDIR =

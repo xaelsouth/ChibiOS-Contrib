@@ -35,6 +35,11 @@ void mbedtls_entropy_init(mbedtls_entropy_context *ctx) {
   (void)ctx;
 }
 
+void mbedtls_entropy_free(mbedtls_entropy_context *ctx) {
+
+  (void)ctx;
+}
+
 int mbedtls_entropy_func(void *data, unsigned char *output, size_t len) {
 
   return mbedtls_ctr_drbg_random(data, output, len);

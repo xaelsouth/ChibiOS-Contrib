@@ -36,6 +36,7 @@
 #include "usb_net_lwip.h"
 #include "telnetd.h"
 #include "tftpd_lfs.h"
+#include "httpsd.h"
 #include "lwip/ip4_addr.h"
 #endif
 
@@ -683,6 +684,7 @@ int main(void) {
       log_line("NAND LittleFS mounted");
 #if HAL_USE_USB
       tftpd_lfs_start(nand_lfs_handle(&nand_lfs));
+      httpsd_start(nand_lfs_handle(&nand_lfs));
 #endif
     }
     else {
