@@ -354,9 +354,17 @@ static void cmd_mac(BaseSequentialStream *chp, int argc, char *argv[]) {
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_gpmi_nand.h"
 #include "nand_lfs.h"
+#include "imx23_romboot.h"
 
 static bool nand_ready;
 static nand_lfs_t nand_lfs;
+static imx23_romboot_t romboot;
+
+/* LittleFS volume starts past the ROM boot area (NCB/LDLB/DBBT + SB). */
+static uint32_t lfs_base_lblock(void) {
+
+  return imx23_romboot_lfs_base(&IMX23NAND1, IMX23_ROMBOOT_RESERVE_BLOCKS);
+}
 
 /* Lazily initialize the GPMI NAND (the BBT scan takes a moment). */
 static int nand_ensure(void) {
@@ -389,6 +397,18 @@ static void hexdump(BaseSequentialStream *chp, const uint8_t *p, uint32_t len) {
   }
 }
 
+/* bootwrite source: stream an lfs file into the SB writer. */
+typedef struct { lfs_t *lfs; lfs_file_t *f; } bw_ctx_t;
+
+static int bw_lfs_read(void *vctx, uint32_t off, uint8_t *buf, uint32_t len) {
+  bw_ctx_t *c = (bw_ctx_t *)vctx;
+
+  if (lfs_file_seek(c->lfs, c->f, off, LFS_SEEK_SET) < 0) {
+    return -1;
+  }
+  return (lfs_file_read(c->lfs, c->f, buf, len) == (lfs_ssize_t)len) ? 0 : -1;
+}
+
 /* U-Boot-style: nand info | nand erase <block> |
    nand read <addr> <block> <page> [len] [raw] |
    nand write <addr> <block> <page> [len] [raw]                        */
@@ -404,7 +424,44 @@ static void cmd_nand(BaseSequentialStream *chp, int argc, char *argv[]) {
   g = imx23_nand_geo(&IMX23NAND1);
 
   if (argc < 1U) {
-    chprintf(chp, "usage: nand info|erase <blk>|read <addr> <blk> <page> [len] [raw]|write <addr> <blk> <page> [len] [raw]\r\n");
+    chprintf(chp, "usage: nand info|erase <blk>|read <addr> <blk> <page> [len] [raw]|write <addr> <blk> <page> [len] [raw]|bootwrite <lfs .sb file>\r\n");
+    return;
+  }
+
+  /* Write an SB bootstream image from LittleFS into the ROM boot area:
+     NCB (Hamming) at blocks 0-7, LDLB at 8-15, DBBT at 16-23, image from
+     block 24. The .sb is produced on the host by elftosb. */
+  if (strcmp(argv[0], "bootwrite") == 0 && argc >= 2U) {
+    bw_ctx_t ctx;
+    lfs_file_t f;
+    lfs_ssize_t sz;
+    int rc2;
+
+    if (!nand_lfs.mounted) {
+      chprintf(chp, "lfs not mounted\r\n");
+      return;
+    }
+    ctx.lfs = nand_lfs_handle(&nand_lfs);
+    ctx.f   = &f;
+    if (lfs_file_open(ctx.lfs, &f, argv[1], LFS_O_RDONLY) != LFS_ERR_OK) {
+      chprintf(chp, "bootwrite: cannot open %s\r\n", argv[1]);
+      return;
+    }
+    sz = lfs_file_size(ctx.lfs, &f);
+    if (sz <= 0) {
+      chprintf(chp, "bootwrite: %s is empty\r\n", argv[1]);
+      lfs_file_close(ctx.lfs, &f);
+      return;
+    }
+    imx23_romboot_init(&romboot, &IMX23NAND1);
+    chprintf(chp, "bootwrite: writing %ld bytes of %s (NCB/LDLB/DBBT + image from block %lu)...\r\n",
+             (long)sz, argv[1],
+             (unsigned long)imx23_romboot_bootstream_block(g));
+    rc2 = imx23_romboot_write_sb(&romboot, bw_lfs_read, &ctx, (uint32_t)sz);
+    lfs_file_close(ctx.lfs, &f);
+    chprintf(chp, "bootwrite: %s (%d)\r\n",
+             rc2 == IMX23_NAND_OK ? "OK - reset to boot from NAND" : "FAILED",
+             rc2);
     return;
   }
 
@@ -524,7 +581,7 @@ static void cmd_lfs(BaseSequentialStream *chp, int argc, char *argv[]) {
       chprintf(chp, "nand init failed: %d\r\n", rc);
       return;
     }
-    rc = nand_lfs_mount(&nand_lfs, &IMX23NAND1, 0U, format);
+    rc = nand_lfs_mount(&nand_lfs, &IMX23NAND1, lfs_base_lblock(), format);
     chprintf(chp, "lfs mount: %s (%d)\r\n",
              rc == LFS_ERR_OK ? "OK" : "FAILED", rc);
     return;
@@ -857,7 +914,7 @@ int main(void) {
 #if defined(BOARD_IMX23_EVK)
   /* Mount NAND LittleFS at startup and expose it over TFTP (UDP 69). */
   if (nand_ensure() == IMX23_NAND_OK && !nand_lfs.mounted) {
-    int rc = nand_lfs_mount(&nand_lfs, &IMX23NAND1, 0U, false);
+    int rc = nand_lfs_mount(&nand_lfs, &IMX23NAND1, lfs_base_lblock(), false);
     if (rc == LFS_ERR_OK) {
       log_line("NAND LittleFS mounted");
 #if HAL_USE_USB

@@ -60,6 +60,7 @@ ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet
 
 # GPMI+BCH NAND driver (devices_lib/nand) + bitmap + LittleFS.
 ALLCSRC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/imx23_gpmi_nand.c \
+           $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/imx23_romboot.c \
            $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/nand_lfs.c \
            $(CHIBIOS_CONTRIB)/os/various/bitmap.c \
            $(CHIBIOS)/ext/littlefs/lfs.c \
