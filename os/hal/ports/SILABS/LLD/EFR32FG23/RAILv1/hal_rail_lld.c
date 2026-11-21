@@ -161,6 +161,37 @@ uint32_t sli_tz_syscfg_read_chiprev_register(void) {
 }
 #endif
 
+/*
+ * EMU DCDC shim — the RAIL library calls this to configure the
+ * PFMX timeout max control register. We implement it directly
+ * via register access (same as emlib em_emu.c but without deps).
+ * Defined unconditionally since the RAIL precompiled lib references it.
+ */
+void EMU_DCDCSetPFMXTimeoutMaxCtrl(uint32_t value) {
+  bool dcdcLocked = false;
+  bool dcdcClkWasEnabled = false;
+
+  dcdcClkWasEnabled = ((CMU->CLKEN0 & CMU_CLKEN0_DCDC) != 0U);
+  CMU->CLKEN0_SET = CMU_CLKEN0_DCDC;
+
+  dcdcLocked = ((DCDC->LOCKSTATUS & DCDC_LOCKSTATUS_LOCK) != 0U);
+  DCDC->LOCK = DCDC_LOCK_LOCKKEY_UNLOCKKEY;
+
+#if defined(_DCDC_SYNCBUSY_MASK)
+  while ((DCDC->SYNCBUSY & DCDC_SYNCBUSY_PFMXCTRL) != 0U) {}
+#endif
+
+  DCDC->PFMXCTRL = ((DCDC->PFMXCTRL & ~_DCDC_PFMXCTRL_IPKTMAXCTRL_MASK)
+                    | (value << _DCDC_PFMXCTRL_IPKTMAXCTRL_SHIFT));
+
+  if (dcdcLocked) {
+    DCDC->LOCK = DCDC_LOCK_LOCKKEY_DEFAULT;  /* re-lock */
+  }
+  if (!dcdcClkWasEnabled) {
+    CMU->CLKEN0_CLR = CMU_CLKEN0_DCDC;
+  }
+}
+
 /*===========================================================================*/
 /* Radio IRQ handler wrappers.                                               */
 /*===========================================================================*/
