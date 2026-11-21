@@ -35,10 +35,38 @@
 /*===========================================================================*/
 
 #if HAL_USE_PWM == TRUE
-extern PWMDriver PWMD1, PWMD2, PWMD3, PWMD4, PWMD5;
+#if EFR32_PWM_USE_TIMER0 || defined(__DOXYGEN__)
+extern PWMDriver PWMD1;
+#endif
+#if EFR32_PWM_USE_TIMER1 || defined(__DOXYGEN__)
+extern PWMDriver PWMD2;
+#endif
+#if EFR32_PWM_USE_TIMER2 || defined(__DOXYGEN__)
+extern PWMDriver PWMD3;
+#endif
+#if EFR32_PWM_USE_TIMER3 || defined(__DOXYGEN__)
+extern PWMDriver PWMD4;
+#endif
+#if EFR32_PWM_USE_TIMER4 || defined(__DOXYGEN__)
+extern PWMDriver PWMD5;
+#endif
 #endif
 #if HAL_USE_GPT == TRUE
-extern GPTDriver GPTD1, GPTD2, GPTD3, GPTD4, GPTD5;
+#if EFR32_GPT_USE_TIMER0 || defined(__DOXYGEN__)
+extern GPTDriver GPTD1;
+#endif
+#if EFR32_GPT_USE_TIMER1 || defined(__DOXYGEN__)
+extern GPTDriver GPTD2;
+#endif
+#if EFR32_GPT_USE_TIMER2 || defined(__DOXYGEN__)
+extern GPTDriver GPTD3;
+#endif
+#if EFR32_GPT_USE_TIMER3 || defined(__DOXYGEN__)
+extern GPTDriver GPTD4;
+#endif
+#if EFR32_GPT_USE_TIMER4 || defined(__DOXYGEN__)
+extern GPTDriver GPTD5;
+#endif
 #endif
 
 /*===========================================================================*/
@@ -52,27 +80,27 @@ extern GPTDriver GPTD1, GPTD2, GPTD3, GPTD4, GPTD5;
   OSAL_IRQ_EPILOGUE()
 
 #if (EFR32_PWM_USE_TIMER0 || EFR32_GPT_USE_TIMER0) || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER0_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_TIMER1_HANDLER) {
   TIMER_IRQ_DISPATCH(1, EFR32_PWM_USE_TIMER0, EFR32_GPT_USE_TIMER0);
 }
 #endif
 #if (EFR32_PWM_USE_TIMER1 || EFR32_GPT_USE_TIMER1) || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER1_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_TIMER2_HANDLER) {
   TIMER_IRQ_DISPATCH(2, EFR32_PWM_USE_TIMER1, EFR32_GPT_USE_TIMER1);
 }
 #endif
 #if (EFR32_PWM_USE_TIMER2 || EFR32_GPT_USE_TIMER2) || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER2_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_TIMER3_HANDLER) {
   TIMER_IRQ_DISPATCH(3, EFR32_PWM_USE_TIMER2, EFR32_GPT_USE_TIMER2);
 }
 #endif
 #if (EFR32_PWM_USE_TIMER3 || EFR32_GPT_USE_TIMER3) || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER3_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_TIMER4_HANDLER) {
   TIMER_IRQ_DISPATCH(4, EFR32_PWM_USE_TIMER3, EFR32_GPT_USE_TIMER3);
 }
 #endif
 #if (EFR32_PWM_USE_TIMER4 || EFR32_GPT_USE_TIMER4) || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER4_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_TIMER5_HANDLER) {
   TIMER_IRQ_DISPATCH(5, EFR32_PWM_USE_TIMER4, EFR32_GPT_USE_TIMER4);
 }
 #endif

@@ -43,7 +43,7 @@ static const uint32_t efr32_timer_clken[5] = {
 
 /* NVIC IRQ numbers for each TIMER. */
 static const uint32_t efr32_timer_irqn[5] = {
-  TIMER0_IRQn, TIMER1_IRQn, TIMER2_IRQn, TIMER3_IRQn, TIMER4_IRQn
+  EFR32_TIMER1_NUMBER, EFR32_TIMER2_NUMBER, EFR32_TIMER3_NUMBER, EFR32_TIMER4_NUMBER, EFR32_TIMER5_NUMBER
 };
 
 /* IRQ priorities from mcuconf. */

@@ -32,7 +32,7 @@
 
 static I2C_TypeDef * const efr32_i2c[2] = { I2C0, I2C1 };
 static const uint32_t efr32_i2c_clken[2] = { CMU_CLKEN0_I2C0, CMU_CLKEN0_I2C1 };
-static const uint32_t efr32_i2c_irqn[2] = { I2C0_IRQn, I2C1_IRQn };
+static const uint32_t efr32_i2c_irqn[2] = { EFR32_I2C1_NUMBER, EFR32_I2C2_NUMBER };
 static const uint32_t efr32_i2c_irqprio[2] = {
   EFR32_I2C0_IRQ_PRIORITY, EFR32_I2C1_IRQ_PRIORITY
 };
@@ -56,14 +56,14 @@ I2CDriver I2CD2;
 /*===========================================================================*/
 
 #if EFR32_I2C_USE_I2C0 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(I2C0_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_I2C1_HANDLER) {
   OSAL_IRQ_PROLOGUE();
   i2c_lld_serve_interrupt(&I2CD1);
   OSAL_IRQ_EPILOGUE();
 }
 #endif
 #if EFR32_I2C_USE_I2C1 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(I2C1_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_I2C2_HANDLER) {
   OSAL_IRQ_PROLOGUE();
   i2c_lld_serve_interrupt(&I2CD2);
   OSAL_IRQ_EPILOGUE();

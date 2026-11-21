@@ -40,7 +40,7 @@ static const uint32_t efr32_gpt_clken[5] = {
 };
 
 static const uint32_t efr32_gpt_irqn[5] = {
-  TIMER0_IRQn, TIMER1_IRQn, TIMER2_IRQn, TIMER3_IRQn, TIMER4_IRQn
+  EFR32_TIMER1_NUMBER, EFR32_TIMER2_NUMBER, EFR32_TIMER3_NUMBER, EFR32_TIMER4_NUMBER, EFR32_TIMER5_NUMBER
 };
 
 static const uint32_t efr32_gpt_irqprio[5] = {

@@ -34,15 +34,8 @@ static EUSART_TypeDef * const efr32_spi_eusart[3] = { EUSART0, EUSART1, EUSART2 
 static const uint32_t efr32_spi_clken[3] = {
   CMU_CLKEN1_EUSART0, CMU_CLKEN1_EUSART1, CMU_CLKEN1_EUSART2
 };
-static const uint32_t efr32_spi_irqn_rx[3] = {
-  EUSART0_RX_IRQn, EUSART1_RX_IRQn, EUSART2_RX_IRQn
-};
-static const uint32_t efr32_spi_irqn_tx[3] = {
-  EUSART0_TX_IRQn, EUSART1_TX_IRQn, EUSART2_TX_IRQn
-};
-static const uint32_t efr32_spi_irqprio[3] = {
-  EFR32_SPI_EUSART1_IRQ_PRIORITY, EFR32_SPI_EUSART2_IRQ_PRIORITY,
-  EFR32_SPI_EUSART3_IRQ_PRIORITY
+static const uint32_t efr32_spi_clk[3] = {
+  EFR32_EUSART1CLK, EFR32_EUSART23CLK, EFR32_EUSART23CLK
 };
 
 /*===========================================================================*/
@@ -103,15 +96,14 @@ void spi_lld_start(SPIDriver *spip, const SPIConfig *config) {
 
     u->EN_SET = EUSART_EN_EN;
 
-    clkdiv = spi_lld_clkdiv(EFR32_EUSART1CLK, config->bitrate);
+    clkdiv = spi_lld_clkdiv(efr32_spi_clk[idx], config->bitrate);
     u->CLKDIV = clkdiv;
 
     u->IF_CLR = u->IF;
     u->CMD_SET = EUSART_CMD_RXEN | EUSART_CMD_TXEN | EUSART_CMD_CLEARTX;
     while ((u->SYNCBUSY & _EUSART_SYNCBUSY_MASK) != 0U) {}
 
-    nvicEnableVector(efr32_spi_irqn_rx[idx], efr32_spi_irqprio[idx]);
-    nvicEnableVector(efr32_spi_irqn_tx[idx], efr32_spi_irqprio[idx]);
+    /* Polling-based driver: no IRQ handlers needed. */
   }
 
   spip->config = config;
@@ -127,8 +119,6 @@ void spi_lld_stop(SPIDriver *spip) {
     u->IF_CLR = u->IF;
     u->EN_CLR = EUSART_EN_EN;
     while ((u->EN & EUSART_EN_DISABLING) == EUSART_EN_DISABLING) {}
-    nvicDisableVector(efr32_spi_irqn_rx[idx]);
-    nvicDisableVector(efr32_spi_irqn_tx[idx]);
     CMU->CLKEN1_CLR = efr32_spi_clken[idx];
   }
 }

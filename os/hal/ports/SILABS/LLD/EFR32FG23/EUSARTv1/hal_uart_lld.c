@@ -37,10 +37,10 @@ static const uint32_t uart_clken[4]   = {
   CMU_CLKEN1_EUSART0, CMU_CLKEN1_EUSART1, CMU_CLKEN1_EUSART2, CMU_CLKEN0_USART0
 };
 static const uint32_t uart_irqn_rx[4] = {
-  EUSART0_RX_IRQn, EUSART1_RX_IRQn, EUSART2_RX_IRQn, USART0_RX_IRQn
+  EFR32_EUSART1_RX_NUMBER, EFR32_EUSART2_RX_NUMBER, EFR32_EUSART3_RX_NUMBER, EFR32_USART1_RX_NUMBER
 };
 static const uint32_t uart_irqn_tx[4] = {
-  EUSART0_TX_IRQn, EUSART1_TX_IRQn, EUSART2_TX_IRQn, USART0_TX_IRQn
+  EFR32_EUSART1_TX_NUMBER, EFR32_EUSART2_TX_NUMBER, EFR32_EUSART3_TX_NUMBER, EFR32_USART1_TX_NUMBER
 };
 static const uint32_t uart_clk[4]     = {
   EFR32_EUSART1CLK, EFR32_EUSART23CLK, EFR32_EUSART23CLK, EFR32_USART1CLK
@@ -92,39 +92,7 @@ static uint32_t uart_get_ovs(uint32_t cfg0, bool is_usart) {
 /*===========================================================================*/
 /* Driver interrupt handlers.                                                */
 /*===========================================================================*/
-
-#if EFR32_UART_USE_EUSART1 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(EFR32_EUSART1_RX_HANDLER) {
-  OSAL_IRQ_PROLOGUE(); uart_lld_serve_interrupt(&UARTD1); OSAL_IRQ_EPILOGUE();
-}
-OSAL_IRQ_HANDLER(EFR32_EUSART1_TX_HANDLER) {
-  OSAL_IRQ_PROLOGUE(); uart_lld_serve_interrupt(&UARTD1); OSAL_IRQ_EPILOGUE();
-}
-#endif
-#if EFR32_UART_USE_EUSART2 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(EFR32_EUSART2_RX_HANDLER) {
-  OSAL_IRQ_PROLOGUE(); uart_lld_serve_interrupt(&UARTD2); OSAL_IRQ_EPILOGUE();
-}
-OSAL_IRQ_HANDLER(EFR32_EUSART2_TX_HANDLER) {
-  OSAL_IRQ_PROLOGUE(); uart_lld_serve_interrupt(&UARTD2); OSAL_IRQ_EPILOGUE();
-}
-#endif
-#if EFR32_UART_USE_EUSART3 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(EFR32_EUSART3_RX_HANDLER) {
-  OSAL_IRQ_PROLOGUE(); uart_lld_serve_interrupt(&UARTD3); OSAL_IRQ_EPILOGUE();
-}
-OSAL_IRQ_HANDLER(EFR32_EUSART3_TX_HANDLER) {
-  OSAL_IRQ_PROLOGUE(); uart_lld_serve_interrupt(&UARTD3); OSAL_IRQ_EPILOGUE();
-}
-#endif
-#if EFR32_UART_USE_USART1 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(EFR32_USART1_RX_HANDLER) {
-  OSAL_IRQ_PROLOGUE(); uart_lld_serve_interrupt(&UARTD4); OSAL_IRQ_EPILOGUE();
-}
-OSAL_IRQ_HANDLER(EFR32_USART1_TX_HANDLER) {
-  OSAL_IRQ_PROLOGUE(); uart_lld_serve_interrupt(&UARTD4); OSAL_IRQ_EPILOGUE();
-}
-#endif
+/* IRQ handlers are in hal_eusart_irq.c (shared with SIO driver).            */
 
 /*===========================================================================*/
 /* Driver exported functions.                                                */

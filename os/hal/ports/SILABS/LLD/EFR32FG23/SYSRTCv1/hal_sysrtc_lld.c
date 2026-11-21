@@ -43,7 +43,7 @@ SYSRTCDriver SYSRTCD1;
  *
  * @isr
  */
-OSAL_IRQ_HANDLER(SYSRTC_SEQ_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_SYSRTC_SEQ_HANDLER) {
   OSAL_IRQ_PROLOGUE();
   sysrtc_lld_serve_interrupt(&SYSRTCD1);
   OSAL_IRQ_EPILOGUE();
@@ -115,7 +115,7 @@ void sysrtc_lld_start(SYSRTCDriver *drvp, efr32_sysrtc_cb_t cb, void *arg) {
     while ((SYSRTC->SYNCBUSY & _SYSRTC_SYNCBUSY_MASK) != 0U) {}
 
     /* Enable SEQ interrupt. */
-    nvicEnableVector(SYSRTC_SEQ_IRQn, EFR32_SYSRTC_IRQ_PRIORITY);
+    nvicEnableVector(EFR32_SYSRTC_SEQ_NUMBER, EFR32_SYSRTC_IRQ_PRIORITY);
 
     drvp->state = 1U;
   }
@@ -138,7 +138,7 @@ void sysrtc_lld_stop(SYSRTCDriver *drvp) {
 
     SYSRTC->GRP0_IEN = 0U;
     SYSRTC->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
-    nvicDisableVector(SYSRTC_SEQ_IRQn);
+    nvicDisableVector(EFR32_SYSRTC_SEQ_NUMBER);
 
     SYSRTC->EN_CLR = SYSRTC_EN_EN;
     CMU->CLKEN0_CLR = CMU_CLKEN0_SYSRTC0;

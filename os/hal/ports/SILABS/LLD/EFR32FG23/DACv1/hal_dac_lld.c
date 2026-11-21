@@ -64,7 +64,7 @@ static struct {
 /*===========================================================================*/
 
 #if (EFR32_DAC_USE_DAC1_CH1 || EFR32_DAC_USE_DAC1_CH2) || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(VDAC_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_VDAC_HANDLER) {
   OSAL_IRQ_PROLOGUE();
 
   uint32_t isr = VDAC0->IF;
@@ -131,7 +131,7 @@ msg_t dac_lld_start(DACDriver *dacp) {
       VDAC0->OUTCTRL_SET = VDAC_OUTCTRL_MAINOUTENCH0;
       VDAC0->CMD_SET = VDAC_CMD_CH0EN;
 
-      nvicEnableVector(VDAC_IRQn, EFR32_DAC_DAC1_IRQ_PRIORITY);
+      nvicEnableVector(EFR32_VDAC_NUMBER, EFR32_DAC_DAC1_IRQ_PRIORITY);
 
       /* Allocate DMA stream for CH0 if needed. */
 #if defined(EFR32_DMA_REQUIRED)
@@ -197,7 +197,7 @@ void dac_lld_stop(DACDriver *dacp) {
     if ((dac.clk_en_mask & EFR32_DAC1_CLK_EN_MASK) == 0U) {
       VDAC0->EN_CLR = VDAC_EN_EN;
       CMU->CLKEN1_CLR = CMU_CLKEN1_VDAC0;
-      nvicDisableVector(VDAC_IRQn);
+      nvicDisableVector(EFR32_VDAC_NUMBER);
     }
   }
 }

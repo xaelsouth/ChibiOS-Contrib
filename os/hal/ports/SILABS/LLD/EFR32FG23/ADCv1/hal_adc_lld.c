@@ -44,7 +44,7 @@ ADCDriver ADCD1;
  *
  * @isr
  */
-OSAL_IRQ_HANDLER(IADC_IRQHandler) {
+OSAL_IRQ_HANDLER(EFR32_IADC_HANDLER) {
   OSAL_IRQ_PROLOGUE();
 
   uint32_t isr = IADC0->IF;
@@ -113,7 +113,7 @@ msg_t adc_lld_start(ADCDriver *adcp) {
     }
 #endif
 
-    nvicEnableVector(IADC_IRQn, EFR32_ADC_IADC0_IRQ_PRIORITY);
+    nvicEnableVector(EFR32_IADC_NUMBER, EFR32_ADC_IADC0_IRQ_PRIORITY);
   }
 #endif
   return HAL_RET_SUCCESS;
@@ -125,7 +125,7 @@ void adc_lld_stop(ADCDriver *adcp) {
     IADC0->CMD = IADC_CMD_SINGLESTOP | IADC_CMD_SCANSTOP;
     IADC0->IEN = 0U;
     IADC0->IF_CLR = _IADC_IF_MASK;
-    nvicDisableVector(IADC_IRQn);
+    nvicDisableVector(EFR32_IADC_NUMBER);
 
     if (adcp->dma != NULL) {
       dmaStreamFree(adcp->dma);
