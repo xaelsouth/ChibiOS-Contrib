@@ -87,10 +87,25 @@ typedef uint32_t ioline_t;
 #define PAL_PORT(line)        ((ioportid_t)((line) >> 8))
 #define PAL_PAD(line)         ((ioportmask_t)((line) & 0xFFU))
 
+#if (PAL_USE_WAIT == TRUE) || (PAL_USE_CALLBACKS == TRUE) || defined(__DOXYGEN__)
+extern palevent_t _pal_events[3U * 32U];
+#define pal_lld_get_pad_event(port, pad)                                    \
+  (&_pal_events[(uint32_t)(port) * 32U + (uint32_t)(pad)])
+#define pal_lld_get_line_event(line)                                        \
+  (&_pal_events[PAL_PORT(line) * 32U + PAL_PAD(line)])
+#define pal_lld_enablepadevent(port, pad, mode)                             \
+  _pal_lld_enablepadevent(port, pad, mode)
+#define pal_lld_disablepadevent(port, pad)                                 \
+  _pal_lld_disablepadevent(port, pad)
+void _pal_lld_enablepadevent(uint32_t port, uint32_t pad, uint32_t mode);
+void _pal_lld_disablepadevent(uint32_t port, uint32_t pad);
+#endif
+
 /**
  * @brief   Type of a pad mask.
  */
 typedef uint32_t        ioportmask_t;
+typedef uint32_t        iopadid_t;
 
 /**
  * @brief   Type of a pad mode.

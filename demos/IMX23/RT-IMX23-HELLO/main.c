@@ -269,6 +269,9 @@ static const ETHSPIConfig eth_spi_cfg = {
   .reset_trc_delay_ms = 1U,
   .reset_tpl_delay_ms = 10U,
   .reset_line         = PAL_LINE(GPIOB, BOARD_ENC28J60_RESET_PIN),
+#if ETH_USE_CALLBACKS == TRUE
+  .irq_line           = PAL_LINE(GPIOC, BOARD_ENC28J60_IRQ_PIN),
+#endif
 };
 
 static const ETHPhyConfig eth_phy_cfg = {
@@ -363,7 +366,6 @@ int main(void) {
     palSetPad(GPIOB, BOARD_ENC28J60_CS_PIN);   /* CS idle high */
   }
   spiStart(&SPID1, &enc_spi_cfg);
-  enc28j60_set_irq_line(PAL_LINE(GPIOC, BOARD_ENC28J60_IRQ_PIN)); /* bank2 */
   macStart(&ETHD1, &mac_cfg);
   log_line("ENC28J60 started on SSP0");
 #endif

@@ -137,6 +137,18 @@ static void enc_bfc(MACDriver *macp, uint8_t addr, uint8_t mask) {
   enc_xfer(macp, tx, NULL, 2U);
 }
 
+#if ETH_USE_CALLBACKS == TRUE
+/**
+ * @brief   INT pin interrupt handler (falling edge).
+ * @isr
+ */
+static void enc28j60_isr(void *arg) {
+  MACDriver *macp = (MACDriver *)arg;
+
+  __mac_callback(macp);
+}
+#endif
+
 /* PHY register access. */
 static void enc_phy_write(MACDriver *macp, uint8_t addr, uint16_t val) {
   unsigned i;
@@ -242,6 +254,17 @@ void mac_lld_start(MACDriver *macp) {
     palSetLineMode(enc_irq_line, PAL_MODE_INPUT_PULLUP);
   }
 
+#if ETH_USE_CALLBACKS == TRUE
+  /* IRQ-driven mode: register the framework irq_line on the INT pin
+     (falling edge), same as the w5500 driver does. */
+  if (macp->spi_config->irq_line != 0U) {
+    enc_irq_line = macp->spi_config->irq_line;
+    palSetLineMode(enc_irq_line, PAL_MODE_INPUT_PULLUP);
+    palSetLineCallbackI(enc_irq_line, enc28j60_isr, macp);
+    palEnableLineEventI(enc_irq_line, PAL_EVENT_MODE_FALLING_EDGE);
+  }
+#endif
+
   /* Wait for the clock to become ready (errata: also just wait). */
   for (i = 0U; i < ENC_TIMEOUT_MS; i++) {
     if ((enc_read8(macp, ESTAT) & ESTAT_CLKRDY) != 0U) {
@@ -300,6 +323,13 @@ void mac_lld_stop(MACDriver *macp) {
 
   enc_write8(macp, EIE, 0x00U);
   enc_bfc(macp, ECON1, ECON1_RXEN);
+
+#if ETH_USE_CALLBACKS == TRUE
+  if (macp->spi_config->irq_line != 0U) {
+    palDisableLineEventI(macp->spi_config->irq_line);
+    palSetLineCallbackI(macp->spi_config->irq_line, NULL, NULL);
+  }
+#endif
 }
 
 msg_t mac_lld_get_transmit_descriptor(MACDriver *macp,

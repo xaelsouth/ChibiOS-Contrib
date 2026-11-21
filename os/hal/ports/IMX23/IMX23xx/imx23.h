@@ -174,6 +174,12 @@ enum imx23_irq_e {
 /*===========================================================================*/
 
 #define IMX23_PINCTRL_CTRL         (IMX23_PINCTRL_BASE + 0x000U)
+
+/* Per-bank GPIO interrupt registers (bank 0..2). */
+#define IMX23_PINCTRL_IRQEN(bank)    (IMX23_PINCTRL_BASE + 0x900U + (bank) * 0x10U)
+#define IMX23_PINCTRL_IRQLEVEL(bank) (IMX23_PINCTRL_BASE + 0xA00U + (bank) * 0x10U)
+#define IMX23_PINCTRL_IRQPOL(bank)   (IMX23_PINCTRL_BASE + 0xB00U + (bank) * 0x10U)
+#define IMX23_PINCTRL_IRQSTAT(bank)  (IMX23_PINCTRL_BASE + 0xC00U + (bank) * 0x10U)
 /* MUXSEL: 2 bits per pin, 16 pins per register, 2 registers per bank. */
 #define IMX23_PINCTRL_MUXSEL(bank, pin)                                     \
   (IMX23_PINCTRL_BASE + 0x100U + ((bank) * 2U + (pin) / 16U) * 0x10U)

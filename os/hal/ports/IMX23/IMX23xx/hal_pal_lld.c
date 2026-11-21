@@ -23,6 +23,7 @@
  */
 
 #include "hal.h"
+#include "icoll.h"
 
 #if (HAL_USE_PAL == TRUE) || defined(__DOXYGEN__)
 
@@ -45,9 +46,60 @@ const PALConfig pal_default_config = {
 /* Module local variables.                                                   */
 /*===========================================================================*/
 
+#if (PAL_USE_WAIT == TRUE) || (PAL_USE_CALLBACKS == TRUE) || defined(__DOXYGEN__)
+/* One event record per pad per bank (3 banks x 32 pads). */
+palevent_t _pal_events[3U * 32U];
+/* Shadow of the programmed event mode per pad. */
+static uint32_t _pal_event_mode[3U * 32U];
+#endif
+
 /*===========================================================================*/
 /* Module local functions.                                                   */
 /*===========================================================================*/
+
+#if (PAL_USE_WAIT == TRUE) || (PAL_USE_CALLBACKS == TRUE) || defined(__DOXYGEN__)
+
+/* GPIO bank IRQ dispatcher (ICOLL vectors 16/17/18 = GPIO0/1/2). */
+static bool pal_gpio_irq_handler(unsigned bank) {
+  volatile uint32_t *irqstat = (volatile uint32_t *)IMX23_PINCTRL_IRQSTAT(bank);
+  uint32_t stat = *irqstat;
+  uint32_t pending;
+
+  /* Acknowledge (write-1-clear). */
+  *irqstat = stat;
+
+  pending = stat;
+  while (pending != 0U) {
+    uint32_t pad = 31U - __builtin_clz(pending);
+    palevent_t *pep = &_pal_events[bank * 32U + pad];
+    uint32_t mode = _pal_event_mode[bank * 32U + pad];
+
+    pending &= ~(1U << pad);
+
+    if (mode == PAL_EVENT_MODE_DISABLED) {
+      continue;
+    }
+#if (PAL_USE_CALLBACKS == TRUE) || defined(__DOXYGEN__)
+    if (pep->cb != NULL) {
+      pep->cb(pep->arg);
+    }
+#endif
+#if (PAL_USE_WAIT == TRUE) || defined(__DOXYGEN__)
+    osalThreadDequeueAllI(&pep->threads, MSG_OK);
+#endif
+  }
+
+  return false;
+}
+
+static bool pal_gpio0_irq(void) { return pal_gpio_irq_handler(0U); }
+static bool pal_gpio1_irq(void) { return pal_gpio_irq_handler(1U); }
+static bool pal_gpio2_irq(void) { return pal_gpio_irq_handler(2U); }
+
+static bool (*const pal_gpio_handlers[3])(void) = {
+  pal_gpio0_irq, pal_gpio1_irq, pal_gpio2_irq
+};
+#endif /* PAL_USE_WAIT || PAL_USE_CALLBACKS */
 
 /*===========================================================================*/
 /* Module exported functions.                                                */
@@ -129,6 +181,66 @@ void imx23_iomux_set_pad(uint32_t bank, uint32_t pin, uint32_t func,
   *muxsel = (*muxsel & ~(0x3U << mshift)) | ((func & 0x3U) << mshift);
   *drv    = (*drv & ~(0xFU << dshift)) | ((drive & 0xFU) << dshift);
 }
+
+#if (PAL_USE_WAIT == TRUE) || (PAL_USE_CALLBACKS == TRUE) || defined(__DOXYGEN__)
+
+/**
+ * @brief   Enables a pad event (pinctrl GPIO interrupt).
+ *
+ * @notapi
+ */
+void _pal_lld_enablepadevent(uint32_t port, uint32_t pad, uint32_t mode) {
+  volatile uint32_t *irqen  = (volatile uint32_t *)IMX23_PINCTRL_IRQEN(port);
+  volatile uint32_t *irlvl  = (volatile uint32_t *)IMX23_PINCTRL_IRQLEVEL(port);
+  volatile uint32_t *irpol  = (volatile uint32_t *)IMX23_PINCTRL_IRQPOL(port);
+
+  if (port > 2U || pad > 31U) {
+    return;
+  }
+
+  _pal_event_mode[port * 32U + pad] = mode & PAL_EVENT_MODE_EDGES_MASK;
+
+  /* Edge triggered (IRQLEVEL=0); polarity per mode. */
+  *irlvl &= ~(1U << pad);
+  switch (mode & PAL_EVENT_MODE_EDGES_MASK) {
+  case PAL_EVENT_MODE_RISING_EDGE:
+    *irpol |= (1U << pad);
+    break;
+  case PAL_EVENT_MODE_FALLING_EDGE:
+    *irpol &= ~(1U << pad);
+    break;
+  case PAL_EVENT_MODE_BOTH_EDGES:
+    /* Both edges: emulate with falling + rising is not possible in HW;
+       use falling edge only as a sane default for INT-style lines. */
+    *irpol &= ~(1U << pad);
+    break;
+  default:
+    *irqen &= ~(1U << pad);
+    return;
+  }
+
+  /* Route the bank IRQ to the CPU once. */
+  icoll_register_handler(IMX23_IRQ_GPIO0 + port, pal_gpio_handlers[port]);
+  icoll_irq_enable(IMX23_IRQ_GPIO0 + port);
+  *irqen |= (1U << pad);
+}
+
+/**
+ * @brief   Disables a pad event.
+ *
+ * @notapi
+ */
+void _pal_lld_disablepadevent(uint32_t port, uint32_t pad) {
+  volatile uint32_t *irqen = (volatile uint32_t *)IMX23_PINCTRL_IRQEN(port);
+
+  if (port > 2U || pad > 31U) {
+    return;
+  }
+  _pal_event_mode[port * 32U + pad] = PAL_EVENT_MODE_DISABLED;
+  *irqen &= ~(1U << pad);
+}
+
+#endif /* PAL_USE_WAIT || PAL_USE_CALLBACKS */
 
 #endif /* HAL_USE_PAL == TRUE */
 
