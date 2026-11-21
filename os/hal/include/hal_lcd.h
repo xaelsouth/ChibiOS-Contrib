@@ -29,6 +29,50 @@
 
 #include "hal_lcd_lld.h"
 
+/*===========================================================================*/
+/* Driver macros.                                                            */
+/*===========================================================================*/
+
+/**
+ * @brief   Starts the LCD driver.
+ */
+#define lcdStart(lcdp, config)              lcd_lld_start(lcdp, config)
+
+/**
+ * @brief   Stops the LCD driver (disables controller, frees clock).
+ */
+#define lcdStop(lcdp)                       lcd_lld_stop(lcdp)
+
+/**
+ * @brief   Clears all segments in the shadow buffer (does not write HW yet).
+ */
+#define lcdClear(lcdp)                      lcd_lld_clear(lcdp)
+
+/**
+ * @brief   Writes shadow buffer to LCD SEGD registers (CPU).
+ */
+#define lcdUpdate(lcdp)                     lcd_lld_update(lcdp)
+
+/**
+ * @brief   Writes shadow buffer to LCD SEGD registers via DMA.
+ */
+#define lcdUpdateDMA(lcdp)                  lcd_lld_update_dma(lcdp)
+
+/**
+ * @brief   Sets/clears a raw segment in the shadow buffer.
+ */
+#define lcdSetSegment(lcdp, seg, on)        lcd_lld_set_segment(lcdp, seg, on)
+
+/**
+ * @brief   Writes a hex digit (0-F) at a digit position.
+ */
+#define lcdWriteDigit(lcdp, pos, digit)     lcd_lld_write_digit(lcdp, pos, digit)
+
+/**
+ * @brief   Sets/clears an icon element.
+ */
+#define lcdWriteIcon(lcdp, icon, on)        lcd_lld_write_icon(lcdp, icon, on)
+
 #endif /* HAL_USE_LCD == TRUE */
 
 #endif /* HAL_LCD_H */

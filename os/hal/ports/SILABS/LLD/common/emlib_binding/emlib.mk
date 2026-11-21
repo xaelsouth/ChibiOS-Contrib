@@ -1,14 +1,12 @@
-# emlib binding for ChibiOS — provides emlib shims (CORE_EnterCritical etc.)
-# and optionally compiles emlib sources when EFR32_EMLIB_COMPILE_SOURCES=TRUE.
+# emlib binding for ChibiOS — compiles emlib shims + full emlib sources.
+# Include from your app Makefile when you need emlib directly (e.g. RAIL testhal).
+# NOTE: When using ChibiOS HAL drivers for the same peripherals, do NOT include
+# this — the HAL drivers replace emlib. RAILv1 users don't need this either
+# (hal_rail_lld.c provides the same shims).
 GECKO_SDK = $(CHIBIOS_CONTRIB)/ext/gecko_sdk
 
-# Always compiled: the ChibiOS shim for emlib core functions.
-EMLIBSRC = $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/common/emlib_binding/emlib_chibios.c
-
-# Optionally compile full emlib sources (only when not using ChibiOS HAL drivers
-# for the same peripherals). Enable with EFR32_EMLIB_COMPILE_SOURCES=TRUE.
-ifeq ($(EFR32_EMLIB_COMPILE_SOURCES),TRUE)
-EMLIBSRC += \
+EMLIBSRC = \
+               $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/common/emlib_binding/emlib_chibios.c \
                $(GECKO_SDK)/platform/emlib/src/em_acmp.c \
                $(GECKO_SDK)/platform/emlib/src/em_adc.c \
                $(GECKO_SDK)/platform/emlib/src/em_aes.c \
@@ -51,7 +49,6 @@ EMLIBSRC += \
                $(GECKO_SDK)/platform/emlib/src/em_vcmp.c \
                $(GECKO_SDK)/platform/emlib/src/em_vdac.c \
                $(GECKO_SDK)/platform/emlib/src/em_wdog.c
-endif
 
 EMLIBINC = \
                $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/common/emlib_binding \
