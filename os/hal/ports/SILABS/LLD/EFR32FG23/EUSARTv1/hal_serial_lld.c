@@ -159,7 +159,7 @@ void sd_lld_start(SerialDriver *sdp, const SerialConfig *config) {
     (void)config->irctrl;
 
     u->EN_SET = USART_EN_EN;
-    while ((u->SYNCBUSY & _USART_SYNCBUSY_MASK) != 0U) {}
+    while ((u->STATUS & USART_STATUS_TXENS) == 0U) {}
 
     /* Clear FIFOs and flags. */
     u->CMD_SET = USART_CMD_RXDIS | USART_CMD_TXDIS |
@@ -186,7 +186,7 @@ void sd_lld_stop(SerialDriver *sdp) {
     nvicDisableVector(SERIAL_TX_IRQN);
     u->IEN_CLR = _USART_IEN_MASK;
     u->CMD_SET = USART_CMD_RXDIS | USART_CMD_TXDIS;
-    while ((u->SYNCBUSY & _USART_SYNCBUSY_MASK) != 0U) {}
+    while ((u->STATUS & USART_STATUS_TXENS) == 0U) {}
     u->EN_CLR = USART_EN_EN;
     while ((u->EN & USART_EN_DISABLING) == USART_EN_DISABLING) {}
     CMU->CLKEN0_CLR = SERIAL_CLKEN;
