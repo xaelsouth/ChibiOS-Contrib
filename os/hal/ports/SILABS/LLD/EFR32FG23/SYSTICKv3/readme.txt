@@ -1,34 +1,35 @@
-How to use LETIMERx present on EFR32FG1X controllers as system tick.
+How to use LETIMER0 present on EFR32FG23 (Series 2) as system tick.
 
-Also see under demos/SILABS. 
+LETIMER0 is clocked from EM23GRPACLK (LFXO/LFRCO/ULFRCO), so the system
+tick keeps running in EM2/EM3 deep sleep — ideal for battery-powered devices.
 
-1) In your mcuconf.h make sure, that:
+1) In your mcuconf.h make sure that:
 
-#define EFR32_LETIM1SEL                 EFR32_LETIM1SEL_LFXO
-#define EFR32_LETIM2SEL                 EFM32_LETIM2SEL_LFXO
+#define EFR32_ST_USE_TIMER              1       // 1 = LETIMER0
 
-or
+   and that the LETIMER0 clock source is selected, e.g.:
 
-#define EFM32_LETIM1SEL                 EFM32_LETIM1SEL_LFRCO
-#define EFM32_LETIM2SEL                 EFM32_LETIM2SEL_LFRCO
+#define EFR32_EM23GRPACLKSEL            EFR32_EM23GRPACLKSEL_LFXO
 
+   (or LFRCO / ULFRCO)
 
-2) In your chconf.h make sure, that:
+2) In your chconf.h make sure that:
 
-#define CH_CFG_ST_RESOLUTION            16
-#define CH_CFG_ST_TIMEDELTA             6
-#define CH_CFG_ST_FREQUENCY             1024 // If LFXO used as src clk
-#define CH_CFG_ST_FREQUENCY             1024 // If LFRCO used as src clk
-#define CH_CFG_ST_FREQUENCY             1000 // If ULFRCO used as src clk
+#define CH_CFG_ST_RESOLUTION            32      // LETIMER0 CNT is 24-bit on FG23;
+                                                // use 32 (OSAL rounds down)
+#define CH_CFG_ST_TIMEDELTA             8
+#define CH_CFG_ST_FREQUENCY             4096    // LFXO 32768 Hz / DIV8 prescaler = 4096 Hz
 
+   The LETIMER0 counter prescaler is derived from CH_CFG_ST_FREQUENCY:
+   LFXO 32768 Hz / CNTPRESC = CH_CFG_ST_FREQUENCY.
 
 You can't use osDelay() or other "sleeping" functions for periods
 longer than:
-         LETIM_ARR_MAX + 1                    65536
+         LETIMER_CNT_MAX + 1               16777216 (24-bit)
 ----------------------------------- =  ------------------- seconds.
-LETIM_CLOCK / LETIM_CLOCK_PRESCALER    CH_CFG_ST_FREQUENCY
+LETIMER_CLOCK / CNTPRESC            CH_CFG_ST_FREQUENCY
 
-For instance, with CH_CFG_ST_FREQUENCY = 1024 the period is 64 seconds.
+For instance, with CH_CFG_ST_FREQUENCY = 4096 the max delay is ~4096 seconds.
 
 Known good combinations of CH_CFG_ST_FREQUENCY/CH_CFG_ST_TIMEDELTA:
 a) 1000/8 or 1024/8

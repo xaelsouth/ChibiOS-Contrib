@@ -28,7 +28,8 @@ else
 endif
 
 # Drivers compatible with the platform.
-#include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/common/SYSTICKv1/driver.mk
+# NOTE: SYSTICKv1 (Cortex-M SysTick) is NOT included here — FG14P uses its
+# own SYSTICKv3 (LETIMER-based, supports EM2 low-power).
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG14P/SYSTICKv3/driver.mk
 
 # Shared variables
