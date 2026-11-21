@@ -1,8 +1,14 @@
-# Required platform files.
+# emlib binding for ChibiOS — provides emlib shims (CORE_EnterCritical etc.)
+# and optionally compiles emlib sources when EFR32_EMLIB_COMPILE_SOURCES=TRUE.
 GECKO_SDK = $(CHIBIOS_CONTRIB)/ext/gecko_sdk
 
-EMLIBSRC = \
-               emlib/emlib_chibios.c \
+# Always compiled: the ChibiOS shim for emlib core functions.
+EMLIBSRC = $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/common/emlib_binding/emlib_chibios.c
+
+# Optionally compile full emlib sources (only when not using ChibiOS HAL drivers
+# for the same peripherals). Enable with EFR32_EMLIB_COMPILE_SOURCES=TRUE.
+ifeq ($(EFR32_EMLIB_COMPILE_SOURCES),TRUE)
+EMLIBSRC += \
                $(GECKO_SDK)/platform/emlib/src/em_acmp.c \
                $(GECKO_SDK)/platform/emlib/src/em_adc.c \
                $(GECKO_SDK)/platform/emlib/src/em_aes.c \
@@ -45,12 +51,10 @@ EMLIBSRC = \
                $(GECKO_SDK)/platform/emlib/src/em_vcmp.c \
                $(GECKO_SDK)/platform/emlib/src/em_vdac.c \
                $(GECKO_SDK)/platform/emlib/src/em_wdog.c
-
-#EMLIBSRC += $(GECKO_SDK)/platform/emlib/src/em_core.c
-#EMLIBSRC += $(GECKO_SDK)/platform/Device/SiliconLabs/EFR32FG23/Source/system_efr32fg23.c
+endif
 
 EMLIBINC = \
-               emlib \
+               $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/common/emlib_binding \
                $(GECKO_SDK)/platform/common/inc \
                $(GECKO_SDK)/platform/emlib/inc
 

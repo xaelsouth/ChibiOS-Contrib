@@ -64,6 +64,9 @@ include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/COMPv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/QEIv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/RAILv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/LCDv1/driver.mk
+# emlib binding (optional, for apps that use emlib directly without RAIL).
+# When EFR32_RAIL_USE_RAIL=TRUE, RAILv1 already provides the same shims.
+include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/common/emlib_binding/driver.mk
 
 # Shared variables
 ALLCSRC += $(PLATFORMSRC_CONTRIB)
