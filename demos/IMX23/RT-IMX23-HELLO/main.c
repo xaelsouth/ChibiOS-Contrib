@@ -31,6 +31,12 @@
 #include "hal_mac.h"
 #endif
 
+#if HAL_USE_USB
+#include "usb_rndis.h"
+#include "usb_net_lwip.h"
+#include "lwip/ip4_addr.h"
+#endif
+
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_lcdif.h"
 #include "imx23_pxp.h"
@@ -584,6 +590,25 @@ static THD_WORKING_AREA(waShell, 1024);
 /*
  * Application entry point.
  */
+#if HAL_USE_USB
+/* USB RNDIS gadget + lwIP netif (static 192.168.7.2/24). */
+static usb_rndis_t    rndis1;
+static usb_net_lwip_t usbnet1;
+static const uint8_t  usb_mac[6] = { 0x02U, 0x00U, 0x00U, 0x00U, 0x00U, 0x01U };
+
+static void usb_net_start(void) {
+  ip4_addr_t ip, nm, gw;
+
+  ip4addr_aton("192.168.7.2", &ip);
+  ip4addr_aton("255.255.255.0", &nm);
+  ip4addr_aton("192.168.7.1", &gw);
+
+  usbObjectInit(&USBD1);
+  usb_net_lwip_init(&usbnet1, &rndis1, &USBD1, usb_mac, &ip, &nm, &gw);
+  log_line("USB RNDIS gadget started, lwIP netif 192.168.7.2");
+}
+#endif
+
 int main(void) {
 
   halInit();
@@ -631,6 +656,11 @@ int main(void) {
   spiStart(&SPID1, &enc_spi_cfg);
   macStart(&ETHD1, &mac_cfg);
   log_line("ENC28J60 started on SSP0");
+#endif
+
+#if HAL_USE_USB
+  /* USB RNDIS + lwIP (telnetd/TFTP/HTTP live on top of this netif). */
+  usb_net_start();
 #endif
 
   /* xshell on the debug serial port. */

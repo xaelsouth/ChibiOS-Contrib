@@ -56,6 +56,7 @@ extern "C" {
   void  tlsfHeapInit(void);
   void *tlsfHeapAlloc(size_t size);
   void *tlsfHeapAllocAligned(size_t size, size_t align);
+  void *tlsfHeapCalloc(size_t count, size_t size);
   void  tlsfHeapFree(void *p);
   size_t tlsfHeapLargest(void);
 #ifdef __cplusplus

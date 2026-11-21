@@ -76,6 +76,11 @@ include $(CHIBIOS)/os/various/newlib_bindings/newlib.mk
 # USB RNDIS gadget (devices_lib/usb_net) for USB networking.
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/usb_net/usb_net.mk
 
+# lwIP (TCP/IP stack) with HTTP server + TFTP server apps.
+USE_LWIP := yes
+LWSRC_EXTRAS = $(HTTPFILES) $(TFTPFILES)
+include $(CHIBIOS)/os/various/lwip_bindings/lwip.mk
+
 ##############################################################################
 # Project, sources and paths
 ##############################################################################

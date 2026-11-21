@@ -24,6 +24,8 @@
 
 #include "tlsf_bindings.h"
 
+#include <string.h>
+
 /*===========================================================================*/
 /* Module local definitions.                                                 */
 /*===========================================================================*/
@@ -62,6 +64,15 @@ void *tlsfHeapAllocAligned(size_t size, size_t align) {
 
   osalDbgCheck(tlsf_ready);
   return tlsf_memalign(tlsf_heap, align, size);
+}
+
+void *tlsfHeapCalloc(size_t count, size_t size) {
+  void *p = tlsfHeapAlloc(count * size);
+
+  if (p != NULL) {
+    memset(p, 0, count * size);
+  }
+  return p;
 }
 
 void tlsfHeapFree(void *p) {

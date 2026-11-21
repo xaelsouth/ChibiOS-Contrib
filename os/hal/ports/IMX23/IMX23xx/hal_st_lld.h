@@ -35,11 +35,12 @@
 /* Driver constants.                                                         */
 /*===========================================================================*/
 
-/* Timers run from the 32kHz crystal (as Linux does on the i.MX23). */
+/* Timers run from the 24 MHz always-tick divided by 32 = 750 kHz, so that
+   the ST frequency is a multiple of 1000 (required by the lwIP bindings). */
 #if !defined(IMX23_ST_PRESCALE) || defined(__DOXYGEN__)
-#define IMX23_ST_PRESCALE       IMX23_TIMCTRL_PRESCALE_DIV_BY_1
+#define IMX23_ST_PRESCALE       IMX23_TIMCTRL_PRESCALE_DIV_BY_32
 #endif
-#define IMX23_ST_SELECT         IMX23_TIMCTRL_SELECT_32KHZ_XTAL
+#define IMX23_ST_SELECT         IMX23_TIMCTRL_SELECT_TICK_ALWAYS
 
 /* ST counter frequency: must match CH_CFG_ST_FREQUENCY. */
 #define IMX23_ST_FREQ           IMX23_TIMROT_TICK_HZ

@@ -158,16 +158,21 @@ enum imx23_irq_e {
 #define IMX23_TIMCTRL_IRQ_EN        (1U << 14)
 #define IMX23_TIMCTRL_UPDATE        (1U << 7)
 #define IMX23_TIMCTRL_RELOAD        (1U << 6)
-#define IMX23_TIMCTRL_PRESCALE_DIV_BY_1 (0U << 4)
-#define IMX23_TIMCTRL_PRESCALE_DIV_BY_2 (1U << 4)
-#define IMX23_TIMCTRL_PRESCALE_DIV_BY_4 (2U << 4)
-#define IMX23_TIMCTRL_PRESCALE_DIV_BY_8 (3U << 4)
+#define IMX23_TIMCTRL_PRESCALE_DIV_BY_1  (0U << 4)
+#define IMX23_TIMCTRL_PRESCALE_DIV_BY_2  (1U << 4)
+#define IMX23_TIMCTRL_PRESCALE_DIV_BY_4  (2U << 4)
+#define IMX23_TIMCTRL_PRESCALE_DIV_BY_8  (3U << 4)
+#define IMX23_TIMCTRL_PRESCALE_DIV_BY_16 (4U << 4)
+#define IMX23_TIMCTRL_PRESCALE_DIV_BY_32 (5U << 4)
+#define IMX23_TIMCTRL_PRESCALE_DIV_BY_64 (6U << 4)
+#define IMX23_TIMCTRL_PRESCALE_DIV_BY_128 (7U << 4)
 #define IMX23_TIMCTRL_SELECT_32KHZ_XTAL     0x8U   /* 32kHz crystal (as Linux) */
-#define IMX23_TIMCTRL_SELECT_TICK_ALWAYS    0xCU   /* always tick               */
+#define IMX23_TIMCTRL_SELECT_TICK_ALWAYS    0xCU   /* always tick (24MHz XTAL)  */
 
 /* On the i.MX23 (TIMROT v1) TIMCOUNTn is { running[31:16], fixed[15:0] }.
-   We run the ST timers from the 32kHz crystal, exactly like Linux. */
-#define IMX23_TIMROT_TICK_HZ        32768U
+   Default ST tick: 24 MHz always-tick / 32 = 750 kHz, a multiple of 1000
+   as required by the lwIP bindings (sys_now). */
+#define IMX23_TIMROT_TICK_HZ        750000U
 
 /*===========================================================================*/
 /* PINCTRL registers.                                                         */

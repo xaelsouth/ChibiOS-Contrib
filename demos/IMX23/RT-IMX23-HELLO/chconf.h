@@ -89,7 +89,9 @@
  *          timer frequency.
  */
 #if !defined(CH_CFG_ST_FREQUENCY)
-#define CH_CFG_ST_FREQUENCY                 32768
+/* 24 MHz always-tick / 32 = 750 kHz (multiple of 1000, required by the
+   lwIP bindings' sys_now); matches IMX23_ST_PRESCALE/IMX23_ST_SELECT. */
+#define CH_CFG_ST_FREQUENCY                 750000
 #endif
 
 /**
