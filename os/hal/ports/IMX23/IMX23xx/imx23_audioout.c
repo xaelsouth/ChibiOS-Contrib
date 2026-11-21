@@ -163,7 +163,10 @@ msg_t imx23_audio_play(const void *buf, size_t bytes, sysinterval_t timeout) {
   /* Stop any previous run (errata 2349: clear RUN before starting DMA). */
   IMX23_REG32(IMX23_AOUT_CTRL + 0x08U) = IMX23_AOUT_CTRL_RUN;   /* CLR */
 
-  /* One-shot memory -> AUDIOOUT DATA transfer on APBX channel 1. */
+  /* One-shot memory -> AUDIOOUT DATA transfer on APBX channel 1.
+     Per the Linux mxs driver: reset + (re)init the DMA channel BEFORE
+     setting the playback RUN bit, otherwise the channel can stall. */
+  imx23_dma_reset(IMX23_DMA_APBX, IMX23_DMA_CH_AUDIO_DAC);
   audio_ccw.next    = 0U;
   audio_ccw.bits    = IMX23_CCW_IRQ | IMX23_CCW_SEMAPHORE |
                       IMX23_CCW_COMMAND_READ;   /* mem -> peripheral */
@@ -173,7 +176,7 @@ msg_t imx23_audio_play(const void *buf, size_t bytes, sysinterval_t timeout) {
 
   imx23_dma_start(IMX23_DMA_APBX, IMX23_DMA_CH_AUDIO_DAC, &audio_ccw);
 
-  /* RUN the DAC. */
+  /* Only now RUN the DAC. */
   IMX23_REG32(IMX23_AOUT_CTRL + 0x04U) = IMX23_AOUT_CTRL_RUN;   /* SET */
 
   /* Wait for DMA completion (semaphore count drops to 0). */
@@ -186,20 +189,27 @@ msg_t imx23_audio_play(const void *buf, size_t bytes, sysinterval_t timeout) {
     chThdSleepMilliseconds(1);
   }
 
-  /* Let the FIFO drain, then stop. */
+  /* Let the FIFO drain, then stop.
+     Per the Linux mxs driver: deinit the DMA channel FIRST, then clear
+     the RUN bit - clearing RUN while the DMA may still be live can hang
+     the channel (see the "potentially hang DMA channel" comment in
+     mxs_trigger_stop()). */
   if (msg == MSG_OK) {
     chThdSleepMilliseconds(20);
   }
-  IMX23_REG32(IMX23_AOUT_CTRL + 0x08U) = IMX23_AOUT_CTRL_RUN;   /* CLR */
   imx23_dma_stop(IMX23_DMA_APBX, IMX23_DMA_CH_AUDIO_DAC);
+  imx23_dma_reset(IMX23_DMA_APBX, IMX23_DMA_CH_AUDIO_DAC);
+  IMX23_REG32(IMX23_AOUT_CTRL + 0x08U) = IMX23_AOUT_CTRL_RUN;   /* CLR */
 
   return msg;
 }
 
 void imx23_audio_stop(void) {
 
-  IMX23_REG32(IMX23_AOUT_CTRL + 0x08U) = IMX23_AOUT_CTRL_RUN;   /* CLR */
+  /* DMA off first, then RUN off (same ordering as imx23_audio_play). */
   imx23_dma_stop(IMX23_DMA_APBX, IMX23_DMA_CH_AUDIO_DAC);
+  imx23_dma_reset(IMX23_DMA_APBX, IMX23_DMA_CH_AUDIO_DAC);
+  IMX23_REG32(IMX23_AOUT_CTRL + 0x08U) = IMX23_AOUT_CTRL_RUN;   /* CLR */
 }
 
 /** @} */
