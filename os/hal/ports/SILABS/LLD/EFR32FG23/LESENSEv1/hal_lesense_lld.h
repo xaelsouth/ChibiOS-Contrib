@@ -63,6 +63,15 @@
 #define EFR32_LESENSE_IRQ_PRIORITY      3
 #endif
 
+/* DMA stream for result FIFO draining. EFR32_DMA_STREAM_ID_ANY = auto-alloc,
+   specific 0-7 = pin, -1 = disable DMA (IRQ-only mode). */
+#if !defined(EFR32_LESENSE_DMA_STREAM) || defined(__DOXYGEN__)
+#define EFR32_LESENSE_DMA_STREAM        EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_LESENSE_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_LESENSE_DMA_IRQ_PRIORITY  5
+#endif
+
 /*===========================================================================*/
 /* Derived constants and error checks.                                       */
 /*===========================================================================*/
@@ -113,6 +122,7 @@ typedef struct {
   lesense_state_t  state;
   const LESENSEConfig *config;
   uint32_t         scanres;  /**< Last scan result. */
+  const void      *dma;      /**< DMA stream for result FIFO (NULL if none). */
 } LESENSEDriver;
 
 /*===========================================================================*/
@@ -132,6 +142,8 @@ extern "C" {
   void lesense_lld_start_scan(LESENSEDriver *lp);
   void lesense_lld_stop_scan(LESENSEDriver *lp);
   uint32_t lesense_lld_get_scanres(LESENSEDriver *lp);
+  void lesense_lld_start_fifo_dma(LESENSEDriver *lp, uint32_t *buf, size_t n);
+  void lesense_lld_stop_fifo_dma(LESENSEDriver *lp);
   void lesense_lld_serve_interrupt(LESENSEDriver *lp);
 #ifdef __cplusplus
 }

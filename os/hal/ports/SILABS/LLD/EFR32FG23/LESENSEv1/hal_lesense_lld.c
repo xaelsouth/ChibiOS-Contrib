@@ -32,6 +32,10 @@
 
 #if EFR32_LESENSE_USE_LESENSE || defined(__DOXYGEN__)
 
+#if !defined(EFR32_DMA_REQUIRED)
+#define EFR32_DMA_REQUIRED
+#endif
+
 /*===========================================================================*/
 /* Driver exported variables.                                                */
 /*===========================================================================*/
@@ -56,6 +60,7 @@ void lesense_lld_init(void) {
   LESENSED1.state = LESENSE_STOP;
   LESENSED1.config = NULL;
   LESENSED1.scanres = 0;
+  LESENSED1.dma = NULL;
 }
 
 void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
@@ -90,16 +95,30 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   LESENSE->CMD_SET = LESENSE_CMD_CLEARBUF;
   LESENSE->IF_CLR = _LESENSE_IF_MASK;
 
-  /* Enable interrupts for all active channels + scan done. */
-  LESENSE->IEN_SET = chen | LESENSE_IEN_SCANDONE;
+  /* Enable interrupts for all active channels + scan done + result watermark. */
+  LESENSE->IEN_SET = chen | LESENSE_IEN_SCANDONE | LESENSE_IEN_RESWL;
 
   nvicEnableVector(EFR32_LESENSE_NUMBER, EFR32_LESENSE_IRQ_PRIORITY);
+
+  /* Allocate DMA stream for result FIFO if configured. */
+#if defined(EFR32_DMA_REQUIRED)
+  if (EFR32_LESENSE_DMA_STREAM >= 0 && lp->dma == NULL) {
+    lp->dma = dmaStreamAlloc(EFR32_LESENSE_DMA_STREAM,
+                             EFR32_LESENSE_DMA_IRQ_PRIORITY, NULL, NULL);
+  }
+#endif
 
   lp->state = LESENSE_READY;
 }
 
 void lesense_lld_stop(LESENSEDriver *lp) {
   nvicDisableVector(EFR32_LESENSE_NUMBER);
+#if defined(EFR32_DMA_REQUIRED)
+  if (lp->dma != NULL) {
+    dmaStreamFree(lp->dma);
+    lp->dma = NULL;
+  }
+#endif
   LESENSE->IEN_CLR = _LESENSE_IEN_MASK;
   LESENSE->CMD_SET = LESENSE_CMD_STOP;
   LESENSE->EN_CLR = LESENSE_EN_EN;
@@ -121,6 +140,39 @@ void lesense_lld_stop_scan(LESENSEDriver *lp) {
 uint32_t lesense_lld_get_scanres(LESENSEDriver *lp) {
   return lp->scanres;
 }
+
+#if defined(EFR32_DMA_REQUIRED) || defined(__DOXYGEN__)
+
+/**
+ * @brief   Start DMA draining of the LESENSE result FIFO into a memory buffer.
+ * @details Each scan that produces a result pushes one word into RESFIFO.
+ *          DMA reads RESFIFO → buf[n] automatically on LESENSEFIFO request.
+ *
+ * @param[in] lp    pointer to LESENSEDriver
+ * @param[in] buf   destination buffer (array of uint32_t)
+ * @param[in] n     number of FIFO entries to drain
+ */
+void lesense_lld_start_fifo_dma(LESENSEDriver *lp, uint32_t *buf, size_t n) {
+  const efr32_dma_stream_t *st = lp->dma;
+  if (st == NULL || n == 0U) return;
+
+  dmaStreamSetRequestSource(st, LDMAXBAR_CH_REQSEL_SOURCESEL_LESENSE >> 16,
+                            LDMAXBAR_CH_REQSEL_SIGSEL_LESENSEFIFO & 0xFU);
+  dmaStartPeriphToMem(st, &LESENSE->RESFIFO, buf, n,
+                      EFR32_DMA_CH_CTRL_SIZE_WORD);
+}
+
+/**
+ * @brief   Stop the result FIFO DMA and free the stream.
+ */
+void lesense_lld_stop_fifo_dma(LESENSEDriver *lp) {
+  const efr32_dma_stream_t *st = lp->dma;
+  if (st != NULL) {
+    dmaStreamDisable(st);
+  }
+}
+
+#endif /* EFR32_DMA_REQUIRED */
 
 void lesense_lld_serve_interrupt(LESENSEDriver *lp) {
   uint32_t isr = LESENSE->IF;
