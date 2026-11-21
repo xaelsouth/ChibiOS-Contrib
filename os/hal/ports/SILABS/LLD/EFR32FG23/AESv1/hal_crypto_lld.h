@@ -46,6 +46,19 @@
 #define EFR32_CRYPTO_USE_AES1               FALSE
 #endif
 
+/**
+ * @brief   RADIOAES completion mode.
+ * @details If @p TRUE the driver waits for operation completion via the
+ *          AES interrupt (semaphore), so the calling thread sleeps during
+ *          bulk operations. If @p FALSE (default) completion is detected
+ *          by busy-polling the STATUS busy bits, which is cheaper for
+ *          single blocks.
+ * @note    The default is @p FALSE.
+ */
+#if !defined(EFR32_CRYPTO_AES_IRQ_MODE) || defined(__DOXYGEN__)
+#define EFR32_CRYPTO_AES_IRQ_MODE           FALSE
+#endif
+
 /*===========================================================================*/
 /* Derived constants and error checks.                                       */
 /*===========================================================================*/
@@ -143,6 +156,16 @@ struct CRYDriver {
    * @brief   Transient AES key size in bytes (16, 24 or 32).
    */
   size_t                    aes_keysize;
+#if (EFR32_CRYPTO_AES_IRQ_MODE == TRUE) || defined(__DOXYGEN__)
+  /**
+   * @brief   Posted by the AES ISR when an operation completes.
+   */
+  semaphore_t               aes_sem;
+  /**
+   * @brief   Set by the AES ISR on a fetcher/pusher error.
+   */
+  bool                      aes_error;
+#endif
 };
 
 /*===========================================================================*/

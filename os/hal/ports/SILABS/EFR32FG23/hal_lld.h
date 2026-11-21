@@ -480,6 +480,10 @@
 #define EFR32_SYSRTC_SEQ_HANDLER        Vector15C
 #define EFR32_SYSRTC_SEQ_NUMBER         SYSRTC_SEQ_IRQn
 
+/* Vector104 = Vector(40 + 4*AES_IRQn) */
+#define EFR32_AES_HANDLER               Vector104
+#define EFR32_AES_NUMBER                AES_IRQn
+
 /* VectorBC = Vector(40 + 4*AGC_IRQn) */
 #define EFR32_AGC_HANDLER               VectorBC
 #define EFR32_AGC_NUMBER                AGC_IRQn

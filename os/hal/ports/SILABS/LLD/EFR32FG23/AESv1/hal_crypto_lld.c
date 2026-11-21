@@ -114,7 +114,9 @@ static uint32_t aes_keysize_mode(size_t size) {
 
 /*
  * Run one RADIOAES operation. The fetcher chain pulls key/config/IV/payload
- * from memory, the pusher chain writes the result. Both are polled.
+ * from memory, the pusher chain writes the result. Completion is detected
+ * by busy-polling (default) or via the AES interrupt + semaphore when
+ * EFR32_CRYPTO_AES_IRQ_MODE is TRUE (bulk operations, thread sleeps).
  */
 static cryerror_t aes_run(aes_dma_descr_t *fetch_first,
                           aes_dma_descr_t *push_first) {
@@ -122,13 +124,59 @@ static cryerror_t aes_run(aes_dma_descr_t *fetch_first,
   RADIOAES->CTRL = AES_CTRL_FETCHERSCATTERGATHER | AES_CTRL_PUSHERSCATTERGATHER;
   RADIOAES->FETCHADDR = (uint32_t)fetch_first;
   RADIOAES->PUSHADDR  = (uint32_t)push_first;
+#if EFR32_CRYPTO_AES_IRQ_MODE == TRUE
+  CRYD1.aes_error = false;
+  RADIOAES->IF_CLR = 0xFFFFFFFFUL;
+  RADIOAES->IEN = AES_IEN_FETCHERENDOFBLOCK | AES_IEN_PUSHERENDOFBLOCK |
+                   AES_IEN_FETCHERERROR | AES_IEN_PUSHERERROR;
+#endif
   RADIOAES->CMD = AES_CMD_STARTPUSHER | AES_CMD_STARTFETCHER;
 
+#if EFR32_CRYPTO_AES_IRQ_MODE == TRUE
+  /* Sleep until the ISR reports completion or error. */
+  chSemWait(&CRYD1.aes_sem);
+  RADIOAES->IEN = 0U;
+  if (CRYD1.aes_error) {
+    return CRY_ERR_OP_FAILURE;
+  }
+#else
   while ((RADIOAES->STATUS & (AES_STATUS_FETCHERBSY | AES_STATUS_PUSHERBSY)) != 0U) {
   }
+#endif
 
   return CRY_NOERROR;
 }
+
+#if EFR32_CRYPTO_AES_IRQ_MODE == TRUE
+/*===========================================================================*/
+/* Driver interrupt handlers.                                                */
+/*===========================================================================*/
+
+OSAL_IRQ_HANDLER(EFR32_AES_HANDLER) {
+
+  OSAL_IRQ_PROLOGUE();
+
+  uint32_t iflags = RADIOAES->IF;
+  RADIOAES->IF_CLR = iflags;
+
+  if ((iflags & (AES_IF_FETCHERERROR | AES_IF_PUSHERERROR)) != 0U) {
+    CRYD1.aes_error = true;
+    osalSysLockFromISR();
+    chSemSignalI(&CRYD1.aes_sem);
+    osalSysUnlockFromISR();
+  } else if (((iflags & (AES_IF_FETCHERENDOFBLOCK | AES_IF_PUSHERENDOFBLOCK)) ==
+              (AES_IF_FETCHERENDOFBLOCK | AES_IF_PUSHERENDOFBLOCK)) &&
+             ((RADIOAES->STATUS & (AES_STATUS_FETCHERBSY | AES_STATUS_PUSHERBSY)) == 0U)) {
+    /* Both engines finished the whole chain (bulk-safe: ENDOFBLOCK may
+       fire per block, only the final one has both busy bits clear). */
+    osalSysLockFromISR();
+    chSemSignalI(&CRYD1.aes_sem);
+    osalSysUnlockFromISR();
+  }
+
+  OSAL_IRQ_EPILOGUE();
+}
+#endif
 
 /*
  * Build the common fetcher prefix (key + config) and run a mode operation.
@@ -215,6 +263,10 @@ static cryerror_t aes_mode_op(CRYDriver *cryp,
 void cry_lld_init(void) {
   cryObjectInit(&CRYD1);
   CRYD1.aes_keysize = 0U;
+#if EFR32_CRYPTO_AES_IRQ_MODE == TRUE
+  chSemObjectInit(&CRYD1.aes_sem, 0);
+  CRYD1.aes_error = false;
+#endif
 }
 
 void cry_lld_start(CRYDriver *cryp) {
@@ -225,10 +277,19 @@ void cry_lld_start(CRYDriver *cryp) {
   RADIOAES->CTRL = AES_CTRL_SWRESET;
   while ((RADIOAES->STATUS & AES_STATUS_SOFTRSTBSY) != 0U) {
   }
+#if EFR32_CRYPTO_AES_IRQ_MODE == TRUE
+  RADIOAES->IF_CLR = 0xFFFFFFFFUL;
+  RADIOAES->IEN = 0U;
+  nvicEnableVector(EFR32_AES_NUMBER, EFR32_AES_IRQ_PRIORITY);
+#endif
 }
 
 void cry_lld_stop(CRYDriver *cryp) {
   (void)cryp;
+#if EFR32_CRYPTO_AES_IRQ_MODE == TRUE
+  nvicDisableVector(EFR32_AES_NUMBER);
+  RADIOAES->IEN = 0U;
+#endif
   RADIOAES->CTRL = AES_CTRL_SWRESET;
   while ((RADIOAES->STATUS & AES_STATUS_SOFTRSTBSY) != 0U) {
   }
