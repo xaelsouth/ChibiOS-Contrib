@@ -25,6 +25,7 @@
 #include "board.h"
 #include "imx23_clock.h"
 #include "imx23_audioout.h"
+#include "tlsf_bindings.h"
 
 #if defined(BOARD_ENC28J60)
 #include "hal_mac.h"
@@ -587,6 +588,7 @@ int main(void) {
 
   halInit();
   chSysInit();
+  tlsfHeapInit();
 
   /* Console / debug serial. */
   sioStart(&SIOD1, &sio_console);

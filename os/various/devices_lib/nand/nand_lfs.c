@@ -52,17 +52,31 @@
 /* Module local functions.                                                   */
 /*===========================================================================*/
 
-/* littlefs hooks, declared by nand_lfs_config.h (LFS_CONFIG): memory comes
-   from the ChibiOS heap, CRC is the standard littlefs table. */
+/* littlefs hooks, declared by nand_lfs_config.h (LFS_CONFIG). Memory comes
+   from the constant-time TLSF heap when USE_TLSF_HEAP is defined (see
+   os/various/tlsf_bindings), otherwise from the ChibiOS first-fit heap.
+   CRC is the standard littlefs table. */
+#if defined(USE_TLSF_HEAP)
+#include "tlsf_bindings.h"
+#endif
+
 void *lfs_malloc(size_t size) {
 
+#if defined(USE_TLSF_HEAP)
+  return tlsfHeapAlloc(size);
+#else
   return chHeapAlloc(NULL, size);
+#endif
 }
 
 void lfs_free(void *p) {
 
   if (p != NULL) {
+#if defined(USE_TLSF_HEAP)
+    tlsfHeapFree(p);
+#else
     chHeapFree(p);
+#endif
   }
 }
 

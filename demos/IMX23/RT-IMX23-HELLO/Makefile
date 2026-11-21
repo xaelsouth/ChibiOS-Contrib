@@ -68,6 +68,11 @@ ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand \
           $(CHIBIOS_CONTRIB)/os/various \
           $(CHIBIOS)/ext/littlefs
 
+# TLSF constant-time allocator (used by littlefs via USE_TLSF_HEAP).
+# Newlib syscall stubs (tlsf error paths call printf -> newlib stdio).
+include $(CHIBIOS_CONTRIB)/os/various/tlsf_bindings/tlsf.mk
+include $(CHIBIOS)/os/various/newlib_bindings/newlib.mk
+
 ##############################################################################
 # Project, sources and paths
 ##############################################################################
@@ -149,7 +154,7 @@ AOPT =
 TOPT = -marm -DTHUMB
 CWARN = -Wall -Wextra -Wundef -Wstrict-prototypes
 CPPWARN = -Wall -Wextra -Wundef
-UDEFS = -DSHELL_CMD_TEST_ENABLED=FALSE -DLFS_THREADSAFE=0 -DLFS_NO_DEBUG=1 -DLFS_NO_WARN=1 -DLFS_CONFIG=nand_lfs_config.h
+UDEFS = -DSHELL_CMD_TEST_ENABLED=FALSE -DLFS_THREADSAFE=0 -DLFS_NO_DEBUG=1 -DLFS_NO_WARN=1 -DLFS_CONFIG=nand_lfs_config.h -DUSE_TLSF_HEAP=1
 UADEFS =
 UINCDIR =
 ULIBDIR =
