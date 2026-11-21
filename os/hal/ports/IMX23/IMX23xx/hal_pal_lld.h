@@ -80,9 +80,12 @@ typedef struct {
  */
 typedef uint32_t        ioportid_t;
 
-/* A port/pad pair encoded into an ioline_t (used by the MAC driver config). */
+/* A port/pad pair encoded into an ioline_t (used by the MAC driver config).
+   Ports are bank numbers 0..2, so encode as (port << 8) | pad. */
 typedef uint32_t ioline_t;
-#define PAL_LINE(port, pad)   ((ioline_t)((uint32_t)(uintptr_t)(port)) | ((uint32_t)(pad)))
+#define PAL_LINE(port, pad)   ((ioline_t)(((uint32_t)(port) << 8) | ((uint32_t)(pad) & 0xFFU)))
+#define PAL_PORT(line)        ((ioportid_t)((line) >> 8))
+#define PAL_PAD(line)         ((ioportmask_t)((line) & 0xFFU))
 
 /**
  * @brief   Type of a pad mask.

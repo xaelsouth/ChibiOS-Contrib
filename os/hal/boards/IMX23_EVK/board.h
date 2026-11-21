@@ -60,6 +60,9 @@
 #define BOARD_ENC28J60_CS_PIN       20U
 #define BOARD_ENC28J60_IRQ_BANK     2U
 #define BOARD_ENC28J60_IRQ_PIN      3U
+/* RESET line (adjust to your wiring; 0 = use SPI soft-reset only). */
+#define BOARD_ENC28J60_RESET_BANK   1U
+#define BOARD_ENC28J60_RESET_PIN    21U
 #define BOARD_ENC28J60_SPI_CLK_HZ   6000000U
 
 /*

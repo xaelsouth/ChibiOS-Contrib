@@ -187,6 +187,15 @@
 #define ENC28J60_RSV_SIZE         6U      /* next(2) + len(2) + status(2) */
 #define ENC28J60_LAMPS_MODE       0x3476U
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+/* Optional INT pin routing for the RX fast path (active low, 0 = none). */
+void enc28j60_set_irq_line(uint32_t line);
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* ENC28J60_HW_H */
 
 /** @} */

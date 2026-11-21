@@ -42,6 +42,7 @@
 static uint8_t  enc_bank;        /* currently selected register bank      */
 static uint16_t enc_rx_pkt;      /* address of the packet being received  */
 static uint16_t enc_rx_next;     /* next-packet pointer of that packet    */
+static ioline_t enc_irq_line;    /* optional INT pin (active low), 0=none */
 
 /*===========================================================================*/
 /* Module local functions.                                                   */
@@ -197,14 +198,43 @@ static void enc_write_buf(MACDriver *macp, const uint8_t *buf, size_t n) {
 void mac_lld_init(void) {
 
   enc_bank = 0U;
+  enc_irq_line = 0U;
+}
+
+/**
+ * @brief   Optional: route the ENC28J60 INT pin (active low) so the RX
+ *          poll can short-circuit without SPI traffic. When the MAC
+ *          events/PAL callbacks are enabled, the framework's
+ *          @p irq_line in ETHSPIConfig is used instead.
+ *
+ * @notapi
+ */
+void enc28j60_set_irq_line(ioline_t line) {
+
+  enc_irq_line = line;
 }
 
 void mac_lld_start(MACDriver *macp) {
   const uint8_t *mac = macp->config->mac_address;
+  ioline_t rst = macp->spi_config->reset_line;
   uint8_t tx[2];
   unsigned i;
 
-  /* Soft reset. */
+  /* Hardware reset pulse on the RESET line, if one is configured. */
+  if (rst != 0U) {
+    palSetLineMode(rst, PAL_MODE_OUTPUT_PUSHPULL);
+    palClearLine(rst);                              /* RESET low          */
+    chThdSleepMilliseconds(macp->spi_config->reset_trc_delay_ms);
+    palSetLine(rst);                                /* RESET high         */
+    chThdSleepMilliseconds(macp->spi_config->reset_tpl_delay_ms);
+  }
+
+  /* INT pin as input (active low, with pull-up) when provided. */
+  if (enc_irq_line != 0U) {
+    palSetLineMode(enc_irq_line, PAL_MODE_INPUT_PULLUP);
+  }
+
+  /* Soft reset over SPI (works even without a wired RESET pin). */
   tx[0] = ENC28J60_SOFT_RESET;
   tx[1] = ENC28J60_SOFT_RESET;
   enc_xfer(macp, tx, NULL, 2U);
@@ -316,6 +346,11 @@ msg_t mac_lld_get_receive_descriptor(MACDriver *macp,
                                      MACReceiveDescriptor *rdp) {
   uint8_t hdr[ENC28J60_RSV_SIZE];
   uint16_t len;
+
+  /* INT pin fast path: high = no pending interrupt, skip the SPI read. */
+  if ((enc_irq_line != 0U) && (palReadLine(enc_irq_line) != PAL_LOW)) {
+    return MSG_TIMEOUT;
+  }
 
   if (enc_read8(macp, EPKTCNT) == 0U) {
     return MSG_TIMEOUT;
