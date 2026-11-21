@@ -10,3 +10,5 @@ build
 *.vtg
 *.jdebug
 *.jdebug.user
+.vscode/
+Testing/
