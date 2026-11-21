@@ -524,6 +524,10 @@
 #define EFR32_SYNTH_HANDLER             VectorE0
 #define EFR32_SYNTH_NUMBER              SYNTH_IRQn
 
+/* Vector160 = Vector(40 + 4*LCD_IRQn) */
+#define EFR32_LCD_HANDLER               Vector160
+#define EFR32_LCD_NUMBER                LCD_IRQn
+
 /*===========================================================================*/
 /* Driver data structures and types.                                         */
 /*===========================================================================*/

@@ -102,6 +102,7 @@
 #include "hal_timcap.h"
 #include "hal_qei.h"
 #include "hal_comp.h"
+#include "hal_lcd.h"
 #include "hal_opamp.h"
 #include "hal_fsmc.h"
 
