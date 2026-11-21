@@ -566,4 +566,130 @@ extern const uint8_t imx23_pwm_cdiv_shift[8];
 #define IMX23_PWM_CHANNELS      5
 #define IMX23_PWM_CLK_HZ        24000000U
 
+/*===========================================================================*/
+/* LCDIF (MX23 register layout, no CTRL2).                                   */
+/*===========================================================================*/
+
+typedef struct {
+  volatile uint32_t CTRL;         /* 0x00 SET 0x04 CLR 0x08 TOG 0x0C        */
+  volatile uint32_t CTRL_SET;
+  volatile uint32_t CTRL_CLR;
+  volatile uint32_t CTRL_TOG;
+  volatile uint32_t CTRL1;        /* 0x10 SET 0x14 CLR 0x18 TOG 0x1C        */
+  volatile uint32_t CTRL1_SET;
+  volatile uint32_t CTRL1_CLR;
+  volatile uint32_t CTRL1_TOG;
+  volatile uint32_t TRANSFER_COUNT; /* 0x20: V_COUNT[31:16] H_COUNT[15:0]   */
+  volatile uint32_t TRANSFER_COUNT_SET;
+  volatile uint32_t TRANSFER_COUNT_CLR;
+  volatile uint32_t TRANSFER_COUNT_TOG;
+  volatile uint32_t CUR_BUF;      /* 0x30                                   */
+  volatile uint32_t CUR_BUF_SET;
+  volatile uint32_t CUR_BUF_CLR;
+  volatile uint32_t CUR_BUF_TOG;
+  volatile uint32_t NEXT_BUF;     /* 0x40                                   */
+  volatile uint32_t NEXT_BUF_SET;
+  volatile uint32_t NEXT_BUF_CLR;
+  volatile uint32_t NEXT_BUF_TOG;
+  volatile uint32_t RESERVED0[4]; /* 0x50-0x5C                              */
+  volatile uint32_t TIMING;       /* 0x60                                   */
+  volatile uint32_t TIMING_SET;
+  volatile uint32_t TIMING_CLR;
+  volatile uint32_t TIMING_TOG;
+  volatile uint32_t VDCTRL0;      /* 0x70                                   */
+  volatile uint32_t VDCTRL0_SET;
+  volatile uint32_t VDCTRL0_CLR;
+  volatile uint32_t VDCTRL0_TOG;
+  volatile uint32_t VDCTRL1;      /* 0x80: VSYNC_PERIOD                     */
+  volatile uint32_t VDCTRL1_SET;
+  volatile uint32_t VDCTRL1_CLR;
+  volatile uint32_t VDCTRL1_TOG;
+  volatile uint32_t VDCTRL2;      /* 0x90: HSYNC_PULSE_WIDTH[31:24] PERIOD  */
+  volatile uint32_t VDCTRL2_SET;
+  volatile uint32_t VDCTRL2_CLR;
+  volatile uint32_t VDCTRL2_TOG;
+  volatile uint32_t VDCTRL3;      /* 0xA0: H_WAIT[27:16] V_WAIT[15:0]       */
+  volatile uint32_t VDCTRL3_SET;
+  volatile uint32_t VDCTRL3_CLR;
+  volatile uint32_t VDCTRL3_TOG;
+  volatile uint32_t VDCTRL4;      /* 0xB0: DOTCLK_DLY[31:29] SYNC_ON bit18  */
+  volatile uint32_t VDCTRL4_SET;  /*       DOTCLK_H_VALID_DATA_CNT[17:0]    */
+  volatile uint32_t VDCTRL4_CLR;
+  volatile uint32_t VDCTRL4_TOG;
+  volatile uint32_t RESERVED1[0x1B0 / 4 - (0xC0 / 4)]; /* up to DATA  */
+  volatile uint32_t DATA;         /* 0x1B0                                  */
+  volatile uint32_t DATA_SET;
+  volatile uint32_t DATA_CLR;
+  volatile uint32_t DATA_TOG;
+  volatile uint32_t BM_ERROR_STAT;/* 0x1C0                                  */
+  volatile uint32_t BM_ERROR_STAT_SET;
+  volatile uint32_t BM_ERROR_STAT_CLR;
+  volatile uint32_t BM_ERROR_STAT_TOG;
+  volatile uint32_t RESERVED2[4]; /* 0x1D0-0x1DC? STAT at 0x1D0           */
+  volatile uint32_t STAT;         /* 0x1D0                                  */
+  volatile uint32_t STAT_SET;
+  volatile uint32_t STAT_CLR;
+  volatile uint32_t STAT_TOG;
+  volatile uint32_t VERSION;      /* 0x1E0                                  */
+} imx23_lcdif_t;
+
+#define IMX23_LCDIF             ((imx23_lcdif_t *)IMX23_LCDIF_BASE)
+
+#define IMX23_LCDIF_CTRL_SFTRST             (1U << 31)
+#define IMX23_LCDIF_CTRL_CLKGATE            (1U << 30)
+#define IMX23_LCDIF_CTRL_DVI_MODE           (1U << 20)
+#define IMX23_LCDIF_CTRL_BYPASS_COUNT       (1U << 19)
+#define IMX23_LCDIF_CTRL_VSYNC_MODE         (1U << 18)
+#define IMX23_LCDIF_CTRL_DOTCLK_MODE        (1U << 17)
+#define IMX23_LCDIF_CTRL_DATABUS_WIDTH_16   (0U << 10)
+#define IMX23_LCDIF_CTRL_DATABUS_WIDTH_8    (1U << 10)
+#define IMX23_LCDIF_CTRL_DATABUS_WIDTH_18   (2U << 10)
+#define IMX23_LCDIF_CTRL_DATABUS_WIDTH_24   (3U << 10)
+#define IMX23_LCDIF_CTRL_WORD_LENGTH_16     (0U << 8)
+#define IMX23_LCDIF_CTRL_WORD_LENGTH_8      (1U << 8)
+#define IMX23_LCDIF_CTRL_WORD_LENGTH_18     (2U << 8)
+#define IMX23_LCDIF_CTRL_WORD_LENGTH_24     (3U << 8)
+#define IMX23_LCDIF_CTRL_LCDIF_MASTER       (1U << 5)
+#define IMX23_LCDIF_CTRL_DATA_FORMAT_16     (1U << 3)
+#define IMX23_LCDIF_CTRL_DATA_FORMAT_24     (1U << 1)
+#define IMX23_LCDIF_CTRL_RUN                (1U << 0)
+
+#define IMX23_LCDIF_CTRL1_RECOVER_ON_UNDERFLOW  (1U << 24)
+#define IMX23_LCDIF_CTRL1_FIFO_CLEAR            (1U << 21)
+#define IMX23_LCDIF_CTRL1_BYTE_PACKING(v)       (((v) & 0xFU) << 16)
+#define IMX23_LCDIF_CTRL1_VSYNC_EDGE_IRQ_EN     (1U << 12)
+#define IMX23_LCDIF_CTRL1_CUR_FRAME_DONE_IRQ_EN (1U << 13)
+#define IMX23_LCDIF_CTRL1_VSYNC_EDGE_IRQ        (1U << 8)
+#define IMX23_LCDIF_CTRL1_CUR_FRAME_DONE_IRQ    (1U << 9)
+
+#define IMX23_LCDIF_VDCTRL0_ENABLE_PRESENT       (1U << 28)
+#define IMX23_LCDIF_VDCTRL0_VSYNC_POL           (1U << 27)
+#define IMX23_LCDIF_VDCTRL0_HSYNC_POL           (1U << 26)
+#define IMX23_LCDIF_VDCTRL0_DOTCLK_POL          (1U << 25)
+#define IMX23_LCDIF_VDCTRL0_ENABLE_POL          (1U << 24)
+#define IMX23_LCDIF_VDCTRL0_VSYNC_PERIOD_UNIT   (1U << 21)
+#define IMX23_LCDIF_VDCTRL0_VSYNC_PULSE_WIDTH_UNIT (1U << 20)
+#define IMX23_LCDIF_VDCTRL0_VSYNC_PULSE_WIDTH(v) ((v) & 0x3FFFFU)
+
+#define IMX23_LCDIF_VDCTRL2_HSYNC_PULSE_WIDTH(v) (((v) & 0xFFU) << 24)
+#define IMX23_LCDIF_VDCTRL2_HSYNC_PERIOD(v)      ((v) & 0x3FFFFU)
+
+#define IMX23_LCDIF_VDCTRL3_HORIZONTAL_WAIT_CNT(v) (((v) & 0xFFFU) << 16)
+#define IMX23_LCDIF_VDCTRL3_VERTICAL_WAIT_CNT(v)   ((v) & 0xFFFFU)
+
+#define IMX23_LCDIF_VDCTRL4_SYNC_SIGNALS_ON         (1U << 18)
+#define IMX23_LCDIF_VDCTRL4_DOTCLK_H_VALID_DATA_CNT(v) ((v) & 0x3FFFFU)
+
+/* CLKCTRL_PIX (0x60) and FRAC0 byte for the pixel clock. */
+#define IMX23_CLKCTRL_PIX           (IMX23_CLKCTRL_BASE + 0x060U)
+#define IMX23_CLKCTRL_PIX_DIV_MASK  0xFFFU
+#define IMX23_CLKCTRL_PIX_DIV_FRAC_EN (1U << 12)
+#define IMX23_CLKCTRL_PIX_BUSY      (1U << 29)
+#define IMX23_CLKCTRL_PIX_CLKGATE   (1U << 31)
+#define IMX23_CLKCTRL_FRAC0         (IMX23_CLKCTRL_BASE + 0x0F0U)
+#define IMX23_CLKCTRL_FRAC0_PIX     2U
+#define IMX23_CLKCTRL_FRAC_CLKGATE  (1U << 7)
+#define IMX23_CLKCTRL_FRAC_MASK     0x3FU
+#define IMX23_CLKCTRL_CLKSEQ_BYPASS_PIX (1U << 1)
+
 #endif /* IMX23_H */

@@ -356,6 +356,26 @@
 #endif
 
 
+/* Vector50 = Vector(40 + 4*TIMER0_IRQn) */
+#define EFR32_TIMER1_HANDLER            Vector50
+#define EFR32_TIMER1_NUMBER             TIMER0_IRQn
+
+/* Vector54 = Vector(40 + 4*TIMER1_IRQn) */
+#define EFR32_TIMER2_HANDLER            Vector54
+#define EFR32_TIMER2_NUMBER             TIMER1_IRQn
+
+/* Vector58 = Vector(40 + 4*TIMER2_IRQn) */
+#define EFR32_TIMER3_HANDLER            Vector58
+#define EFR32_TIMER3_NUMBER             TIMER2_IRQn
+
+/* Vector5C = Vector(40 + 4*TIMER3_IRQn) */
+#define EFR32_TIMER4_HANDLER            Vector5C
+#define EFR32_TIMER4_NUMBER             TIMER3_IRQn
+
+/* Vector60 = Vector(40 + 4*TIMER4_IRQn) */
+#define EFR32_TIMER5_HANDLER            Vector60
+#define EFR32_TIMER5_NUMBER             TIMER4_IRQn
+
 /* Vector8C = Vector(40 + 4*LETIMER0_IRQn) */
 #define EFR32_LETIM1_HANDLER            Vector8C
 #define EFR32_LETIM1_NUMBER             LETIMER0_IRQn

@@ -49,6 +49,9 @@
 #define IMX23_LCD_VFP           22
 /* Dot clock: 30MHz typ for 800x480@60 (pixel clock ~30MHz). */
 #define IMX23_LCD_PIXCLK_HZ     30000000
+/* Seiko 4.3in panel on the EVK: DE high active, HSYNC/VSYNC low, DOTCLK
+   samples on the falling edge. */
+#define IMX23_LCD_FLAGS         IMX23_LCDIF_FLAG_DE_HIGH
 
 /*
  * The rest of the file is plain C and is hidden when board.h is preprocessed

@@ -24,6 +24,10 @@
 #include "board.h"
 #include "imx23_clock.h"
 
+#if defined(BOARD_IMX23_EVK)
+#include "imx23_lcdif.h"
+#endif
+
 /*
  * Console + xshell on the PL011 DUART (pins configured in board.c).
  */
@@ -74,6 +78,43 @@ static void cmd_freq(BaseSequentialStream *chp, int argc, char *argv[]) {
 }
 
 #if defined(BOARD_IMX23_EVK)
+/*
+ * LCD framebuffer (XRGB8888) and test pattern.
+ */
+static uint32_t lcd_fb[IMX23_LCD_WIDTH * IMX23_LCD_HEIGHT]
+    __attribute__((aligned(32)));
+static volatile uint32_t lcd_frames;
+
+static void lcd_vsync_cb(void) {
+  lcd_frames++;
+}
+
+static const imx23_lcdif_timing_t lcd_timing = {
+  .width      = IMX23_LCD_WIDTH,
+  .height     = IMX23_LCD_HEIGHT,
+  .hsync_len  = IMX23_LCD_HSYNC,
+  .hfp        = IMX23_LCD_HFP,
+  .hbp        = IMX23_LCD_HBP,
+  .vsync_len  = IMX23_LCD_VSYNC,
+  .vfp        = IMX23_LCD_VFP,
+  .vbp        = IMX23_LCD_VBP,
+  .pixclk_hz  = IMX23_LCD_PIXCLK_HZ,
+  .flags      = IMX23_LCD_FLAGS,
+};
+
+static void lcd_test_pattern(void) {
+  uint32_t x, y;
+
+  for (y = 0U; y < IMX23_LCD_HEIGHT; y++) {
+    for (x = 0U; x < IMX23_LCD_WIDTH; x++) {
+      uint32_t r = (x * 255U) / IMX23_LCD_WIDTH;
+      uint32_t g = (y * 255U) / IMX23_LCD_HEIGHT;
+      uint32_t b = ((x + y) * 255U) / (IMX23_LCD_WIDTH + IMX23_LCD_HEIGHT);
+      lcd_fb[y * IMX23_LCD_WIDTH + x] = 0xFF000000U | (r << 16) | (g << 8) | b;
+    }
+  }
+}
+
 /*
  * LCD backlight on PWM channel 2 (pad GPIO_1_28, function 0).
  * "backlight [0-100]" - duty cycle in percent.
@@ -142,11 +183,16 @@ int main(void) {
   palClearPad(BOARD_LED_PORT, BOARD_LED_PAD);
 
 #if defined(BOARD_IMX23_EVK)
-  /* LCD backlight PWM2 on GPIO_1_28. */
+  /* LCD: framebuffer + LCDIF + backlight PWM2 on GPIO_1_28. */
+  lcd_test_pattern();
+  imx23_lcdif_init(&lcd_timing, lcd_fb);
+  imx23_lcdif_set_vsync_callback(lcd_vsync_cb);
   imx23_iomux_set_pad(1U, 28U, 0U, 0x4U);
   pwmStart(&PWMD1, &pwm_backlight_cfg);
   pwmEnableChannel(&PWMD1, BOARD_BACKLIGHT_PWM_CHANNEL,
                    BOARD_BACKLIGHT_PWM_PERIOD / 2U);   /* 50% */
+  log_line("LCD up: %ux%u @ %lu Hz pixclk", IMX23_LCD_WIDTH, IMX23_LCD_HEIGHT,
+           (unsigned long)IMX23_LCD_PIXCLK_HZ);
 #endif
 
   /* xshell on the debug serial port. */
@@ -157,9 +203,16 @@ int main(void) {
   /* Heartbeat with timestamped log. */
   while (true) {
     palTogglePad(BOARD_LED_PORT, BOARD_LED_PAD);
+#if defined(BOARD_IMX23_EVK)
+    log_line("heartbeat, CPU = %lu Hz, profile %u, LCD frames = %lu",
+             (unsigned long)imx23_clock_cpu_hz(),
+             imx23_clock_current_profile(),
+             (unsigned long)lcd_frames);
+#else
     log_line("heartbeat, CPU = %lu Hz, profile %u",
              (unsigned long)imx23_clock_cpu_hz(),
              imx23_clock_current_profile());
+#endif
     chThdSleepMilliseconds(2000);
   }
 

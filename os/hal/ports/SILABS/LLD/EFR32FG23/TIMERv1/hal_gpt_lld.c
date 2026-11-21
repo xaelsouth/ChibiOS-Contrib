@@ -72,42 +72,8 @@ GPTDriver GPTD5;
 /*===========================================================================*/
 /* Driver interrupt handlers.                                                */
 /*===========================================================================*/
-
-#if EFR32_GPT_USE_TIMER0 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER0_IRQHandler) {
-  OSAL_IRQ_PROLOGUE();
-  gpt_lld_serve_interrupt(&GPTD1);
-  OSAL_IRQ_EPILOGUE();
-}
-#endif
-#if EFR32_GPT_USE_TIMER1 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER1_IRQHandler) {
-  OSAL_IRQ_PROLOGUE();
-  gpt_lld_serve_interrupt(&GPTD2);
-  OSAL_IRQ_EPILOGUE();
-}
-#endif
-#if EFR32_GPT_USE_TIMER2 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER2_IRQHandler) {
-  OSAL_IRQ_PROLOGUE();
-  gpt_lld_serve_interrupt(&GPTD3);
-  OSAL_IRQ_EPILOGUE();
-}
-#endif
-#if EFR32_GPT_USE_TIMER3 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER3_IRQHandler) {
-  OSAL_IRQ_PROLOGUE();
-  gpt_lld_serve_interrupt(&GPTD4);
-  OSAL_IRQ_EPILOGUE();
-}
-#endif
-#if EFR32_GPT_USE_TIMER4 || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(TIMER4_IRQHandler) {
-  OSAL_IRQ_PROLOGUE();
-  gpt_lld_serve_interrupt(&GPTD5);
-  OSAL_IRQ_EPILOGUE();
-}
-#endif
+/* TIMER IRQ handlers are shared with the PWM driver and defined in
+   hal_timer_irq.c to avoid duplicate symbol definitions. */
 
 /*===========================================================================*/
 /* Driver exported functions.                                                */
