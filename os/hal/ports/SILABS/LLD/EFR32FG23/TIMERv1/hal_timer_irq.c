@@ -16,11 +16,10 @@
 
 /**
  * @file    TIMERv1/hal_timer_irq.c
- * @brief   Shared TIMER interrupt handlers for PWM and GPT drivers.
+ * @brief   Shared TIMER interrupt handlers for PWM, GPT and ICU drivers.
  *
- * @details Each TIMER IRQ handler dispatches to the active driver (PWM or
- *          GPT) for that timer instance. This avoids duplicate symbol
- *          definitions when both HAL_USE_PWM and HAL_USE_GPT are enabled.
+ * @details Each TIMER IRQ handler dispatches to the active driver (PWM, GPT
+ *          or ICU) for that timer instance.
  *
  * @addtogroup TIMER
  * @{
@@ -28,7 +27,7 @@
 
 #include "hal.h"
 
-#if (HAL_USE_PWM == TRUE) || (HAL_USE_GPT == TRUE) || defined(__DOXYGEN__)
+#if (HAL_USE_PWM == TRUE) || (HAL_USE_GPT == TRUE) || (HAL_USE_ICU == TRUE) || defined(__DOXYGEN__)
 
 /*===========================================================================*/
 /* Driver local definitions.                                                 */
@@ -68,43 +67,61 @@ extern GPTDriver GPTD4;
 extern GPTDriver GPTD5;
 #endif
 #endif
+#if HAL_USE_ICU == TRUE
+#if EFR32_ICU_USE_TIMER0 || defined(__DOXYGEN__)
+extern ICUDriver ICUD1;
+#endif
+#if EFR32_ICU_USE_TIMER1 || defined(__DOXYGEN__)
+extern ICUDriver ICUD2;
+#endif
+#if EFR32_ICU_USE_TIMER2 || defined(__DOXYGEN__)
+extern ICUDriver ICUD3;
+#endif
+#if EFR32_ICU_USE_TIMER3 || defined(__DOXYGEN__)
+extern ICUDriver ICUD4;
+#endif
+#if EFR32_ICU_USE_TIMER4 || defined(__DOXYGEN__)
+extern ICUDriver ICUD5;
+#endif
+#endif
 
 /*===========================================================================*/
 /* Shared IRQ handlers.                                                      */
 /*===========================================================================*/
 
-#define TIMER_IRQ_DISPATCH(idx, pwm_en, gpt_en)                            \
+#define TIMER_IRQ_DISPATCH(idx, pwm_en, gpt_en, icu_en)                    \
   OSAL_IRQ_PROLOGUE();                                                      \
-  if (pwm_en) { pwm_lld_serve_interrupt(&PWMD##idx); }                     \
-  else if (gpt_en) { gpt_lld_serve_interrupt(&GPTD##idx); }                 \
+  if (pwm_en)       { pwm_lld_serve_interrupt(&PWMD##idx); }               \
+  else if (gpt_en)  { gpt_lld_serve_interrupt(&GPTD##idx); }               \
+  else if (icu_en)  { icu_lld_serve_interrupt(&ICUD##idx); }               \
   OSAL_IRQ_EPILOGUE()
 
-#if (EFR32_PWM_USE_TIMER0 || EFR32_GPT_USE_TIMER0) || defined(__DOXYGEN__)
+#if (EFR32_PWM_USE_TIMER0 || EFR32_GPT_USE_TIMER0 || EFR32_ICU_USE_TIMER0) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_TIMER1_HANDLER) {
-  TIMER_IRQ_DISPATCH(1, EFR32_PWM_USE_TIMER0, EFR32_GPT_USE_TIMER0);
+  TIMER_IRQ_DISPATCH(1, EFR32_PWM_USE_TIMER0, EFR32_GPT_USE_TIMER0, EFR32_ICU_USE_TIMER0);
 }
 #endif
-#if (EFR32_PWM_USE_TIMER1 || EFR32_GPT_USE_TIMER1) || defined(__DOXYGEN__)
+#if (EFR32_PWM_USE_TIMER1 || EFR32_GPT_USE_TIMER1 || EFR32_ICU_USE_TIMER1) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_TIMER2_HANDLER) {
-  TIMER_IRQ_DISPATCH(2, EFR32_PWM_USE_TIMER1, EFR32_GPT_USE_TIMER1);
+  TIMER_IRQ_DISPATCH(2, EFR32_PWM_USE_TIMER1, EFR32_GPT_USE_TIMER1, EFR32_ICU_USE_TIMER1);
 }
 #endif
-#if (EFR32_PWM_USE_TIMER2 || EFR32_GPT_USE_TIMER2) || defined(__DOXYGEN__)
+#if (EFR32_PWM_USE_TIMER2 || EFR32_GPT_USE_TIMER2 || EFR32_ICU_USE_TIMER2) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_TIMER3_HANDLER) {
-  TIMER_IRQ_DISPATCH(3, EFR32_PWM_USE_TIMER2, EFR32_GPT_USE_TIMER2);
+  TIMER_IRQ_DISPATCH(3, EFR32_PWM_USE_TIMER2, EFR32_GPT_USE_TIMER2, EFR32_ICU_USE_TIMER2);
 }
 #endif
-#if (EFR32_PWM_USE_TIMER3 || EFR32_GPT_USE_TIMER3) || defined(__DOXYGEN__)
+#if (EFR32_PWM_USE_TIMER3 || EFR32_GPT_USE_TIMER3 || EFR32_ICU_USE_TIMER3) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_TIMER4_HANDLER) {
-  TIMER_IRQ_DISPATCH(4, EFR32_PWM_USE_TIMER3, EFR32_GPT_USE_TIMER3);
+  TIMER_IRQ_DISPATCH(4, EFR32_PWM_USE_TIMER3, EFR32_GPT_USE_TIMER3, EFR32_ICU_USE_TIMER3);
 }
 #endif
-#if (EFR32_PWM_USE_TIMER4 || EFR32_GPT_USE_TIMER4) || defined(__DOXYGEN__)
+#if (EFR32_PWM_USE_TIMER4 || EFR32_GPT_USE_TIMER4 || EFR32_ICU_USE_TIMER4) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_TIMER5_HANDLER) {
-  TIMER_IRQ_DISPATCH(5, EFR32_PWM_USE_TIMER4, EFR32_GPT_USE_TIMER4);
+  TIMER_IRQ_DISPATCH(5, EFR32_PWM_USE_TIMER4, EFR32_GPT_USE_TIMER4, EFR32_ICU_USE_TIMER4);
 }
 #endif
 
-#endif /* HAL_USE_PWM || HAL_USE_GPT */
+#endif /* HAL_USE_PWM || HAL_USE_GPT || HAL_USE_ICU */
 
 /** @} */
