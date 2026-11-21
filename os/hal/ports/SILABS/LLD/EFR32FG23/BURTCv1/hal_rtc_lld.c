@@ -128,7 +128,11 @@ __STATIC_INLINE void _rtc_lld_to_timespec_slow(uint32_t tv_sec, uint32_t tv_msec
 
   /* Calculate year in 4 years steps. */
   do {
-    int days_in_4years = isleap(year) ? (1 + 4 * 365) : (4 * 365);
+    /* A 4-year block [year, year+4) contains exactly one leap year
+       unless it spans a century non-leap year (e.g. 2100). */
+    int days_in_4years = 4 * 365;
+    if (isleap(year) || isleap(year + 1) || isleap(year + 2) || isleap(year + 3))
+      days_in_4years += 1;
 
     if (day < days_in_4years)
       break;
@@ -140,7 +144,7 @@ __STATIC_INLINE void _rtc_lld_to_timespec_slow(uint32_t tv_sec, uint32_t tv_msec
 
   /* Further calculate year in 1 years steps. */
   do {
-    int days_in_1year = isleap(year) ? (1 + 1 * 365) : (1 * 365);
+    int days_in_1year = isleap(year) ? 366 : 365;
 
     if (day < days_in_1year)
       break;
@@ -227,7 +231,7 @@ __STATIC_INLINE void _rtc_lld_to_timespec_approx(uint32_t tv_sec, uint32_t tv_ms
 
 __STATIC_INLINE void _rtc_lld_to_timespec(uint32_t tv_sec, uint32_t tv_msec, RTCDateTime* timespec, uint32_t dstflag) {
 
-  return _rtc_lld_to_timespec_approx(tv_sec, tv_msec, timespec, dstflag);
+  return _rtc_lld_to_timespec_slow(tv_sec, tv_msec, timespec, dstflag);
 }
 
 /*===========================================================================*/
@@ -465,7 +469,7 @@ __STATIC_INLINE void rtc_lld_set_time_approx(RTCDriver *rtcp, const RTCDateTime 
  */
 void rtc_lld_set_time(RTCDriver *rtcp, const RTCDateTime *timespec) {
 
-  return rtc_lld_set_time_approx(rtcp, timespec);
+  return rtc_lld_set_time_slow(rtcp, timespec);
 }
 
 /**
@@ -480,20 +484,24 @@ void rtc_lld_set_time(RTCDriver *rtcp, const RTCDateTime *timespec) {
 void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec) {
 
   syssts_t sts;
-  uint32_t cnt;
+  uint32_t cnt, cnt2;
   uint32_t ovf_counter, tv_sec, tv_msec, dstflag;
 
   /* Entering a reentrant critical zone.*/
   sts = osalSysGetStatusAndLockX();
 
-  /* Cache overflow counter. */
-  ovf_counter = *(rtcp->ovf_counter);
+  /* Read counter, then overflow counter, then counter again.
+     If the counter wrapped between the two reads (cnt2 < cnt), the
+     overflow counter was incremented after we read it — re-read it. */
+  do {
+    cnt = BURTC->CNT;
+    ovf_counter = *(rtcp->ovf_counter);
+    cnt2 = BURTC->CNT;
+  } while (cnt2 < cnt);
+
   tv_sec = *(rtcp->tv_sec);
   tv_msec = *(rtcp->tv_msec);
   dstflag = *(rtcp->dstflag);
-
-  /* Read counter. */
-  cnt = BURTC->CNT;
 
   /* Leaving a reentrant critical zone.*/
   osalSysRestoreStatusX(sts);
