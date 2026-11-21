@@ -93,16 +93,6 @@ uint32_t crcsw_update(const crcsw_config_t *cfg, uint32_t crc,
  */
 uint32_t crcsw_calc(const crcsw_config_t *cfg, const void *blob, size_t bloblen);
 
-/** One-shot CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF). */
-static inline uint16_t crc16ccitt(const void *blob, size_t bloblen) {
-  return (uint16_t)crcsw_calc(&crcsw_crc16ccitt_cfg, blob, bloblen);
-}
-
-/** One-shot CRC-16 IEC 870 FT3 (M-Bus long frame checksum). */
-static inline uint16_t crc16iec870ft3(const void *blob, size_t bloblen) {
-  return (uint16_t)crcsw_calc(&crcsw_crc16iec870ft3_cfg, blob, bloblen);
-}
-
 #ifdef __cplusplus
 }
 #endif
