@@ -445,4 +445,39 @@ halfreq_t hal_lld_get_clock_point(halclkpt_t clkpt) {
 }
 #endif /* defined(HAL_LLD_USE_CLOCK_MANAGEMENT) */
 
+/*===========================================================================*/
+/* Low-power mode support (EM2/EM3).                                         */
+/*===========================================================================*/
+
+/**
+ * @brief   Configure whether WFI enters EM2 or EM3.
+ *
+ * @param[in] em3   true = WFI enters EM3, false = WFI enters EM2.
+ */
+void efr32_set_sleep_mode(bool em3) {
+  /* On Series 2, the SLEEPDEEP bit in SCB->SCR controls EM2 vs EM3 entry.
+     EM2 = normal sleep (SLEEPDEEP=0), EM3 = deep sleep (SLEEPDEEP=1). */
+  if (em3) {
+    SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+  } else {
+    SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+  }
+}
+
+/**
+ * @brief   Enter EM2 (deep sleep). Returns after wake-up interrupt.
+ */
+void efr32_enter_em2(void) {
+  efr32_set_sleep_mode(false);
+  __WFI();
+}
+
+/**
+ * @brief   Enter EM3 (deep sleep with RAM retention). Returns after wake-up.
+ */
+void efr32_enter_em3(void) {
+  efr32_set_sleep_mode(true);
+  __WFI();
+}
+
 /** @} */

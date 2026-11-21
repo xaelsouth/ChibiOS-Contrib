@@ -184,10 +184,45 @@
 /**
  * @brief   Low level fields of the SIO configuration structure.
  */
+/* IrDA control values for sio_lld_config_fields.irctrl. */
+#define EFR32_SIO_IRDA_NONE     0U  /**< IrDA disabled (default). */
+#define EFR32_SIO_IRDA_HF       1U  /**< HF IrDA mode (IRHFCFG). */
+#define EFR32_SIO_IRDA_LF       2U  /**< LF IrDA mode (IRLFCFG) - for low baud like M-Bus 2400. */
+
+/*
+ * M-Bus (Meter-Bus) IrDA preset for 2400 baud, 8E1:
+ *   - LF IrDA mode (IRLFCFG_IRLFEN) since 2400 is a low baud rate
+ *   - 8 data bits, even parity, 1 stop bit
+ *   - 4x oversampling (disable oversampling for LF operation, matching
+ *     the SmartMeter app which uses (4U << 5) = OVS disabled)
+ *
+ * Usage:
+ *   static const SIOConfig mbus_cfg = {
+ *     .baud     = 2400U,
+ *     .cfg0     = (0U << 0) | (4U << 5),   // ASYNC, OVS disabled for LF
+ *     .framecfg = EFR32_SIO_LLD_EUSART_8E1,
+ *     .irhfcg   = 0,
+ *     .irlfcfg  = 0,
+ *     .irctrl   = EFR32_SIO_IRDA_LF,
+ *   };
+ */
+#define EFR32_SIO_LLD_MBUS_2400_8E1                                              \
+  {                                                                             \
+    .baud     = 2400U,                                                          \
+    .cfg0     = (0U << 0) | (4U << 5),  /* ASYNC, disable oversampling */       \
+    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                       \
+    .irhfcg   = 0,                                                              \
+    .irlfcfg  = 0,                                                              \
+    .irctrl   = EFR32_SIO_IRDA_LF,                                              \
+  }
+
 #define sio_lld_config_fields                                               \
   uint32_t baud;    /**< Desired baud rate. */                              \
   uint32_t cfg0;    /**< EUSART_CFG _or_ USART_CTRL. */                     \
-  uint32_t framecfg /**< EUSART_FRAMECFG _or_ USART_FRAME. */
+  uint32_t framecfg; /**< EUSART_FRAMECFG _or_ USART_FRAME. */             \
+  uint32_t irhfcg;  /**< IrDA HF config (0=disabled), EUSART_IRHFCFG. */    \
+  uint32_t irlfcfg; /**< IrDA LF config (0=disabled), EUSART_IRLFCFG. */    \
+  uint32_t irctrl;  /**< IrDA control: 0=none, 1=HF, 2=LF (M-Bus 2400). */
 
 /**
  * @brief   Determines the state of the RX FIFO.

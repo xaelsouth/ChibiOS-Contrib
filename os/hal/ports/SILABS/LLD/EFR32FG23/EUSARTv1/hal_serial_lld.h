@@ -88,7 +88,11 @@ typedef struct hal_serial_config {
   uint8_t                   ib[SERIAL_BUFFERS_SIZE];                        \
   /* Output circular buffer.*/                                              \
   uint8_t                   ob[SERIAL_BUFFERS_SIZE];                        \
-  /* End of the mandatory fields.*/
+  /* End of the mandatory fields.*/                                         \
+  /* Pointer to the USART registers block.*/                                \
+  void                     *usart;                                          \
+  /* Clock frequency for the associated USART.*/                            \
+  uint32_t                  clock;
 
 /*===========================================================================*/
 /* Driver macros.                                                            */
@@ -108,6 +112,7 @@ extern "C" {
   void sd_lld_init(void);
   void sd_lld_start(SerialDriver *sdp, const SerialConfig *config);
   void sd_lld_stop(SerialDriver *sdp);
+  void sd_lld_serve_interrupt(SerialDriver *sdp);
 #ifdef __cplusplus
 }
 #endif

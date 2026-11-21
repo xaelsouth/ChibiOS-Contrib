@@ -173,6 +173,19 @@ __STATIC_INLINE void _sio_lld_start_eusart(SIODriver* siop) {
 
   _sio_lld_reg_masked_write(&(usart->FRAMECFG), _EUSART_FRAMECFG_MASK, config->framecfg);
 
+  /* IrDA configuration (0 = disabled, default for backward compat). */
+  if (config->irctrl == 1U) {
+    /* HF IrDA mode: IRHFCFG with configurable pulse width + filter. */
+    usart->IRHFCFG = config->irhfcg | EUSART_IRHFCFG_IRHFEN;
+  } else if (config->irctrl == 2U) {
+    /* LF IrDA mode: for low baud rates (e.g. M-Bus 2400 baud).
+       IRLFCFG_IRLFEN enables the LF pulse generator/extender. */
+    usart->IRLFCFG = config->irlfcfg | EUSART_IRLFCFG_IRLFEN;
+  } else {
+    usart->IRHFCFG = 0;
+    usart->IRLFCFG = 0;
+  }
+
   //_sio_lld_reg_masked_write(&(usart->CFG1), _EUSART_CFG1_MASK, EUSART_CFG1_TXFIW_SIXTEENFRAMES);
 
   /* Enable module before writing into CLKDIV register. */

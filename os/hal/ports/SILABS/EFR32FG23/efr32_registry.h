@@ -107,6 +107,17 @@
 #define EFR32_HAS_WDOG0                     TRUE
 #define EFR32_HAS_WDOG1                     TRUE
 
+/*
+ * LESENSE driver system settings.
+ */
+#define EFR32_HAS_LESENSE                   TRUE
+#define EFR32_LESENSE_NUM_CHANNELS          16
+
+/*
+ * CRC driver system settings.
+ */
+#define EFR32_HAS_GPCRC                     TRUE
+
 /*===========================================================================*/
 /* Common.                                                                   */
 /*===========================================================================*/

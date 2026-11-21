@@ -16,11 +16,11 @@
 
 /**
  * @file    EUSARTv1/hal_eusart_irq.c
- * @brief   Shared EUSART/USART interrupt handlers for SIO and UART drivers.
+ * @brief   Shared EUSART/USART interrupt handlers for SIO, UART and SERIAL.
  *
  * @details Each EUSART/USART IRQ handler dispatches to the active driver
- *          (SIO or UART) for that instance. This avoids duplicate symbol
- *          definitions when both HAL_USE_SIO and HAL_USE_UART are enabled.
+ *          (SIO, UART or SERIAL) for that instance. This avoids duplicate
+ *          symbol definitions when multiple drivers are enabled.
  *
  * @addtogroup EUSART
  * @{
@@ -28,7 +28,7 @@
 
 #include "hal.h"
 
-#if (HAL_USE_SIO == TRUE) || (HAL_USE_UART == TRUE) || defined(__DOXYGEN__)
+#if (HAL_USE_SIO == TRUE) || (HAL_USE_UART == TRUE) || (HAL_USE_SERIAL == TRUE) || defined(__DOXYGEN__)
 
 /*===========================================================================*/
 /* Driver local definitions.                                                 */
@@ -64,52 +64,59 @@ extern UARTDriver UARTD4;
 #endif
 #endif /* HAL_USE_UART */
 
+#if HAL_USE_SERIAL == TRUE
+#if EFR32_SERIAL_USE_USART1 || defined(__DOXYGEN__)
+extern SerialDriver SD1;
+#endif
+#endif /* HAL_USE_SERIAL */
+
 /*===========================================================================*/
 /* Shared IRQ handlers.                                                      */
 /*===========================================================================*/
 
-#define EUSART_IRQ_DISPATCH(idx, sio_en, uart_en)                          \
+#define EUSART_IRQ_DISPATCH(idx, sio_en, uart_en, ser_en)                  \
   OSAL_IRQ_PROLOGUE();                                                      \
-  if (sio_en) { sio_lld_serve_interrupt(&SIOD##idx); }                     \
+  if (sio_en)       { sio_lld_serve_interrupt(&SIOD##idx); }               \
   else if (uart_en) { uart_lld_serve_interrupt(&UARTD##idx); }             \
+  else if (ser_en)  { sd_lld_serve_interrupt(&SD##idx); }                  \
   OSAL_IRQ_EPILOGUE()
 
 #if (EFR32_SIO_USE_EUSART1 || EFR32_UART_USE_EUSART1) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_EUSART1_RX_HANDLER) {
-  EUSART_IRQ_DISPATCH(1, EFR32_SIO_USE_EUSART1, EFR32_UART_USE_EUSART1);
+  EUSART_IRQ_DISPATCH(1, EFR32_SIO_USE_EUSART1, EFR32_UART_USE_EUSART1, FALSE);
 }
 OSAL_IRQ_HANDLER(EFR32_EUSART1_TX_HANDLER) {
-  EUSART_IRQ_DISPATCH(1, EFR32_SIO_USE_EUSART1, EFR32_UART_USE_EUSART1);
+  EUSART_IRQ_DISPATCH(1, EFR32_SIO_USE_EUSART1, EFR32_UART_USE_EUSART1, FALSE);
 }
 #endif
 
 #if (EFR32_SIO_USE_EUSART2 || EFR32_UART_USE_EUSART2) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_EUSART2_RX_HANDLER) {
-  EUSART_IRQ_DISPATCH(2, EFR32_SIO_USE_EUSART2, EFR32_UART_USE_EUSART2);
+  EUSART_IRQ_DISPATCH(2, EFR32_SIO_USE_EUSART2, EFR32_UART_USE_EUSART2, FALSE);
 }
 OSAL_IRQ_HANDLER(EFR32_EUSART2_TX_HANDLER) {
-  EUSART_IRQ_DISPATCH(2, EFR32_SIO_USE_EUSART2, EFR32_UART_USE_EUSART2);
+  EUSART_IRQ_DISPATCH(2, EFR32_SIO_USE_EUSART2, EFR32_UART_USE_EUSART2, FALSE);
 }
 #endif
 
 #if (EFR32_SIO_USE_EUSART3 || EFR32_UART_USE_EUSART3) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_EUSART3_RX_HANDLER) {
-  EUSART_IRQ_DISPATCH(3, EFR32_SIO_USE_EUSART3, EFR32_UART_USE_EUSART3);
+  EUSART_IRQ_DISPATCH(3, EFR32_SIO_USE_EUSART3, EFR32_UART_USE_EUSART3, FALSE);
 }
 OSAL_IRQ_HANDLER(EFR32_EUSART3_TX_HANDLER) {
-  EUSART_IRQ_DISPATCH(3, EFR32_SIO_USE_EUSART3, EFR32_UART_USE_EUSART3);
+  EUSART_IRQ_DISPATCH(3, EFR32_SIO_USE_EUSART3, EFR32_UART_USE_EUSART3, FALSE);
 }
 #endif
 
-#if (EFR32_SIO_USE_USART1 || EFR32_UART_USE_USART1) || defined(__DOXYGEN__)
+#if (EFR32_SIO_USE_USART1 || EFR32_UART_USE_USART1 || EFR32_SERIAL_USE_USART1) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_USART1_RX_HANDLER) {
-  EUSART_IRQ_DISPATCH(4, EFR32_SIO_USE_USART1, EFR32_UART_USE_USART1);
+  EUSART_IRQ_DISPATCH(4, EFR32_SIO_USE_USART1, EFR32_UART_USE_USART1, EFR32_SERIAL_USE_USART1);
 }
 OSAL_IRQ_HANDLER(EFR32_USART1_TX_HANDLER) {
-  EUSART_IRQ_DISPATCH(4, EFR32_SIO_USE_USART1, EFR32_UART_USE_USART1);
+  EUSART_IRQ_DISPATCH(4, EFR32_SIO_USE_USART1, EFR32_UART_USE_USART1, EFR32_SERIAL_USE_USART1);
 }
 #endif
 
-#endif /* HAL_USE_SIO || HAL_USE_UART */
+#endif /* HAL_USE_SIO || HAL_USE_UART || HAL_USE_SERIAL */
 
 /** @} */

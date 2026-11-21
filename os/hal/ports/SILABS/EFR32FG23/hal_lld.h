@@ -544,6 +544,27 @@ extern "C" {
   void efr32_clock_init(void);
 
   /**
+   * @brief   Enter EM2 (deep sleep). Returns after wake-up interrupt.
+   * @details On EFR32 Series 2, WFI automatically enters EM2 if EM2 is
+   *          enabled. All HF peripherals are stopped; LF peripherals
+   *          (LESENSE, SYSRTC, BURTC, LETIMER) keep running.
+   */
+  void efr32_enter_em2(void);
+
+  /**
+   * @brief   Enter EM3 (deep sleep with RAM retention, LF osc only).
+   * @details WFI enters EM3 when EM3 is enabled. Most LF peripherals
+   *          can remain active.
+   */
+  void efr32_enter_em3(void);
+
+  /**
+   * @brief   Configure whether WFI enters EM2 or EM3.
+   * @param[in] em3   true = WFI enters EM3, false = WFI enters EM2.
+   */
+  void efr32_set_sleep_mode(bool em3);
+
+  /**
    * @brief The user can overwrite the weak function in order to use his own values.
    *
    * @param gain    LFXO gain value
