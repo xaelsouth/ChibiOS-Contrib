@@ -34,8 +34,8 @@ include $(CHIBIOS)/os/common/ports/ARM/compilers/GCC/mk/port_generic.mk
 # Other files.
 include $(CHIBIOS)/tools/mk/autobuild.mk
 
-# chprintf (used by the timestamped log) and xshell on the debug serial.
-include $(CHIBIOS)/os/various/chprintf/chprintf.mk
+# HAL streams lib (chprintf) and xshell on the debug serial.
+include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 include $(CHIBIOS)/os/various/shell/shell.mk
 
 ##############################################################################
@@ -119,7 +119,7 @@ AOPT =
 TOPT = -marm -DTHUMB
 CWARN = -Wall -Wextra -Wundef -Wstrict-prototypes
 CPPWARN = -Wall -Wextra -Wundef
-UDEFS =
+UDEFS = -DSHELL_CMD_TEST_ENABLED=FALSE
 UADEFS =
 UINCDIR =
 ULIBDIR =

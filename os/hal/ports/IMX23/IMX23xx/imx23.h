@@ -403,8 +403,8 @@ typedef struct {
 
 /* Channel command word (CCW) bits. */
 #define IMX23_CCW_COMMAND_NO_XFER   0x0U
-#define IMX23_CCW_COMMAND_WRITE     0x1U    /* memory -> peripheral */
-#define IMX23_CCW_COMMAND_READ      0x2U    /* peripheral -> memory */
+#define IMX23_CCW_COMMAND_WRITE     0x1U    /* peripheral -> memory (RM DMA_WRITE) */
+#define IMX23_CCW_COMMAND_READ      0x2U    /* memory -> peripheral (RM DMA_READ)  */
 #define IMX23_CCW_CHAIN             (1U << 2)
 #define IMX23_CCW_IRQ               (1U << 3)
 #define IMX23_CCW_SEMAPHORE         (1U << 6)
@@ -752,5 +752,65 @@ typedef struct {
 
 /* Scale registers: 2.12 fixed point, 0x1000 = 1:1. */
 #define IMX23_PXP_SCALE_ONE             0x1000U
+
+/*===========================================================================*/
+/* AUDIOOUT (mxs-builtin DAC, playback path).                                */
+/*===========================================================================*/
+
+#define IMX23_AOUT_REG(off)     (IMX23_AUDIOOUT_BASE + (off))
+#define IMX23_AOUT_CTRL         IMX23_AOUT_REG(0x000U)
+#define IMX23_AOUT_STAT         IMX23_AOUT_REG(0x010U)
+#define IMX23_AOUT_DACSRR       IMX23_AOUT_REG(0x020U)
+#define IMX23_AOUT_DACVOLUME    IMX23_AOUT_REG(0x030U)
+#define IMX23_AOUT_HPVOL        IMX23_AOUT_REG(0x050U)
+#define IMX23_AOUT_PWRDN        IMX23_AOUT_REG(0x070U)
+#define IMX23_AOUT_REFCTRL      IMX23_AOUT_REG(0x080U)
+#define IMX23_AOUT_ANACTRL      IMX23_AOUT_REG(0x090U)
+#define IMX23_AOUT_ANACLKCTRL   IMX23_AOUT_REG(0x0E0U)
+#define IMX23_AOUT_DATA         IMX23_AOUT_REG(0x0F0U)
+#define IMX23_AOUT_SPEAKERCTRL  IMX23_AOUT_REG(0x100U)
+#define IMX23_AOUT_VERSION      IMX23_AOUT_REG(0x200U)
+
+#define IMX23_AOUT_CTRL_SFTRST              (1U << 31)
+#define IMX23_AOUT_CTRL_CLKGATE             (1U << 30)
+#define IMX23_AOUT_CTRL_DMAWAIT_COUNT(v)    (((v) & 0x1FU) << 16)
+#define IMX23_AOUT_CTRL_WORD_LENGTH         (1U << 6)   /* 1=16-bit, 0=32-bit */
+#define IMX23_AOUT_CTRL_FIFO_UNDERFLOW_IRQ  (1U << 3)
+#define IMX23_AOUT_CTRL_FIFO_OVERFLOW_IRQ   (1U << 2)
+#define IMX23_AOUT_CTRL_FIFO_ERROR_IRQ_EN   (1U << 1)
+#define IMX23_AOUT_CTRL_RUN                 (1U << 0)
+
+#define IMX23_AOUT_DACSRR_OSR               (1U << 31)
+#define IMX23_AOUT_DACSRR_BASEMULT(v)       (((v) & 0x7U) << 28)
+#define IMX23_AOUT_DACSRR_SRC_HOLD(v)       (((v) & 0x7U) << 24)
+#define IMX23_AOUT_DACSRR_SRC_INT(v)        (((v) & 0x1FU) << 16)
+#define IMX23_AOUT_DACSRR_SRC_FRAC(v)       ((v) & 0xFFFFU)
+
+#define IMX23_AOUT_DACVOLUME_EN_ZCD         (1U << 25)
+#define IMX23_AOUT_DACVOLUME_MUTE_LEFT      (1U << 24)
+#define IMX23_AOUT_DACVOLUME_VOL_LEFT(v)    (((v) & 0xFFU) << 16)
+#define IMX23_AOUT_DACVOLUME_MUTE_RIGHT     (1U << 8)
+#define IMX23_AOUT_DACVOLUME_VOL_RIGHT(v)   ((v) & 0xFFU)
+
+#define IMX23_AOUT_HPVOL_EN_MSTR_ZCD        (1U << 25)
+#define IMX23_AOUT_HPVOL_MUTE               (1U << 24)
+#define IMX23_AOUT_HPVOL_VOL_LEFT(v)        (((v) & 0x7FU) << 8)
+#define IMX23_AOUT_HPVOL_VOL_RIGHT(v)       ((v) & 0x7FU)
+
+#define IMX23_AOUT_PWRDN_SPEAKER            (1U << 24)
+#define IMX23_AOUT_PWRDN_DAC                (1U << 12)
+#define IMX23_AOUT_PWRDN_CAPLESS            (1U << 4)
+#define IMX23_AOUT_PWRDN_HEADPHONE          (1U << 0)
+
+#define IMX23_AOUT_ANACTRL_HP_CLASSAB       (1U << 4)
+#define IMX23_AOUT_ANACTRL_HP_HOLD_GND      (1U << 5)
+
+#define IMX23_AOUT_ANACLKCTRL_CLKGATE       (1U << 31)
+#define IMX23_AOUT_ANACLKCTRL_DACDIV(v)     ((v) & 0x7U)
+
+#define IMX23_AOUT_SPEAKERCTRL_MUTE         (1U << 24)
+
+/* APBX DMA channel bound to the DAC (audio-dac). */
+#define IMX23_DMA_CH_AUDIO_DAC              1U
 
 #endif /* IMX23_H */

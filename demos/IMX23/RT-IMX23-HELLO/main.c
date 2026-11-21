@@ -24,6 +24,7 @@
 
 #include "board.h"
 #include "imx23_clock.h"
+#include "imx23_audioout.h"
 
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_lcdif.h"
@@ -179,8 +180,77 @@ static void cmd_pxp(BaseSequentialStream *chp, int argc, char *argv[]) {
 }
 #endif
 
+/*
+ * "tone [hz] [ms]" - play a sine wave on the mxs-builtin DAC (44100 Hz,
+ * 16-bit stereo) through the APBX DMA channel.
+ */
+#define TONE_RATE_HZ    44100U
+#define TONE_BUF_FRAMES 2048U
+
+static int16_t tone_buf[TONE_BUF_FRAMES * 2U];
+
+/* 256-entry sine table, amplitude 127. */
+static const int8_t sine_tab[256] = {
+   0,  3,  6,  9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46,
+  49, 52, 54, 57, 60, 63, 65, 68, 71, 73, 76, 78, 81, 83, 85, 88,
+  90, 92, 94, 96, 98,100,102,104,106,108,109,111,113,114,116,117,
+ 119,120,121,122,124,125,126,127,127,127,126,125,124,122,121,120,
+ 119,117,116,114,113,111,109,108,106,104,102,100, 98, 96, 94, 92,
+  90, 88, 85, 83, 81, 78, 76, 73, 71, 68, 65, 63, 60, 57, 54, 52,
+  49, 46, 43, 40, 37, 34, 31, 28, 25, 22, 19, 16, 12,  9,  6,  3,
+   0, -3, -6, -9,-12,-16,-19,-22,-25,-28,-31,-34,-37,-40,-43,-46,
+ -49,-52,-54,-57,-60,-63,-65,-68,-71,-73,-76,-78,-81,-83,-85,-88,
+ -90,-92,-94,-96,-98,-100,-102,-104,-106,-108,-109,-111,-113,-114,
+ -116,-117,-119,-120,-121,-122,-124,-125,-126,-127,-127,-127,-126,
+ -125,-124,-122,-121,-120,-119,-117,-116,-114,-113,-111,-109,-108,
+ -106,-104,-102,-100,-98,-96,-94,-92,-90,-88,-85,-83,-81,-78,-76,
+ -73,-71,-68,-65,-63,-60,-57,-54,-52,-49,-46,-43,-40,-37,-34,-31,
+ -28,-25,-22,-19,-16,-12, -9, -6, -3,  0,  3,  6,  9, 12, 16, 19
+};
+/* note: entries 128..255 mirror 127..0 with sign flip via (256 - i) trick
+   handled below; simpler: use index (phase & 255) and negate when in
+   second half of the table range. */
+
+static void cmd_tone(BaseSequentialStream *chp, int argc, char *argv[]) {
+  static const imx23_audio_config_t audio_cfg = {
+    .rate = TONE_RATE_HZ, .bits = 16U, .volume = 60U,
+  };
+  unsigned hz = (argc > 0) ? (unsigned)atoi(argv[0]) : 440U;
+  unsigned ms = (argc > 1) ? (unsigned)atoi(argv[1]) : 500U;
+  unsigned total = (TONE_RATE_HZ * ms) / 1000U;
+  unsigned done = 0U;
+  msg_t msg = MSG_OK;
+
+  if (hz == 0U) hz = 440U;
+
+  imx23_audio_init(&audio_cfg);
+
+  while (done < total && msg == MSG_OK) {
+    unsigned n = total - done;
+    unsigned i;
+    if (n > TONE_BUF_FRAMES) n = TONE_BUF_FRAMES;
+    for (i = 0U; i < n; i++) {
+      /* 256 steps per period */
+      unsigned phase = ((i + done) * hz * 256U) / TONE_RATE_HZ;
+      unsigned idx = phase & 0xFFU;
+      int v = sine_tab[idx];
+      int16_t smp = (int16_t)(v * 100);
+      tone_buf[2U * i]      = smp;
+      tone_buf[2U * i + 1U] = smp;
+    }
+    msg = imx23_audio_play(tone_buf, n * 4U, TIME_MS2I(2000));
+    done += n;
+  }
+
+  imx23_audio_stop();
+  chprintf(chp, "tone %u Hz %u ms: %s\r\n", hz, ms,
+           (msg == MSG_OK) ? "done" : "FAILED");
+  log_line("tone %u Hz %u ms %s", hz, ms, (msg == MSG_OK) ? "done" : "FAILED");
+}
+
 static const ShellCommand commands[] = {
   { "freq", cmd_freq },
+  { "tone", cmd_tone },
 #if defined(BOARD_IMX23_EVK)
   { "backlight", cmd_backlight },
   { "pxp", cmd_pxp },
