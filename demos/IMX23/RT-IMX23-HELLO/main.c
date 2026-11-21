@@ -16,6 +16,7 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ch.h"
 #include "hal.h"
@@ -26,6 +27,7 @@
 
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_lcdif.h"
+#include "imx23_pxp.h"
 #endif
 
 /*
@@ -150,10 +152,38 @@ static void cmd_backlight(BaseSequentialStream *chp, int argc, char *argv[]) {
 }
 #endif /* BOARD_IMX23_EVK */
 
+#if defined(BOARD_IMX23_EVK)
+/*
+ * "pxp" - blit the top half of the framebuffer onto the bottom half
+ * through the PXP (exercises the mem2mem path used for LVGL flushes).
+ */
+static void cmd_pxp(BaseSequentialStream *chp, int argc, char *argv[]) {
+  imx23_pxp_job_t job;
+  msg_t msg;
+
+  (void)argc; (void)argv;
+
+  memset(&job, 0, sizeof(job));
+  job.src     = &lcd_fb[0];
+  job.src_w   = IMX23_LCD_WIDTH;
+  job.src_h   = IMX23_LCD_HEIGHT / 2U;
+  job.src_fmt = IMX23_PXP_S0_FMT_RGB888;
+  job.dst     = &lcd_fb[(IMX23_LCD_HEIGHT / 2U) * IMX23_LCD_WIDTH];
+  job.dst_w   = IMX23_LCD_WIDTH;
+  job.dst_h   = IMX23_LCD_HEIGHT / 2U;
+  job.dst_fmt = IMX23_PXP_OUT_FMT_RGB888;
+
+  msg = imx23_pxp_run(&job, TIME_MS2I(1000));
+  chprintf(chp, "pxp blit: %s\r\n", (msg == MSG_OK) ? "OK" : "FAILED");
+  log_line("pxp blit %s", (msg == MSG_OK) ? "OK" : "FAILED");
+}
+#endif
+
 static const ShellCommand commands[] = {
   { "freq", cmd_freq },
 #if defined(BOARD_IMX23_EVK)
   { "backlight", cmd_backlight },
+  { "pxp", cmd_pxp },
 #endif
   { NULL, NULL }
 };
@@ -185,6 +215,7 @@ int main(void) {
 #if defined(BOARD_IMX23_EVK)
   /* LCD: framebuffer + LCDIF + backlight PWM2 on GPIO_1_28. */
   lcd_test_pattern();
+  imx23_pxp_init();
   imx23_lcdif_init(&lcd_timing, lcd_fb);
   imx23_lcdif_set_vsync_callback(lcd_vsync_cb);
   imx23_iomux_set_pad(1U, 28U, 0U, 0x4U);

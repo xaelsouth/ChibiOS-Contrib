@@ -692,4 +692,65 @@ typedef struct {
 #define IMX23_CLKCTRL_FRAC_MASK     0x3FU
 #define IMX23_CLKCTRL_CLKSEQ_BYPASS_PIX (1U << 1)
 
+/*===========================================================================*/
+/* PXP (pixel pipeline, RTL v2 on i.MX23, S0 only, no overlay).             */
+/*===========================================================================*/
+
+#define IMX23_PXP_CTRL              (IMX23_PXP_BASE + 0x000U)
+#define IMX23_PXP_CTRL_SET          (IMX23_PXP_BASE + 0x004U)
+#define IMX23_PXP_CTRL_CLR          (IMX23_PXP_BASE + 0x008U)
+#define IMX23_PXP_STAT              (IMX23_PXP_BASE + 0x010U)
+#define IMX23_PXP_STAT_CLR          (IMX23_PXP_BASE + 0x018U)
+#define IMX23_PXP_RGBBUF            (IMX23_PXP_BASE + 0x020U)
+#define IMX23_PXP_RGBSIZE           (IMX23_PXP_BASE + 0x040U)
+#define IMX23_PXP_S0BUF             (IMX23_PXP_BASE + 0x050U)
+#define IMX23_PXP_S0UBUF            (IMX23_PXP_BASE + 0x060U)
+#define IMX23_PXP_S0VBUF            (IMX23_PXP_BASE + 0x070U)
+#define IMX23_PXP_S0PARAM           (IMX23_PXP_BASE + 0x080U)
+#define IMX23_PXP_S0BACKGROUND      (IMX23_PXP_BASE + 0x090U)
+#define IMX23_PXP_S0CROP            (IMX23_PXP_BASE + 0x0A0U)
+#define IMX23_PXP_S0SCALE           (IMX23_PXP_BASE + 0x0B0U)
+#define IMX23_PXP_S0OFFSET          (IMX23_PXP_BASE + 0x0C0U)
+#define IMX23_PXP_CSCCOEFF0         (IMX23_PXP_BASE + 0x0D0U)
+#define IMX23_PXP_CSCCOEFF1         (IMX23_PXP_BASE + 0x0E0U)
+#define IMX23_PXP_CSCCOEFF2         (IMX23_PXP_BASE + 0x0F0U)
+#define IMX23_PXP_S0COLORKEYLOW     (IMX23_PXP_BASE + 0x180U)
+#define IMX23_PXP_S0COLORKEYHIGH    (IMX23_PXP_BASE + 0x190U)
+#define IMX23_PXP_VERSION           (IMX23_PXP_BASE + 0x1F0U)
+
+#define IMX23_PXP_CTRL_SFTRST           (1U << 31)
+#define IMX23_PXP_CTRL_CLKGATE          (1U << 30)
+#define IMX23_PXP_CTRL_ALPHA_OUTPUT     (1U << 22)
+#define IMX23_PXP_CTRL_CROP             (1U << 19)
+#define IMX23_PXP_CTRL_SCALE            (1U << 18)
+#define IMX23_PXP_CTRL_S0_FORMAT(v)     (((v) & 0xFU) << 12)
+#define IMX23_PXP_CTRL_VFLIP            (1U << 11)
+#define IMX23_PXP_CTRL_HFLIP            (1U << 10)
+#define IMX23_PXP_CTRL_ROTATE(v)        (((v) & 0x3U) << 8)
+#define IMX23_PXP_CTRL_OUT_FMT(v)       (((v) & 0xFU) << 4)
+#define IMX23_PXP_CTRL_IRQ_ENABLE       (1U << 1)
+#define IMX23_PXP_CTRL_ENABLE           (1U << 0)
+
+#define IMX23_PXP_S0_FMT_RGB888         0x1U
+#define IMX23_PXP_S0_FMT_RGB565         0x4U
+#define IMX23_PXP_S0_FMT_YUV422         0x8U
+#define IMX23_PXP_S0_FMT_YUV420         0x9U
+
+#define IMX23_PXP_OUT_FMT_ARGB8888      0x0U
+#define IMX23_PXP_OUT_FMT_RGB888        0x1U
+#define IMX23_PXP_OUT_FMT_RGB565        0x4U
+
+#define IMX23_PXP_STAT_IRQ              (1U << 0)
+#define IMX23_PXP_STAT_AXI_WRITE_ERROR  (1U << 1)
+#define IMX23_PXP_STAT_AXI_READ_ERROR   (1U << 2)
+
+/* Sizes are programmed in 8x8 blocks. */
+#define IMX23_PXP_BLOCKS(px)            ((px) >> 3)
+#define IMX23_PXP_BLOCK_PARAM(x, y, w, h) \
+    (((uint32_t)(x) & 0xFFU) << 24 | ((uint32_t)(y) & 0xFFU) << 16 | \
+     ((uint32_t)(w) & 0xFFU) << 8  | ((uint32_t)(h) & 0xFFU))
+
+/* Scale registers: 2.12 fixed point, 0x1000 = 1:1. */
+#define IMX23_PXP_SCALE_ONE             0x1000U
+
 #endif /* IMX23_H */

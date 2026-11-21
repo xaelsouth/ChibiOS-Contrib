@@ -428,6 +428,22 @@
 #define EFR32_EUSART3_TX_HANDLER 	    	Vector80
 #define EFR32_EUSART3_TX_NUMBER		    	EUSART2_TX_IRQn
 
+/* VectorB0 = Vector(40 + 4*I2C0_IRQn) */
+#define EFR32_I2C1_HANDLER              VectorB0
+#define EFR32_I2C1_NUMBER               I2C0_IRQn
+
+/* VectorB4 = Vector(40 + 4*I2C1_IRQn) */
+#define EFR32_I2C2_HANDLER              VectorB4
+#define EFR32_I2C2_NUMBER               I2C1_IRQn
+
+/* Vector108 = Vector(40 + 4*IADC_IRQn) */
+#define EFR32_IADC_HANDLER              Vector108
+#define EFR32_IADC_NUMBER               IADC_IRQn
+
+/* Vector11C = Vector(40 + 4*VDAC_IRQn) */
+#define EFR32_VDAC_HANDLER              Vector11C
+#define EFR32_VDAC_NUMBER               VDAC_IRQn
+
 /* Vector88 = Vector(40 + 4*BURTC_IRQn) */
 #define EFR32_BURTC_HANDLER             Vector88
 #define EFR32_BURTC_NUMBER              BURTC_IRQn
