@@ -240,19 +240,28 @@ void uart_lld_serve_interrupt(UARTDriver *uartp) {
     USART_TypeDef *u = uartp->usart;
     uint32_t isr = u->IF;
 
+    /* RX: drain FIFO in a loop while data is available and buffer has room. */
     if ((isr & USART_IF_RXFULL) != 0U && uartp->rxbuf != NULL) {
-      *uartp->rxbuf++ = (uint8_t)u->RXDATA;
+      while ((u->STATUS & USART_STATUS_RXDATAV) != 0U &&
+             uartp->rxbuf < uartp->rxend) {
+        uint8_t b = (uint8_t)u->RXDATA;
+        *uartp->rxbuf++ = b;
+        if (uartp->config->rxchar_cb != NULL) {
+          uartp->config->rxchar_cb(uartp, (uint16_t)b);
+        }
+      }
       if (uartp->rxbuf >= uartp->rxend) {
         u->IEN_CLR = USART_IEN_RXFULL;
         _uart_wakeup_rx_isr(uartp);
       }
-      if (uartp->config->rxchar_cb != NULL) {
-        uartp->config->rxchar_cb(uartp, (uint16_t)(*(uartp->rxbuf - 1U)));
-      }
     }
 
+    /* TX: fill FIFO in a loop while there is room and data to send. */
     if ((isr & USART_IF_TXBL) != 0U && uartp->txbuf != NULL) {
-      u->TXDATA = *uartp->txbuf++;
+      while ((u->STATUS & USART_STATUS_TXBL) != 0U &&
+             uartp->txbuf < uartp->txend) {
+        u->TXDATA = *uartp->txbuf++;
+      }
       if (uartp->txbuf >= uartp->txend) {
         u->IEN_CLR = USART_IEN_TXBL;
         u->IEN_SET = USART_IEN_TXC;
@@ -271,19 +280,28 @@ void uart_lld_serve_interrupt(UARTDriver *uartp) {
     EUSART_TypeDef *u = uartp->usart;
     uint32_t isr = u->IF;
 
+    /* RX: drain FIFO in a loop while RXFL is set and buffer has room. */
     if ((isr & EUSART_IF_RXFL) != 0U && uartp->rxbuf != NULL) {
-      *uartp->rxbuf++ = (uint8_t)u->RXDATA;
+      while ((u->STATUS & EUSART_STATUS_RXFL) != 0U &&
+             uartp->rxbuf < uartp->rxend) {
+        uint8_t b = (uint8_t)u->RXDATA;
+        *uartp->rxbuf++ = b;
+        if (uartp->config->rxchar_cb != NULL) {
+          uartp->config->rxchar_cb(uartp, (uint16_t)b);
+        }
+      }
       if (uartp->rxbuf >= uartp->rxend) {
         u->IEN_CLR = EUSART_IEN_RXFL;
         _uart_wakeup_rx_isr(uartp);
       }
-      if (uartp->config->rxchar_cb != NULL) {
-        uartp->config->rxchar_cb(uartp, (uint16_t)(*(uartp->rxbuf - 1U)));
-      }
     }
 
+    /* TX: fill FIFO in a loop while TXFL is set and data remains. */
     if ((isr & EUSART_IF_TXFL) != 0U && uartp->txbuf != NULL) {
-      u->TXDATA = *uartp->txbuf++;
+      while ((u->STATUS & EUSART_STATUS_TXFL) != 0U &&
+             uartp->txbuf < uartp->txend) {
+        u->TXDATA = *uartp->txbuf++;
+      }
       if (uartp->txbuf >= uartp->txend) {
         u->IEN_CLR = EUSART_IEN_TXFL;
         u->IEN_SET = EUSART_IEN_TXC;

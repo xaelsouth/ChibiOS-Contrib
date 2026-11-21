@@ -81,28 +81,31 @@ void sd_lld_serve_interrupt(SerialDriver *sdp) {
   USART_TypeDef *u = (USART_TypeDef *)sdp->usart;
   uint32_t isr = u->IF;
 
-  /* RX data available or errors. */
+  /* RX: drain the hardware FIFO in a loop while data is available. */
   if (isr & (USART_IF_RXDATAV | USART_IF_RXFULL | USART_IF_RXOF |
              USART_IF_PERR | USART_IF_FERR)) {
     osalSysLockFromISR();
     if (isr & (USART_IF_RXOF | USART_IF_PERR | USART_IF_FERR))
       serial_lld_set_error(sdp, isr);
-    if (isr & (USART_IF_RXDATAV | USART_IF_RXFULL)) {
+    /* Loop while RXDATAV is set — drains up to FIFO depth (8) per IRQ. */
+    while ((u->STATUS & USART_STATUS_RXDATAV) != 0U) {
       uint8_t b = (uint8_t)(u->RXDATA & 0xFFU);
       sdIncomingDataI(sdp, b);
     }
     osalSysUnlockFromISR();
   }
 
-  /* TX buffer level (room for more data). */
+  /* TX: fill the hardware FIFO in a loop while there is room. */
   if ((u->IEN & USART_IEN_TXBL) && (isr & USART_IF_TXBL)) {
-    msg_t b;
     osalSysLockFromISR();
-    b = oqGetI(&sdp->oqueue);
-    if (b < MSG_OK) {
-      chnAddFlagsI(sdp, CHN_OUTPUT_EMPTY);
-      u->IEN_CLR = USART_IEN_TXBL;
-    } else {
+    /* Loop while TXBL (TX buffer has room) and queue is not empty. */
+    while ((u->STATUS & USART_STATUS_TXBL) != 0U) {
+      msg_t b = oqGetI(&sdp->oqueue);
+      if (b < MSG_OK) {
+        chnAddFlagsI(sdp, CHN_OUTPUT_EMPTY);
+        u->IEN_CLR = USART_IEN_TXBL;
+        break;
+      }
       u->TXDATA = (uint32_t)b;
     }
     osalSysUnlockFromISR();
