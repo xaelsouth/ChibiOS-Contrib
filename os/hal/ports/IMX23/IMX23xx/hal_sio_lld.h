@@ -63,10 +63,17 @@
 /* External declarations.                                                    */
 /*===========================================================================*/
 
-/* Additional driver fields: pointer to the PL011 register block. */
+/* SIO channel types. */
+#define IMX23_SIO_DUART         0U      /* PL011 debug UART  -> SIOD1 */
+#define IMX23_SIO_AUART0        1U      /* application UART0 -> SIOD2 */
+#define IMX23_SIO_AUART1        2U      /* application UART1 -> SIOD3 */
+
+/* Additional driver fields: channel type + register block pointer. */
 #define sio_lld_driver_fields                                               \
-  /* Pointer to the PL011 registers.*/                                     \
-  imx23_pl011_t             *uart;
+  /* Channel type (IMX23_SIO_*).*/                                         \
+  uint32_t                  siotype;                                       \
+  /* Pointer to the register block (imx23_pl011_t or imx23_auart_t).*/     \
+  volatile void             *u;
 
 /* Additional config fields: bit rate + LCR_H frame configuration. */
 #define sio_lld_config_fields                                               \
@@ -77,6 +84,18 @@
 
 #if (IMX23_SIO_USE_DUART == TRUE) && !defined(__DOXYGEN__)
 extern SIODriver SIOD1;
+#endif
+#if !defined(IMX23_SIO_USE_AUART0) || defined(__DOXYGEN__)
+#define IMX23_SIO_USE_AUART0    TRUE
+#endif
+#if !defined(IMX23_SIO_USE_AUART1) || defined(__DOXYGEN__)
+#define IMX23_SIO_USE_AUART1    TRUE
+#endif
+#if (IMX23_SIO_USE_AUART0 == TRUE) && !defined(__DOXYGEN__)
+extern SIODriver SIOD2;
+#endif
+#if (IMX23_SIO_USE_AUART1 == TRUE) && !defined(__DOXYGEN__)
+extern SIODriver SIOD3;
 #endif
 
 #ifdef __cplusplus

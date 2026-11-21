@@ -129,7 +129,7 @@ RULESPATH = $(CHIBIOS)/os/common/startup/ARM/compilers/GCC
 
 # BUILDDIR is normally set by rules.mk; define it early for LDSCRIPT below.
 ifeq ($(BUILDDIR),)
-  BUILDDIR = build
+  BUILDDIR = build/$(BOARD)
 endif
 
 include $(RULESPATH)/rules.mk

@@ -397,4 +397,111 @@ typedef struct {
   volatile uint32_t bufaddr;          /* memory buffer address             */
   volatile uint32_t pio[16];          /* PIO words written to the periph.  */
 } imx23_dma_ccw_t;
+
+/*===========================================================================*/
+/* I2C (I2C0 @ 0x80058000).                                                   */
+/*===========================================================================*/
+
+typedef struct {
+  volatile uint32_t CTRL0;        /* 0x00 */
+  volatile uint32_t TIMING0;      /* 0x10 */
+  volatile uint32_t TIMING1;      /* 0x20 */
+  volatile uint32_t TIMING2;      /* 0x30 */
+  volatile uint32_t CTRL1;        /* 0x40 */
+  volatile uint32_t STAT;         /* 0x50 */
+  volatile uint32_t QUEUECTRL;    /* 0x60 */
+  volatile uint32_t QUEUESTAT;    /* 0x70 */
+  volatile uint32_t QUEUECMD;     /* 0x80 */
+  volatile uint32_t QUEUEDATA;    /* 0x90 */
+  volatile uint32_t DATA;         /* 0xA0 */
+  volatile uint32_t DEBUG0;       /* 0xB0 */
+  volatile uint32_t DEBUG1;       /* 0xC0 */
+  volatile uint32_t VERSION;      /* 0xD0 */
+} imx23_i2c_t;
+
+#define IMX23_I2C0              ((imx23_i2c_t *)IMX23_I2C0_BASE)
+
+#define IMX23_I2C_CTRL0_SFTRST          (1U << 31)
+#define IMX23_I2C_CTRL0_CLKGATE         (1U << 30)
+#define IMX23_I2C_CTRL0_RUN             (1U << 29)
+#define IMX23_I2C_CTRL0_SEND_NAK_ON_LAST (1U << 25)
+#define IMX23_I2C_CTRL0_PIO_MODE        (1U << 24)
+#define IMX23_I2C_CTRL0_RETAIN_CLOCK    (1U << 21)
+#define IMX23_I2C_CTRL0_POST_SEND_STOP  (1U << 20)
+#define IMX23_I2C_CTRL0_PRE_SEND_START  (1U << 19)
+#define IMX23_I2C_CTRL0_MASTER_MODE     (1U << 17)
+#define IMX23_I2C_CTRL0_DIRECTION       (1U << 16)  /* 1 = master receive */
+#define IMX23_I2C_CTRL0_XFER_COUNT_MASK 0xFFFFU
+
+#define IMX23_I2C_CTRL1_SLAVE_ADDR_BYTE(addr_rw) ((uint32_t)(addr_rw) << 16)
+#define IMX23_I2C_CTRL1_NO_SLAVE_ACK_IRQ (1U << 29)
+#define IMX23_I2C_CTRL1_DATA_ENGINE_CMPLT_IRQ (1U << 14)
+
+#define IMX23_I2C_STAT_GOT_A_NAK        (1U << 28)
+#define IMX23_I2C_STAT_BUS_BUSY         (1U << 11)
+#define IMX23_I2C_STAT_CLK_GEN_BUSY     (1U << 10)
+#define IMX23_I2C_STAT_DATA_ENGINE_BUSY (1U << 9)
+
+/* I2C bus clock is the 24MHz XTAL. */
+#define IMX23_I2C_CLK_HZ        24000000U
+
+/*===========================================================================*/
+/* AUART (application UARTs 0/1).                                            */
+/*===========================================================================*/
+
+typedef struct {
+  volatile uint32_t CTRL0;        /* 0x00 */
+  volatile uint32_t CTRL1;        /* 0x10 */
+  volatile uint32_t CTRL2;        /* 0x20 */
+  volatile uint32_t LINECTRL;     /* 0x30 */
+  volatile uint32_t LINECTRL2;    /* 0x40 */
+  volatile uint32_t INTR;         /* 0x50 */
+  volatile uint32_t DATA;         /* 0x60 */
+  volatile uint32_t STAT;         /* 0x70 */
+  volatile uint32_t DEBUG0;       /* 0x80 */
+  volatile uint32_t VERSION;      /* 0xB0 */
+} imx23_auart_t;
+
+#define IMX23_AUART0            ((imx23_auart_t *)IMX23_AUART0_BASE)
+#define IMX23_AUART1            ((imx23_auart_t *)IMX23_AUART1_BASE)
+
+#define IMX23_AUART_CTRL0_SFTRST        (1U << 31)
+#define IMX23_AUART_CTRL0_CLKGATE       (1U << 30)
+
+#define IMX23_AUART_CTRL2_UARTEN        (1U << 0)
+#define IMX23_AUART_CTRL2_TXE           (1U << 8)
+#define IMX23_AUART_CTRL2_RXE           (1U << 9)
+
+#define IMX23_AUART_LINECTRL_BAUD_DIVINT(v)  (((v) & 0xFFFFU) << 16)
+#define IMX23_AUART_LINECTRL_BAUD_DIVFRAC(v) (((v) & 0x3FU) << 8)
+#define IMX23_AUART_LINECTRL_WLEN(v)    ((((v) - 5U) & 0x3U) << 5)
+#define IMX23_AUART_LINECTRL_FEN        (1U << 4)
+#define IMX23_AUART_LINECTRL_STP2       (1U << 3)
+#define IMX23_AUART_LINECTRL_EPS        (1U << 2)
+#define IMX23_AUART_LINECTRL_PEN        (1U << 1)
+
+#define IMX23_AUART_INTR_RXIEN          (1U << 20)
+#define IMX23_AUART_INTR_TXIEN          (1U << 21)
+#define IMX23_AUART_INTR_RTIEN          (1U << 22)
+#define IMX23_AUART_INTR_RXIS           (1U << 4)
+#define IMX23_AUART_INTR_TXIS           (1U << 5)
+#define IMX23_AUART_INTR_RTIS           (1U << 6)
+#define IMX23_AUART_INTR_ERRORS         (IMX23_AUART_INTR_RTIS | 0x70000U)
+
+#define IMX23_AUART_STAT_BUSY           (1U << 29)
+#define IMX23_AUART_STAT_TXFE           (1U << 27)
+#define IMX23_AUART_STAT_TXFF           (1U << 25)
+#define IMX23_AUART_STAT_RXFE           (1U << 24)
+#define IMX23_AUART_STAT_OERR           (1U << 19)
+#define IMX23_AUART_STAT_BERR           (1U << 18)
+#define IMX23_AUART_STAT_PERR           (1U << 17)
+#define IMX23_AUART_STAT_FERR           (1U << 16)
+#define IMX23_AUART_STAT_ERRORS         (IMX23_AUART_STAT_OERR | IMX23_AUART_STAT_BERR | \
+                                         IMX23_AUART_STAT_PERR | IMX23_AUART_STAT_FERR)
+
+/* AUART frame configs (LINECTRL values). */
+#define IMX23_SIO_AUART_8N1     (IMX23_AUART_LINECTRL_WLEN(8) | IMX23_AUART_LINECTRL_FEN)
+#define IMX23_SIO_AUART_8E1     (IMX23_SIO_AUART_8N1 | IMX23_AUART_LINECTRL_PEN | IMX23_AUART_LINECTRL_EPS)
+#define IMX23_SIO_AUART_8O1     (IMX23_SIO_AUART_8N1 | IMX23_AUART_LINECTRL_PEN)
+
 #endif /* IMX23_H */
