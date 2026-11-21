@@ -1,5 +1,5 @@
 /*
-    ChibiOS - Copyright (C) 2024 Xael South
+    ChibiOS - Copyright (C) 2026 Xael South
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
 */
 
 /**
- * @file    hal_adc_lld.h
- * @brief   PLATFORM ADC subsystem low level driver header.
+ * @file    ADCv1/hal_adc_lld.h
+ * @brief   EFR32FG23 IADC subsystem low level driver header.
  *
  * @addtogroup ADC
  * @{
@@ -31,90 +31,85 @@
 /* Driver constants.                                                         */
 /*===========================================================================*/
 
-/**
- * @name    Possible ADC errors mask bits.
- * @{
- */
-#define ADC_ERR_DMAFAILURE      1U  /**< DMA operations failure.            */
-#define ADC_ERR_OVERFLOW        2U  /**< ADC overflow condition.            */
-#define ADC_ERR_AWD             4U  /**< Watchdog triggered.                */
-/** @} */
+#define ADC_ERR_DMAFAILURE      1U
+#define ADC_ERR_OVERFLOW        2U
+#define ADC_ERR_AWD             4U
 
 /*===========================================================================*/
 /* Driver pre-compile time settings.                                         */
 /*===========================================================================*/
 
-/**
- * @name    PLATFORM configuration options
- * @{
- */
-/**
- * @brief   ADC1 driver enable switch.
- * @details If set to @p TRUE the support for ADC1 is included.
- * @note    The default is @p FALSE.
- */
-#if !defined(PLATFORM_ADC_USE_ADC1) || defined(__DOXYGEN__)
-#define PLATFORM_ADC_USE_ADC1                  FALSE
+#if !defined(EFR32_ADC_USE_IADC0) || defined(__DOXYGEN__)
+#define EFR32_ADC_USE_IADC0                 TRUE
 #endif
 
-#if (PLATFORM_ADC_USE_ADC1 == TRUE) && !defined(__DOXYGEN__)
-#error "ADC driver is not implemented for the SILABS EFR32FG23 port."
+#if !defined(EFR32_ADC_IADC0_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_ADC_IADC0_IRQ_PRIORITY        4
 #endif
-/** @} */
 
-/*===========================================================================*/
-/* Derived constants and error checks.                                       */
-/*===========================================================================*/
+#if !defined(EFR32_ADC_IADC0_DMA_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_ADC_IADC0_DMA_PRIORITY        4
+#endif
+
+#define EFR32_ADC_IADC0_DMA_STREAM          EFR32_DMA_STREAM_ID_ANY
 
 /*===========================================================================*/
 /* Driver data structures and types.                                         */
 /*===========================================================================*/
 
-/**
- * @brief   ADC sample data type.
- */
 typedef uint16_t adcsample_t;
-
-/**
- * @brief   Channels number in a conversion group.
- */
 typedef uint16_t adc_channels_num_t;
-
-/**
- * @brief   Type of an ADC error mask.
- */
 typedef uint32_t adcerror_t;
 
-/*===========================================================================*/
-/* Driver macros.                                                            */
-/*===========================================================================*/
-
 /**
- * @brief   Low level fields of the ADC driver structure.
+ * @brief   IADC port selection for a channel.
  */
-#define adc_lld_driver_fields                                               \
-  /* Dummy field, it is not needed.*/                                       \
-  uint32_t                  dummy
+typedef enum {
+  EFR32_ADC_PORT_GND   = 0U,
+  EFR32_ADC_PORT_DAC1  = 2U,
+  EFR32_ADC_PORT_PORTA = 8U,
+  EFR32_ADC_PORT_PORTB = 9U,
+  EFR32_ADC_PORT_PORTC = 10U,
+  EFR32_ADC_PORT_PORTD = 11U,
+} efr32_adc_port_t;
 
 /**
- * @brief   Low level fields of the ADC configuration structure.
- */
-#define adc_lld_config_fields                                               \
-  /* Dummy configuration, it is not needed.*/                               \
-  uint32_t                  dummy
-
-/**
- * @brief   Low level fields of the ADC configuration structure.
+ * @brief   ADC driver configuration (per-group).
  */
 #define adc_lld_configuration_group_fields                                  \
-  /* Dummy configuration, it is not needed.*/                               \
+  /* Positive input port for single conversion. */                         \
+  efr32_adc_port_t          portpos;                                        \
+  /* Negative input port (usually GND). */                                 \
+  efr32_adc_port_t          portneg;                                        \
+  /* Pin number within the port (0-15). */                                  \
+  uint8_t                   pin;                                          \
+  /* Reference selection (0=VBGR, 1=VREF, 3=VDDX). */                      \
+  uint8_t                   refsel;                                       \
+  /* Oversampling (0=HISPD2 ... 6=HISPD128). */                             \
+  uint8_t                   osrhs
+
+/**
+ * @brief   ADC driver-level config fields.
+ */
+#define adc_lld_config_fields                                               \
   uint32_t                  dummy
+
+/**
+ * @brief   ADC driver structure fields.
+ */
+#define adc_lld_driver_fields                                               \
+  /* Pointer to IADC registers. */                                          \
+  IADC_TypeDef              *iadc;                                          \
+  /* Associated DMA stream. */                                              \
+  const efr32_dma_stream_t  *dma;                                           \
+  /* Error flags. */                                                        \
+  adcerror_t                errors
 
 /*===========================================================================*/
 /* External declarations.                                                    */
 /*===========================================================================*/
 
-#if (PLATFORM_ADC_USE_ADC1 == TRUE) && !defined(__DOXYGEN__)
+#if EFR32_ADC_USE_IADC0 && !defined(__DOXYGEN__)
 extern ADCDriver ADCD1;
 #endif
 
@@ -122,7 +117,7 @@ extern ADCDriver ADCD1;
 extern "C" {
 #endif
   void adc_lld_init(void);
-  void adc_lld_start(ADCDriver *adcp);
+  msg_t adc_lld_start(ADCDriver *adcp);
   void adc_lld_stop(ADCDriver *adcp);
   void adc_lld_start_conversion(ADCDriver *adcp);
   void adc_lld_stop_conversion(ADCDriver *adcp);

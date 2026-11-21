@@ -16,7 +16,7 @@
 
 /**
  * @file    EUSARTv1/hal_uart_lld.h
- * @brief   PLATFORM UART subsystem low level driver header (not implemented).
+ * @brief   EFR32FG23 UART subsystem low level driver header.
  *
  * @addtogroup UART
  * @{
@@ -27,7 +27,122 @@
 
 #if (HAL_USE_UART == TRUE) || defined(__DOXYGEN__)
 
-#error "UART driver is not implemented for the SILABS EFR32FG23 port. Use SIO (HAL_USE_SIO) instead."
+/*===========================================================================*/
+/* Driver pre-compile time settings.                                         */
+/*===========================================================================*/
+
+#if !defined(EFR32_UART_USE_EUSART1) || defined(__DOXYGEN__)
+#define EFR32_UART_USE_EUSART1      FALSE
+#endif
+#if !defined(EFR32_UART_USE_EUSART2) || defined(__DOXYGEN__)
+#define EFR32_UART_USE_EUSART2      FALSE
+#endif
+#if !defined(EFR32_UART_USE_EUSART3) || defined(__DOXYGEN__)
+#define EFR32_UART_USE_EUSART3      FALSE
+#endif
+#if !defined(EFR32_UART_USE_USART1) || defined(__DOXYGEN__)
+#define EFR32_UART_USE_USART1       FALSE
+#endif
+
+#if !defined(EFR32_UART_EUSART1_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_UART_EUSART1_IRQ_PRIORITY  4
+#endif
+#if !defined(EFR32_UART_EUSART2_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_UART_EUSART2_IRQ_PRIORITY  4
+#endif
+#if !defined(EFR32_UART_EUSART3_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_UART_EUSART3_IRQ_PRIORITY  4
+#endif
+#if !defined(EFR32_UART_USART1_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_UART_USART1_IRQ_PRIORITY   4
+#endif
+
+/*===========================================================================*/
+/* Driver data structures and types.                                         */
+/*===========================================================================*/
+
+/**
+ * @brief   UART driver configuration structure.
+ */
+typedef struct {
+  /**
+   * @brief   Bit rate in Hz.
+   */
+  uint32_t                  speed;
+  /**
+   * @brief   EUSART CFG0 / USART CTRL register value.
+   */
+  uint32_t                  cfg0;
+  /**
+   * @brief   EUSART FRAMECFG / USART FRAME register value.
+   */
+  uint32_t                  framecfg;
+  /**
+   * @brief   End of transmission buffer callback.
+   */
+  uartcb_t                  txend1_cb;
+  /**
+   * @brief   Physical end of transmission callback.
+   */
+  uartcb_t                  txend2_cb;
+  /**
+   * @brief   Receive buffer filled callback.
+   */
+  uartcb_t                  rxend_cb;
+  /**
+   * @brief   Character received callback.
+   */
+  uartccb_t                 rxchar_cb;
+  /**
+   * @brief   Receive error callback.
+   */
+  uartecb_t                 rxerr_cb;
+} UARTConfig;
+
+/**
+ * @brief   UART driver structure fields.
+ */
+#define uart_lld_driver_fields                                              \
+  /* Pointer to the EUSART/USART registers (as void*). */                   \
+  void                      *usart;                                         \
+  /* True if this is a USART (not EUSART). */                               \
+  bool                      is_usart;                                      \
+  /* UART instance index (0=EUSART0, 1=EUSART1, 2=EUSART2, 3=USART0). */   \
+  uint32_t                  index;                                         \
+  /* Clock frequency for baud rate calculation. */                          \
+  uint32_t                  clock
+
+/*===========================================================================*/
+/* External declarations.                                                    */
+/*===========================================================================*/
+
+#if EFR32_UART_USE_EUSART1 && !defined(__DOXYGEN__)
+extern UARTDriver UARTD1;
+#endif
+#if EFR32_UART_USE_EUSART2 && !defined(__DOXYGEN__)
+extern UARTDriver UARTD2;
+#endif
+#if EFR32_UART_USE_EUSART3 && !defined(__DOXYGEN__)
+extern UARTDriver UARTD3;
+#endif
+#if EFR32_UART_USE_USART1 && !defined(__DOXYGEN__)
+extern UARTDriver UARTD4;
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+  void uart_lld_init(void);
+  msg_t uart_lld_start(UARTDriver *uartp, const UARTConfig *config);
+  void uart_lld_stop(UARTDriver *uartp);
+  void uart_lld_start_send(UARTDriver *uartp, size_t n, const void *txbuf);
+  size_t uart_lld_stop_send(UARTDriver *uartp);
+  void uart_lld_start_receive(UARTDriver *uartp, size_t n, void *rxbuf);
+  size_t uart_lld_stop_receive(UARTDriver *uartp);
+  void uart_lld_serve_interrupt(UARTDriver *uartp);
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* HAL_USE_UART == TRUE */
 
