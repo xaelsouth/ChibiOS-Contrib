@@ -1,3 +1,15 @@
+ifeq ($(USE_SMART_BUILD),yes)
+
+ifneq ($(findstring HAL_USE_SYSRTC TRUE,$(HALCONF)),)
 PLATFORMSRC_CONTRIB += $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/SYSRTCv1/hal_sysrtc_lld.c
+else
+ifneq ($(findstring EFR32_ST_USE_SYSRTC TRUE,$(HALCONF)),)
+PLATFORMSRC_CONTRIB += $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/SYSRTCv1/hal_sysrtc_lld.c
+endif
+endif
+
+else
+PLATFORMSRC_CONTRIB += $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/SYSRTCv1/hal_sysrtc_lld.c
+endif
 
 PLATFORMINC_CONTRIB += $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/SYSRTCv1
