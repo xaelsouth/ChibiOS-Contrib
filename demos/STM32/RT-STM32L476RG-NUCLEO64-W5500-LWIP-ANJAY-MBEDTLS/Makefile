@@ -128,8 +128,7 @@ CSRC = $(ALLCSRC) \
        $(TESTSRC) \
        main.c \
        avs_test_task.c \
-       $(CHIBIOS)/os/various/evtimer.c \
-       $(CHIBIOS)/os/various/syscalls.c \
+       $(CHIBIOS)/os/various/newlib_bindings/syscalls.c \
        $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet/w5500_lld.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
@@ -160,7 +159,7 @@ CPPWARN = -Wall -Wextra -Wundef
 #
 
 # List all user C define here, like -D_DEBUG=1
-UDEFS =
+UDEFS = -DMBEDTLS_CONFIG_FILE=\"cfg/mbedtls/mbedtls_config.h\"
 
 # Define ASM defines here
 UADEFS =

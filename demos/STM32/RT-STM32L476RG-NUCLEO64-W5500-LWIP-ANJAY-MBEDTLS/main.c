@@ -66,8 +66,12 @@ MACDriver ETHD1 = {
   .phy_config = &phy_config,
 };
 
+static const MACConfig mac_config = {
+  .mac_address = mac_address
+};
+
 static const lwipthread_opts_t lwip_opts = {
-  .macaddress = mac_address,
+  .eth_config = &mac_config,
   .addrMode = NET_ADDRESS_DHCP,
 };
 

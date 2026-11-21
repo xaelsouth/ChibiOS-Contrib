@@ -1,5 +1,5 @@
 /*
-    ChibiOS - Copyright (C) 2006..2020 Giovanni Di Sirio
+    ChibiOS - Copyright (C) 2006-2026 Giovanni Di Sirio.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -29,9 +29,16 @@
 #define HALCONF_H
 
 #define _CHIBIOS_HAL_CONF_
-#define _CHIBIOS_HAL_CONF_VER_8_4_
+#define _CHIBIOS_HAL_CONF_VER_9_1_
 
 #include "mcuconf.h"
+
+/**
+ * @brief   Enables the HAL safety subsystem.
+ */
+#if !defined(HAL_USE_SAFETY) || defined(__DOXYGEN__)
+#define HAL_USE_SAFETY                      FALSE
+#endif
 
 /**
  * @brief   Enables the PAL subsystem.
@@ -66,6 +73,13 @@
  */
 #if !defined(HAL_USE_DAC) || defined(__DOXYGEN__)
 #define HAL_USE_DAC                         FALSE
+#endif
+
+/**
+ * @brief   Enables the display subsystem.
+ */
+#if !defined(HAL_USE_DSPL) || defined(__DOXYGEN__)
+#define HAL_USE_DSPL                        FALSE
 #endif
 
 /**
@@ -306,6 +320,14 @@
 /*===========================================================================*/
 
 /**
+ * @brief   Slave mode API enable switch.
+ * @note    The low level driver must support this capability.
+ */
+#if !defined(I2C_ENABLE_SLAVE_MODE)
+#define I2C_ENABLE_SLAVE_MODE               FALSE
+#endif
+
+/**
  * @brief   Enables the mutual exclusion APIs on the I2C bus.
  */
 #if !defined(I2C_USE_MUTUAL_EXCLUSION) || defined(__DOXYGEN__)
@@ -505,7 +527,7 @@
  * @note    Disabling this option saves both code and data space.
  */
 #if !defined(UART_USE_WAIT) || defined(__DOXYGEN__)
-#define UART_USE_WAIT                       TRUE
+#define UART_USE_WAIT                       FALSE
 #endif
 
 /**
@@ -513,7 +535,7 @@
  * @note    Disabling this option saves both code and data space.
  */
 #if !defined(UART_USE_MUTUAL_EXCLUSION) || defined(__DOXYGEN__)
-#define UART_USE_MUTUAL_EXCLUSION           TRUE
+#define UART_USE_MUTUAL_EXCLUSION           FALSE
 #endif
 
 /*===========================================================================*/
@@ -526,6 +548,15 @@
  */
 #if !defined(USB_USE_WAIT) || defined(__DOXYGEN__)
 #define USB_USE_WAIT                        FALSE
+#endif
+
+/**
+ * @brief   Moves EP0 request handling to thread context.
+ * @note    When enabled the legacy requests hook callback is not available
+ *          and the application must provide a dedicated EP0 worker thread.
+ */
+#if !defined(USB_USE_EP0_THREAD) || defined(__DOXYGEN__)
+#define USB_USE_EP0_THREAD                  FALSE
 #endif
 
 /*===========================================================================*/

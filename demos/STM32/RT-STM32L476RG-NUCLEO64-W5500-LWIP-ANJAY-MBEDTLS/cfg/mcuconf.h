@@ -1,5 +1,5 @@
 /*
-    ChibiOS - Copyright (C) 2006..2020 Giovanni Di Sirio
+    ChibiOS - Copyright (C) 2006-2026 Giovanni Di Sirio.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@
 #define STM32_PVD_ENABLE                    FALSE
 #define STM32_PLS                           STM32_PLS_LEV0
 #define STM32_HSI16_ENABLED                 FALSE
-#define STM32_LSI_ENABLED                   FALSE
+#define STM32_LSI_ENABLED                   TRUE
 #define STM32_HSE_ENABLED                   FALSE
 #define STM32_LSE_ENABLED                   TRUE
 #define STM32_MSIPLL_ENABLED                TRUE
@@ -80,19 +80,19 @@
 #define STM32_USART3SEL                     STM32_USART3SEL_SYSCLK
 #define STM32_UART4SEL                      STM32_UART4SEL_SYSCLK
 #define STM32_UART5SEL                      STM32_UART5SEL_SYSCLK
-#define STM32_LPUART1SEL                    STM32_LPUART1SEL_LSE
+#define STM32_LPUART1SEL                    STM32_LPUART1SEL_SYSCLK
 #define STM32_I2C1SEL                       STM32_I2C1SEL_SYSCLK
 #define STM32_I2C2SEL                       STM32_I2C2SEL_SYSCLK
 #define STM32_I2C3SEL                       STM32_I2C3SEL_SYSCLK
-#define STM32_LPTIM1SEL                     STM32_LPTIM1SEL_LSE
-#define STM32_LPTIM2SEL                     STM32_LPTIM2SEL_LSE
+#define STM32_LPTIM1SEL                     STM32_LPTIM1SEL_PCLK1
+#define STM32_LPTIM2SEL                     STM32_LPTIM2SEL_PCLK1
 #define STM32_SAI1SEL                       STM32_SAI1SEL_OFF
 #define STM32_SAI2SEL                       STM32_SAI2SEL_OFF
 #define STM32_CLK48SEL                      STM32_CLK48SEL_PLLSAI1
 #define STM32_ADCSEL                        STM32_ADCSEL_SYSCLK
 #define STM32_SWPMI1SEL                     STM32_SWPMI1SEL_PCLK1
 #define STM32_DFSDMSEL                      STM32_DFSDMSEL_PCLK2
-#define STM32_RTCSEL                        STM32_RTCSEL_LSE
+#define STM32_RTCSEL                        STM32_RTCSEL_LSI
 
 /*
  * IRQ system settings.
@@ -246,8 +246,8 @@
  */
 #define STM32_SDC_USE_SDMMC1                FALSE
 #define STM32_SDC_SDMMC_UNALIGNED_SUPPORT   TRUE
-#define STM32_SDC_SDMMC_WRITE_TIMEOUT       1000
-#define STM32_SDC_SDMMC_READ_TIMEOUT        1000
+#define STM32_SDC_SDMMC_WRITE_TIMEOUT       10000
+#define STM32_SDC_SDMMC_READ_TIMEOUT        10000
 #define STM32_SDC_SDMMC_CLOCK_DELAY         10
 #define STM32_SDC_SDMMC1_DMA_PRIORITY       3
 #define STM32_SDC_SDMMC1_IRQ_PRIORITY       9
@@ -261,7 +261,7 @@
 #define STM32_SERIAL_USE_USART3             FALSE
 #define STM32_SERIAL_USE_UART4              FALSE
 #define STM32_SERIAL_USE_UART5              FALSE
-#define STM32_SERIAL_USE_LPUART1            TRUE
+#define STM32_SERIAL_USE_LPUART1            FALSE
 
 /*
  * SIO driver system settings.
@@ -308,11 +308,10 @@
  * UART driver system settings.
  */
 #define STM32_UART_USE_USART1               FALSE
-#define STM32_UART_USE_USART2               FALSE
+#define STM32_UART_USE_USART2               TRUE
 #define STM32_UART_USE_USART3               FALSE
 #define STM32_UART_USE_UART4                FALSE
 #define STM32_UART_USE_UART5                FALSE
-#define STM32_UART_USE_LPUART1              FALSE
 #define STM32_UART_USART1_RX_DMA_STREAM     STM32_DMA_STREAM_ID(2, 7)
 #define STM32_UART_USART1_TX_DMA_STREAM     STM32_DMA_STREAM_ID(2, 6)
 #define STM32_UART_USART2_RX_DMA_STREAM     STM32_DMA_STREAM_ID(1, 6)
@@ -328,7 +327,6 @@
 #define STM32_UART_USART3_DMA_PRIORITY      0
 #define STM32_UART_UART4_DMA_PRIORITY       0
 #define STM32_UART_UART5_DMA_PRIORITY       0
-#define STM32_UART_LPUART1_DMA_PRIORITY     0
 #define STM32_UART_DMA_ERROR_HOOK(uartp)    osalSysHalt("DMA failure")
 
 /*
