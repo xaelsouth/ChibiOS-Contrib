@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    boards/IMX23_OLIMEX_IMX233/board.c
+ * @file    boards/IMX233_OLINUXINO_MINI/board.c
  * @brief   OLIMEX i.MX233-OLinuXino board file.
  *
  * @details Pinmux ported from U-Boot board/olimex/mx23_olinuxino/spl_boot.c.

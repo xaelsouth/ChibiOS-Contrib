@@ -37,7 +37,7 @@ vectors into OCRAM at `0x0`, disables MMU/caches and clears the CP15 V bit.
     `imx23_lcdif` (LCDIF dotclock master, XRGB8888 fb, vsync IRQ),
     `imx23_pxp` (pixel pipeline blit/CSC, IRQ 57),
     `imx23_audioout` (mxs-builtin DAC playback, APBX DMA ch1)
-- `ChibiOS-Contrib/os/hal/boards/IMX23_OLIMEX_IMX233/` — 64MB, `IMX23_RAM_SIZE 0x4000000`
+- `ChibiOS-Contrib/os/hal/boards/IMX233_OLINUXINO_MINI/` — 64MB, `IMX23_RAM_SIZE 0x4000000`
 - `ChibiOS-Contrib/os/hal/boards/IMX23_EVK/` — 128MB, LCD panel + ENC28J60 defines
 - `ChibiOS-Contrib/os/various/devices_lib/ethernet/enc28j60_lld.c` — SPI MAC LLD
 - `ChibiOS-Contrib/demos/IMX23/RT-IMX23-HELLO/` — demo with xshell on the DUART
@@ -51,7 +51,7 @@ OCRAM (32KB at 0x0) is a second linker region (`ram1`) for vectors/stacks.
 ```sh
 export PATH=/opt/arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi/bin:$PATH
 cd ChibiOS-Contrib/demos/IMX23/RT-IMX23-HELLO
-make -j8 BOARD=IMX23_OLIMEX_IMX233   # or BOARD=IMX23_EVK
+make -j8 BOARD=IMX233_OLINUXINO_MINI   # or BOARD=IMX23_EVK
 # -> build/<BOARD>/ch.bin  (load at 0x40000000 via bootstream)
 ```
 

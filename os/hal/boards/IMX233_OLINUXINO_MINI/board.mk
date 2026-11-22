@@ -15,10 +15,10 @@
 #
 
 # List of all the board related files.
-BOARDSRC = ${CHIBIOS_CONTRIB}/os/hal/boards/IMX23_OLIMEX_IMX233/board.c
+BOARDSRC = ${CHIBIOS_CONTRIB}/os/hal/boards/IMX233_OLINUXINO_MINI/board.c
 
 # Required include directories
-BOARDINC = ${CHIBIOS_CONTRIB}/os/hal/boards/IMX23_OLIMEX_IMX233
+BOARDINC = ${CHIBIOS_CONTRIB}/os/hal/boards/IMX233_OLINUXINO_MINI
 
 # Shared variables
 ALLCSRC += $(BOARDSRC)

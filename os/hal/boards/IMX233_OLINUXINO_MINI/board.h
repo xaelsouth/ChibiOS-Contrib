@@ -20,7 +20,7 @@
 /*
  * Board identifier.
  */
-#define BOARD_IMX23_OLIMEX_IMX233
+#define BOARD_IMX233_OLINUXINO_MINI
 #define BOARD_NAME              "OLIMEX i.MX233-OLinuXino"
 
 /*

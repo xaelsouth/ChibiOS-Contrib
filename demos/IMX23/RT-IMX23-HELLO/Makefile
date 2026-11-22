@@ -21,9 +21,9 @@
 # Project name.
 PROJECT = ch
 
-# Board selection: IMX23_OLIMEX_IMX233 (64MB) or IMX23_EVK (128MB).
+# Board selection: IMX233_OLINUXINO_MINI (64MB) or IMX23_EVK (128MB).
 # The board's board.h defines IMX23_RAM_SIZE, which sizes the memory map.
-BOARD ?= IMX23_OLIMEX_IMX233
+BOARD ?= IMX233_OLINUXINO_MINI
 
 # Imported source files and paths.
 CHIBIOS := ../../../../ChibiOS
