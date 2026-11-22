@@ -34,13 +34,14 @@ vectors into OCRAM at `0x0`, disables MMU/caches and clears the CP15 V bit.
     `hal_i2c_lld` (I2C0 PIO master), `hal_pwm_lld` (5 ch, 24MHz),
     `imx23_dma` (APBH/APBX CCW engine),
     `imx23_clock` (CPU 480/240/120 MHz + VDDD scaling),
-    `imx23_lcdif` (LCDIF dotclock master, XRGB8888 fb, vsync IRQ),
-    `imx23_pxp` (pixel pipeline blit/CSC, IRQ 57),
-    `imx23_audioout` (mxs-builtin DAC playback, APBX DMA ch1)
+    `imx23_lradc`, `imx23_gpmi_nand` + `imx23_romboot` (NAND + ROM boot writer)
+  - MXS-family blocks moved to devices_lib: `crypto/mxs_dcp`,
+    `display/mxs_lcdif`+`mxs_pxp`, `audio/mxs_audioout`, `nand/*`
 - `ChibiOS-Contrib/os/hal/boards/IMX233_OLINUXINO_MINI/` — 64MB, `IMX23_RAM_SIZE 0x4000000`
 - `ChibiOS-Contrib/os/hal/boards/IMX23_EVK/` — 128MB, LCD panel + ENC28J60 defines
 - `ChibiOS-Contrib/os/various/devices_lib/ethernet/enc28j60_lld.c` — SPI MAC LLD
 - `ChibiOS-Contrib/demos/IMX23/RT-IMX23-HELLO/` — demo with shell on the DUART
+- `ChibiOS-Contrib/demos/IMX23/RT-IMX23-BOOTLOADER/` — failsafe NAND bootloader (see its README.md)
 
 RAM size: one `#define IMX23_RAM_SIZE` in the board's `board.h`
 (`0x4000000` OLIMEX / `0x8000000` EVK); `heap_end` is 0x44000000 / 0x48000000.
