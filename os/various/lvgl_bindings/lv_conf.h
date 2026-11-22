@@ -36,7 +36,7 @@
 /* Display / color.                                                          */
 /*--------------------------------------------------------------------------*/
 /* RGB565: the i.MX23 port flushes through the PXP, which converts to the
-   LCDIF's XRGB8888 framebuffer (see devices_lib/lvgl_imx23). */
+   LCDIF's XRGB8888 framebuffer (see the i.MX23 LVGL port layer). */
 #define LV_COLOR_FORMAT_DEFAULT     LV_COLOR_FORMAT_RGB565
 
 /*--------------------------------------------------------------------------*/

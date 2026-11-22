@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/lvgl_imx23/imx23_lvgl.c
+ * @file    demos/IMX23/RT-IMX23-HELLO/lvgl_imx23/imx23_lvgl.c
  * @brief   LVGL display port for the i.MX23 LCDIF + PXP.
  *
  * @addtogroup LVGL_IMX23

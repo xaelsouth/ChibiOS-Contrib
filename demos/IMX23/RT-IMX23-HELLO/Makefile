@@ -98,10 +98,11 @@ include $(CHIBIOS_CONTRIB)/os/various/mbedtls_bindings/mbedtls.mk
 # Network services: telnetd (TCP/23), TFTP + HTTPS on LittleFS.
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/net_services/net_services.mk
 
-# LVGL + i.MX23 LCDIF/PXP port layer (EVK has the 4.3" LCD).
+# LVGL + i.MX23 LCDIF/PXP port layer (EVK has the 4.3" LCD; the LVGL port
+# layer itself is demo-local, see lvgl_imx23/).
 ifeq ($(BOARD),IMX23_EVK)
 include $(CHIBIOS_CONTRIB)/os/various/lvgl_bindings/lvgl.mk
-include $(CHIBIOS_CONTRIB)/os/various/devices_lib/lvgl_imx23/lvgl_imx23.mk
+include lvgl_imx23/lvgl_imx23.mk
 endif
 
 ##############################################################################
@@ -231,4 +232,9 @@ $(BUILDDIR)/IMX23.ld: $(STARTUPLD)/IMX23.ld $(BOARDINC)/board.h
 upload: $(BUILDDIR)/$(PROJECT).bin
 	@echo "Load $(BUILDDIR)/$(PROJECT).bin at 0x40000000 and jump (bootstream)"
 
-.PHONY: upload
+elftosb: upload
+	tools/elftosb --debug --zero-key -c bootlets/bootlets.bd -o build/chibios.sb
+	tools/sb_loader -d -p hid build/chibios.sb
+	@echo "sudo tools/sb_loader -d -p hid build/chibios.sb"
+
+.PHONY: upload elftosb
