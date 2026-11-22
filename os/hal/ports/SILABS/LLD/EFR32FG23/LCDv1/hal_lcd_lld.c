@@ -156,6 +156,12 @@ void lcd_lld_stop(LCDDriver *lcdp) {
     LCD->IEN = 0U;
     LCD->IF_CLR = _LCD_IF_MASK;
     LCD->EN_CLR = LCD_EN_EN;
+    /* Wait for the disable to propagate before gating the bus clock —
+       touching the peripheral with its clock off bus-faults. */
+    {
+      volatile uint32_t sp = 1000000UL;
+      while (((LCD->EN & LCD_EN_DISABLING) != 0U) && (--sp != 0U)) {}
+    }
     CMU->CLKEN1_CLR = CMU_CLKEN1_LCD;
     lcdp->state = LCD_STOP;
     lcdp->config = NULL;

@@ -169,9 +169,9 @@
 /*
  * LCD segment controller driver settings.
  */
-#define EFR32_LCD_USE_LCD                   FALSE
+#define EFR32_LCD_USE_LCD                   TRUE
 #define EFR32_LCD_IRQ_PRIORITY              3
-#define EFR32_LCD_DMA_STREAM                EFR32_DMA_STREAM_ID_ANY
+#define EFR32_LCD_DMA_STREAM                (-1)   /* CPU writes only for this test */
 #define EFR32_LCD_DMA_IRQ_PRIORITY          5
 
 /*

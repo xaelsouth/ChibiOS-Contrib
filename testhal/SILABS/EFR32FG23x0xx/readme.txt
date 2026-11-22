@@ -59,7 +59,7 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
   DAC         PASS  (VDAC0 both channels, polled + IRQ completion)
   ADC         PASS  (IADC0 single conversions: GND vs GND -> code 0,
               PA0 vs GND completes, clock gated off after stop)
-  LCD         (scaffolded, no main.c yet)
+  LCD         test written (main.c), builds; on-target run pending board power-cycle
 
 Notes / driver quirks discovered on FG23 (all handled in the LLDs):
   - Peripheral bus clocks must be enabled (CMU CLKEN0) before register

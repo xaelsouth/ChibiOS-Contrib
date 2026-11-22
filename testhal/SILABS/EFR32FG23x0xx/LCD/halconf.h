@@ -87,7 +87,7 @@
  * @brief   Enables the LCD segment controller subsystem (community).
  */
 #if !defined(HAL_USE_LCD) || defined(__DOXYGEN__)
-#define HAL_USE_LCD                         FALSE
+#define HAL_USE_LCD                         TRUE
 #endif
 
 /**
