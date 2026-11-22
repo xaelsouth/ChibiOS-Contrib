@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/net_services/httpsd.h
+ * @file    demos/IMX23/RT-IMX23-HELLO/net/httpsd.h
  * @brief   Minimal HTTPS server (altcp_tls + mbedTLS) with a firmware
  *          upload web UI.
  *

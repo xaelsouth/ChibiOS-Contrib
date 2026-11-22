@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/net_services/httpsd.c
+ * @file    demos/IMX23/RT-IMX23-HELLO/net/httpsd.c
  * @brief   Minimal HTTPS server (altcp_tls + mbedTLS) with firmware upload.
  *
  * @addtogroup NET_SERVICES

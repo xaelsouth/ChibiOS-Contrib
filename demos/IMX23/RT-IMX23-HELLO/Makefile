@@ -105,8 +105,13 @@ ALLCSRC += $(filter-out $(CHIBIOS)/ext/lwip/src/netif/ppp/polarssl/% \
 # from mbedTLS 2.x but 3.x removed (certs.h, net.h, ssl_internal.h).
 include $(CHIBIOS_CONTRIB)/os/various/mbedtls_bindings/mbedtls.mk
 
-# Network services: telnetd (TCP/23), TFTP + HTTPS on LittleFS.
+# Network services: telnetd (TCP/23), TFTP on LittleFS, net shell commands.
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/net_services/net_services.mk
+
+# HTTPS firmware-upload server is demo-local (net/httpsd.c): it stores the
+# uploaded image in this demo's LittleFS and reports its SHA-256.
+ALLCSRC += net/httpsd.c
+ALLINC += net
 
 # LVGL + i.MX23 LCDIF/PXP port layer (EVK has the 4.3" LCD; the LVGL port
 # layer itself is demo-local, see lvgl/).
