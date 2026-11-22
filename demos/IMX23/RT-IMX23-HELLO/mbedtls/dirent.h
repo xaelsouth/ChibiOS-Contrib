@@ -16,8 +16,9 @@
 
 /* Stub: mbedTLS's x509_crt.c includes <dirent.h> on non-Windows even when
    MBEDTLS_FS_IO is off; arm-none-eabi newlib's <dirent.h> is a hard #error.
-   This stub (found first via -I.) satisfies the include; the DIR type is
-   only used under MBEDTLS_FS_IO, which we do not enable. */
+   This stub (found first via -Imbedtls, see UINCDIR in the Makefile)
+   satisfies the include; the DIR type is only used under MBEDTLS_FS_IO,
+   which we do not enable. */
 
 #ifndef DIRENT_H_STUB
 #define DIRENT_H_STUB

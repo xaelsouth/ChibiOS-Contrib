@@ -117,7 +117,7 @@ LDSCRIPT = $(BUILDDIR)/IMX23.ld
 # C sources that can be compiled in ARM or THUMB mode.
 CSRC = $(ALLCSRC) \
        main.c \
-       mbedtls_platform.c
+       mbedtls/mbedtls_platform.c
 
 # C++ sources.
 CPPSRC = $(ALLCPPSRC)
@@ -191,7 +191,7 @@ CPPWARN = -Wall -Wextra -Wundef
 # MBEDTLS_CONFIG_H guard then suppresses mbedtls's default config.
 UDEFS = -DSHELL_CMD_TEST_ENABLED=FALSE -DLFS_THREADSAFE=0 -DLFS_NO_DEBUG=1 -DLFS_NO_WARN=1 -DLFS_CONFIG=nand_lfs_config.h -DUSE_TLSF_HEAP=1 -include $(CURDIR)/cfg/mbedtls_config.h
 UADEFS =
-UINCDIR =
+UINCDIR = mbedtls
 ULIBDIR =
 ULIBS =
 
@@ -233,8 +233,7 @@ upload: $(BUILDDIR)/$(PROJECT).bin
 	@echo "Load $(BUILDDIR)/$(PROJECT).bin at 0x40000000 and jump (bootstream)"
 
 elftosb: upload
-	tools/elftosb --debug --zero-key -c bootlets/bootlets.bd -o build/chibios.sb
-	tools/sb_loader -d -p hid build/chibios.sb
-	@echo "sudo tools/sb_loader -d -p hid build/chibios.sb"
+	tools/elftosb --debug --zero-key -c bootlets/IMX23_EVK/bootlets.bd -o build/IMX23_EVK/chibios.sb
+	@echo "sudo tools/sb_loader -d -p hid build/IMX23_EVK/chibios.sb"
 
 .PHONY: upload elftosb
