@@ -58,6 +58,9 @@ include $(CHIBIOS)/os/various/shell/shell.mk
 ALLCSRC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet/enc28j60_lld.c
 ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet
 
+# MXS DCP hardware crypto (devices_lib/crypto) — used by dcp/sbtool cmds.
+include $(CHIBIOS_CONTRIB)/os/various/devices_lib/crypto/mxs_dcp.mk
+
 # Generic matrix keypad (devices_lib/keypad).
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/keypad/keypad.mk
 

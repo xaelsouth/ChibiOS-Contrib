@@ -18,7 +18,6 @@
 PLATFORMSRC_CONTRIB := \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_lld.c \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/imx23_dma.c \
-  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/imx23_dcp.c \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/imx23_clock.c \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/imx23_lcdif.c \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/imx23_pxp.c \

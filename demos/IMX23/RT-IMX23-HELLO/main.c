@@ -405,7 +405,7 @@ static void cmd_mac(BaseSequentialStream *chp, int argc, char *argv[]) {
 }
 #endif /* BOARD_ENC28J60 */
 
-#include "imx23_dcp.h"
+#include "mxs_dcp.h"
 
 #if defined(BOARD_IMX23_EVK)
 #include "imx23_gpmi_nand.h"
@@ -878,40 +878,40 @@ static void cmd_sbtool(BaseSequentialStream *chp, int argc, char *argv[]) {
   lfs_file_t fi, fo;
   lfs_ssize_t n;
   uint32_t total = 0U;
-  int rc = IMX23_DCP_OK;
+  int rc = MXS_DCP_OK;
 
   if (!nand_lfs.mounted) {
     chprintf(chp, "lfs not mounted\r\n");
     return;
   }
-  if (imx23_dcp_init(&IMX23DCP1) != IMX23_DCP_OK) {
+  if (mxs_dcp_init(&MXSDCP1) != MXS_DCP_OK) {
     chprintf(chp, "dcp init failed\r\n");
     return;
   }
 
-  in  = malloc(IMX23_DCP_CHUNK);
-  tmp = malloc(IMX23_DCP_CHUNK);
-  out = malloc(IMX23_DCP_CHUNK);
+  in  = malloc(MXS_DCP_CHUNK);
+  tmp = malloc(MXS_DCP_CHUNK);
+  out = malloc(MXS_DCP_CHUNK);
   if (in == NULL || tmp == NULL || out == NULL) {
     chprintf(chp, "out of memory\r\n");
     goto done;
   }
   if (lfs_file_open(&nand_lfs.lfs, &fi, in_name, LFS_O_RDONLY) != LFS_ERR_OK) {
     chprintf(chp, "cannot open %s\r\n", in_name);
-    rc = IMX23_DCP_ERR_HW;
+    rc = MXS_DCP_ERR_HW;
     goto done;
   }
   if (lfs_file_open(&nand_lfs.lfs, &fo, out_name,
                     LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) != LFS_ERR_OK) {
     chprintf(chp, "cannot create %s\r\n", out_name);
     lfs_file_close(&nand_lfs.lfs, &fi);
-    rc = IMX23_DCP_ERR_HW;
+    rc = MXS_DCP_ERR_HW;
     goto done;
   }
 
   memset(iv_in, 0, sizeof(iv_in));      /* CBC, zero IV on both sides */
   memset(iv_out, 0, sizeof(iv_out));
-  while ((n = lfs_file_read(&nand_lfs.lfs, &fi, in, IMX23_DCP_CHUNK)) > 0) {
+  while ((n = lfs_file_read(&nand_lfs.lfs, &fi, in, MXS_DCP_CHUNK)) > 0) {
     uint32_t len = (uint32_t)n;
     uint32_t pad = (16U - (len % 16U)) % 16U;
     uint8_t ct_blk[16];
@@ -922,19 +922,19 @@ static void cmd_sbtool(BaseSequentialStream *chp, int argc, char *argv[]) {
     }
     memcpy(ct_blk, in + len - 16U, 16U);  /* save last ciphertext block */
     /* decrypt with the zero distribution key (input CBC chain) */
-    rc = imx23_dcp_aes128(&IMX23DCP1, in, tmp, len, zero_key,
-                          IMX23_DCP_KEY_SLOT(0), false, true, iv_in);
-    if (rc != IMX23_DCP_OK) {
+    rc = mxs_dcp_aes128(&MXSDCP1, in, tmp, len, zero_key,
+                          MXS_DCP_KEY_SLOT(0), false, true, iv_in);
+    if (rc != MXS_DCP_OK) {
       break;
     }
     /* re-encrypt with the device-unique key (output CBC chain) */
-    rc = imx23_dcp_aes128(&IMX23DCP1, tmp, out, len, NULL,
-                          IMX23_DCP_KEY_UNIQUE, true, true, iv_out);
-    if (rc != IMX23_DCP_OK) {
+    rc = mxs_dcp_aes128(&MXSDCP1, tmp, out, len, NULL,
+                          MXS_DCP_KEY_UNIQUE, true, true, iv_out);
+    if (rc != MXS_DCP_OK) {
       break;
     }
     if (lfs_file_write(&nand_lfs.lfs, &fo, out, len) != (lfs_ssize_t)len) {
-      rc = IMX23_DCP_ERR_HW;
+      rc = MXS_DCP_ERR_HW;
       break;
     }
     total += len;
@@ -942,14 +942,14 @@ static void cmd_sbtool(BaseSequentialStream *chp, int argc, char *argv[]) {
     memcpy(iv_out, out + len - 16U, 16U);
   }
   if (n < 0) {
-    rc = IMX23_DCP_ERR_HW;              /* read error */
+    rc = MXS_DCP_ERR_HW;              /* read error */
   }
   lfs_file_close(&nand_lfs.lfs, &fo);
   lfs_file_close(&nand_lfs.lfs, &fi);
 
   chprintf(chp, "sbtool %s -> %s: %s, %lu bytes (AES-128-CBC zero key -> "
            "device-unique DCP key)\r\n",
-           in_name, out_name, rc == IMX23_DCP_OK ? "OK" : "FAILED",
+           in_name, out_name, rc == MXS_DCP_OK ? "OK" : "FAILED",
            (unsigned long)total);
 
 done:
@@ -986,7 +986,7 @@ static void cmd_dcp(BaseSequentialStream *chp, int argc, char *argv[]) {
   int rc;
   unsigned i;
 
-  if (imx23_dcp_init(&IMX23DCP1) != IMX23_DCP_OK) {
+  if (mxs_dcp_init(&MXSDCP1) != MXS_DCP_OK) {
     chprintf(chp, "dcp init failed\r\n");
     return;
   }
@@ -998,16 +998,16 @@ static void cmd_dcp(BaseSequentialStream *chp, int argc, char *argv[]) {
 
   if (strcmp(argv[0], "info") == 0) {
     chprintf(chp, "DCP capability1 = 0x%08lx (AES128=%lu SHA1=%lu SHA256=%lu)\r\n",
-             (unsigned long)IMX23_REG(IMX23_DCP_CAPABILITY1),
-             (unsigned long)(IMX23_REG(IMX23_DCP_CAPABILITY1) & 1U),
-             (unsigned long)((IMX23_REG(IMX23_DCP_CAPABILITY1) >> 16) & 1U),
-             (unsigned long)((IMX23_REG(IMX23_DCP_CAPABILITY1) >> 16) & 4U));
+             (unsigned long)IMX23_REG(MXS_DCP_CAPABILITY1),
+             (unsigned long)(IMX23_REG(MXS_DCP_CAPABILITY1) & 1U),
+             (unsigned long)((IMX23_REG(MXS_DCP_CAPABILITY1) >> 16) & 1U),
+             (unsigned long)((IMX23_REG(MXS_DCP_CAPABILITY1) >> 16) & 4U));
     return;
   }
 
   if (strcmp(argv[0], "sha256") == 0) {
     const char *msg = (argc >= 2U) ? argv[1] : "abc";
-    rc = imx23_dcp_sha256(&IMX23DCP1, (const uint8_t *)msg, strlen(msg), buf);
+    rc = mxs_dcp_sha256(&MXSDCP1, (const uint8_t *)msg, strlen(msg), buf);
     chprintf(chp, "sha256(\"%s\") rc=%d: ", msg, rc);
     for (i = 0U; i < 32U; i++) {
       chprintf(chp, "%02x", buf[i]);
@@ -1020,16 +1020,16 @@ static void cmd_dcp(BaseSequentialStream *chp, int argc, char *argv[]) {
 
   if (strcmp(argv[0], "aes") == 0) {
     uint8_t ct[16], pt[16];
-    rc = imx23_dcp_aes128(&IMX23DCP1, fips_pt, ct, 16U, fips_key, 0U,
+    rc = mxs_dcp_aes128(&MXSDCP1, fips_pt, ct, 16U, fips_key, 0U,
                           true, false, NULL);
-    if (rc != IMX23_DCP_OK || memcmp(ct, fips_ct, 16U) != 0U) {
+    if (rc != MXS_DCP_OK || memcmp(ct, fips_ct, 16U) != 0U) {
       chprintf(chp, "AES-128-ECB encrypt FAILED rc=%d\r\n", rc);
       return;
     }
-    rc = imx23_dcp_aes128(&IMX23DCP1, ct, pt, 16U, fips_key, 0U,
+    rc = mxs_dcp_aes128(&MXSDCP1, ct, pt, 16U, fips_key, 0U,
                           false, false, NULL);
     chprintf(chp, "AES-128-ECB %s\r\n",
-             (rc == IMX23_DCP_OK && memcmp(pt, fips_pt, 16U) == 0U)
+             (rc == MXS_DCP_OK && memcmp(pt, fips_pt, 16U) == 0U)
              ? "SELFTEST OK" : "FAILED");
     return;
   }
@@ -1037,16 +1037,16 @@ static void cmd_dcp(BaseSequentialStream *chp, int argc, char *argv[]) {
   if (strcmp(argv[0], "unique") == 0) {
     uint8_t ct[16], pt[16];
     memcpy(buf, fips_pt, 16U);
-    rc = imx23_dcp_aes128(&IMX23DCP1, buf, ct, 16U, NULL,
-                          IMX23_DCP_KEY_UNIQUE, true, false, NULL);
-    if (rc != IMX23_DCP_OK) {
+    rc = mxs_dcp_aes128(&MXSDCP1, buf, ct, 16U, NULL,
+                          MXS_DCP_KEY_UNIQUE, true, false, NULL);
+    if (rc != MXS_DCP_OK) {
       chprintf(chp, "unique-key encrypt FAILED rc=%d\r\n", rc);
       return;
     }
-    rc = imx23_dcp_aes128(&IMX23DCP1, ct, pt, 16U, NULL,
-                          IMX23_DCP_KEY_UNIQUE, false, false, NULL);
+    rc = mxs_dcp_aes128(&MXSDCP1, ct, pt, 16U, NULL,
+                          MXS_DCP_KEY_UNIQUE, false, false, NULL);
     chprintf(chp, "device-unique-key roundtrip %s\r\n",
-             (rc == IMX23_DCP_OK && memcmp(pt, buf, 16U) == 0U)
+             (rc == MXS_DCP_OK && memcmp(pt, buf, 16U) == 0U)
              ? "OK" : "FAILED");
     return;
   }
@@ -1058,16 +1058,16 @@ static void cmd_dcp(BaseSequentialStream *chp, int argc, char *argv[]) {
     static const uint8_t iv[16] = { 0 };
     uint8_t ct[16], pt[16];
     memcpy(ct, fips_pt, 16U);   /* pretend this is the zero-key ciphertext */
-    rc = imx23_dcp_aes128(&IMX23DCP1, ct, pt, 16U, zero_key, 0U,
+    rc = mxs_dcp_aes128(&MXSDCP1, ct, pt, 16U, zero_key, 0U,
                           false, true, iv);
-    if (rc != IMX23_DCP_OK) {
+    if (rc != MXS_DCP_OK) {
       chprintf(chp, "zero-key decrypt FAILED rc=%d\r\n", rc);
       return;
     }
-    rc = imx23_dcp_aes128(&IMX23DCP1, pt, ct, 16U, NULL,
-                          IMX23_DCP_KEY_UNIQUE, true, true, iv);
+    rc = mxs_dcp_aes128(&MXSDCP1, pt, ct, 16U, NULL,
+                          MXS_DCP_KEY_UNIQUE, true, true, iv);
     chprintf(chp, "reencrypt zero->unique %s (rc=%d)\r\n",
-             rc == IMX23_DCP_OK ? "OK" : "FAILED", rc);
+             rc == MXS_DCP_OK ? "OK" : "FAILED", rc);
     return;
   }
 

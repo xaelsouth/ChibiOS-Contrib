@@ -15,8 +15,8 @@
 */
 
 /**
- * @file    imx23_dcp.c
- * @brief   i.MX23 DCP (Data Co-Path) hardware crypto engine driver.
+ * @file    devices_lib/crypto/mxs_dcp.c
+ * @brief   MXS-family DCP (Data Co-Path) hardware crypto engine driver.
  *
  * @details Register model follows Linux drivers/crypto/mxs-dcp.c. The DCP has
  *          its own AHB master and walks 8-word descriptors; with the MMU
@@ -25,8 +25,14 @@
  */
 
 #include "hal.h"
+#if defined(__has_include)
+#if __has_include("imx23.h")
+#define MXS_DCP_HAVE_IMX23_PORT 1
+#include "imx23.h"
 #include "icoll.h"
-#include "imx23_dcp.h"
+#endif
+#endif
+#include "mxs_dcp.h"
 
 #include <string.h>
 
@@ -41,37 +47,37 @@
 /* Module exported variables.                                                */
 /*===========================================================================*/
 
-IMX23DCPDriver IMX23DCP1;
+MXSDCPDriver MXSDCP1;
 
 /*===========================================================================*/
 /* Module local variables.                                                   */
 /*===========================================================================*/
 
-static IMX23DCPDriver *dcp_active;
+static MXSDCPDriver *dcp_active;
 
 /*===========================================================================*/
 /* Module local functions.                                                   */
 /*===========================================================================*/
 
 static bool dcp_irq_handler(void) {
-  uint32_t stat = IMX23_REG(IMX23_DCP_STAT);
+  uint32_t stat = MXS_DCP_REG(MXS_DCP_STAT);
 
   if ((stat & (1U << DCP_CHAN)) != 0U) {
-    dcp_active->last_ch_stat = IMX23_REG(IMX23_DCP_CH_STAT(DCP_CHAN));
-    IMX23_REG(IMX23_DCP_CH_STAT_CLR(DCP_CHAN)) = 0xFFFFFFFFU;
-    IMX23_REG(IMX23_DCP_STAT_CLR) = stat;
+    dcp_active->last_ch_stat = MXS_DCP_REG(MXS_DCP_CH_STAT(DCP_CHAN));
+    MXS_DCP_REG(MXS_DCP_CH_STAT_CLR(DCP_CHAN)) = 0xFFFFFFFFU;
+    MXS_DCP_REG(MXS_DCP_STAT_CLR) = stat;
     chSemSignalI(&dcp_active->done);
   }
   return true;    /* handled, keep the IRQ enabled */
 }
 
 /* Run one descriptor on channel 0, wait for completion. */
-static int dcp_run(IMX23DCPDriver *dcp, imx23_dcp_desc_t *desc) {
+static int dcp_run(MXSDCPDriver *dcp, mxs_dcp_desc_t *desc) {
   unsigned i;
 
-  IMX23_REG(IMX23_DCP_CH_STAT_CLR(DCP_CHAN)) = 0xFFFFFFFFU;
-  IMX23_REG(IMX23_DCP_CH_CMDPTR(DCP_CHAN)) = (uint32_t)desc;
-  IMX23_REG(IMX23_DCP_CH_SEMA(DCP_CHAN)) = 1U;    /* kick the channel      */
+  MXS_DCP_REG(MXS_DCP_CH_STAT_CLR(DCP_CHAN)) = 0xFFFFFFFFU;
+  MXS_DCP_REG(MXS_DCP_CH_CMDPTR(DCP_CHAN)) = (uint32_t)desc;
+  MXS_DCP_REG(MXS_DCP_CH_SEMA(DCP_CHAN)) = 1U;    /* kick the channel      */
 
   for (i = 0U; i < DCP_TIMEOUT_MS; i++) {
     if (chSemWaitTimeout(&dcp->done, TIME_MS2I(1)) == MSG_OK) {
@@ -80,13 +86,13 @@ static int dcp_run(IMX23DCPDriver *dcp, imx23_dcp_desc_t *desc) {
     chThdSleepMilliseconds(1);
   }
   if (i == DCP_TIMEOUT_MS) {
-    return IMX23_DCP_ERR_TIMEOUT;
+    return MXS_DCP_ERR_TIMEOUT;
   }
   /* CH_STAT bit 31 is the error flag on STMP-style channels. */
   if ((dcp->last_ch_stat & (1U << 31)) != 0U) {
-    return IMX23_DCP_ERR_HW;
+    return MXS_DCP_ERR_HW;
   }
-  return IMX23_DCP_OK;
+  return MXS_DCP_OK;
 }
 
 static bool need_bounce(const void *p) {
@@ -98,7 +104,7 @@ static bool need_bounce(const void *p) {
 /* Module exported functions.                                                */
 /*===========================================================================*/
 
-int imx23_dcp_init(IMX23DCPDriver *dcp) {
+int mxs_dcp_init(MXSDCPDriver *dcp) {
   unsigned i;
 
   memset(dcp, 0, sizeof(*dcp));
@@ -106,54 +112,58 @@ int imx23_dcp_init(IMX23DCPDriver *dcp) {
   dcp_active = dcp;
 
   /* Ungate and de-reset the DCP block (STMP-style CTRL SFTRST/CLKGATE). */
-  IMX23_REG(IMX23_DCP_CTRL) = IMX23_DCP_CTRL_SFTRST | IMX23_DCP_CTRL_CLKGATE;
-  IMX23_REG(IMX23_DCP_CTRL) = IMX23_DCP_CTRL_CLKGATE;
+  MXS_DCP_REG(MXS_DCP_CTRL) = MXS_DCP_CTRL_SFTRST | MXS_DCP_CTRL_CLKGATE;
+  MXS_DCP_REG(MXS_DCP_CTRL) = MXS_DCP_CTRL_CLKGATE;
   for (i = 0U; i < 100U; i++) {
-    if ((IMX23_REG(IMX23_DCP_CTRL) & IMX23_DCP_CTRL_SFTRST) == 0U) {
+    if ((MXS_DCP_REG(MXS_DCP_CTRL) & MXS_DCP_CTRL_SFTRST) == 0U) {
       break;
     }
   }
-  IMX23_REG_CLR(IMX23_DCP_CTRL, IMX23_DCP_CTRL_CLKGATE);
+  MXS_DCP_REG_CLR(MXS_DCP_CTRL, MXS_DCP_CTRL_CLKGATE);
 
   /* Control: gather residual writes + context caching + channel enables. */
-  IMX23_REG(IMX23_DCP_CTRL) = IMX23_DCP_CTRL_GATHER_RESIDUAL_WRITES |
-                               IMX23_DCP_CTRL_ENABLE_CONTEXT_CACHING | 0x0FU;
+  MXS_DCP_REG(MXS_DCP_CTRL) = MXS_DCP_CTRL_GATHER_RESIDUAL_WRITES |
+                               MXS_DCP_CTRL_ENABLE_CONTEXT_CACHING | 0x0FU;
   /* Enable all DCP DMA channels. */
-  IMX23_REG(IMX23_DCP_CHANNELCTRL) = 0xFFU;
+  MXS_DCP_REG(MXS_DCP_CHANNELCTRL) = 0xFFU;
   /* No context switching: point the context buffer at ROM (illegal for
      the DCP DMA) as Linux does. */
-  IMX23_REG(IMX23_DCP_CONTEXT) = 0xFFFF0000U;
+  MXS_DCP_REG(MXS_DCP_CONTEXT) = 0xFFFF0000U;
   for (i = 0U; i < 4U; i++) {
-    IMX23_REG(IMX23_DCP_CH_STAT_CLR(i)) = 0xFFFFFFFFU;
+    MXS_DCP_REG(MXS_DCP_CH_STAT_CLR(i)) = 0xFFFFFFFFU;
   }
-  IMX23_REG(IMX23_DCP_STAT_CLR) = 0xFFFFFFFFU;
+  MXS_DCP_REG(MXS_DCP_STAT_CLR) = 0xFFFFFFFFU;
 
+#if defined(MXS_DCP_HAVE_IMX23_PORT)
   icoll_register_handler(IMX23_IRQ_DCP0, dcp_irq_handler);
   icoll_irq_set_priority(IMX23_IRQ_DCP0, 4U);
   icoll_irq_enable(IMX23_IRQ_DCP0);
+#else
+  /* Non-i.MX23 MXS port: wire the DCP IRQ to dcp_irq_handler() yourself. */
+#endif
 
-  return IMX23_DCP_OK;
+  return MXS_DCP_OK;
 }
 
-int imx23_dcp_sha256(IMX23DCPDriver *dcp, const uint8_t *in, size_t len,
-                     uint8_t out[IMX23_DCP_SHA256_LEN]) {
-  imx23_dcp_desc_t *desc = &dcp->desc;
+int mxs_dcp_sha256(MXSDCPDriver *dcp, const uint8_t *in, size_t len,
+                     uint8_t out[MXS_DCP_SHA256_LEN]) {
+  mxs_dcp_desc_t *desc = &dcp->desc;
   const uint8_t *src = in;
   int rc;
 
   if (need_bounce(in) || need_bounce(out)) {
     if (len > sizeof(dcp->bounce)) {
-      return IMX23_DCP_ERR_SIZE;
+      return MXS_DCP_ERR_SIZE;
     }
     memcpy(dcp->bounce, in, len);
     src = dcp->bounce;
   }
 
   memset(desc, 0, sizeof(*desc));
-  desc->control0 = IMX23_DCP_C0_DECR_SEMAPHORE | IMX23_DCP_C0_INTERRUPT |
-                    IMX23_DCP_C0_ENABLE_HASH | IMX23_DCP_C0_HASH_INIT |
-                    IMX23_DCP_C0_HASH_TERM;
-  desc->control1 = IMX23_DCP_C1_HASH_SELECT_SHA256;
+  desc->control0 = MXS_DCP_C0_DECR_SEMAPHORE | MXS_DCP_C0_INTERRUPT |
+                    MXS_DCP_C0_ENABLE_HASH | MXS_DCP_C0_HASH_INIT |
+                    MXS_DCP_C0_HASH_TERM;
+  desc->control1 = MXS_DCP_C1_HASH_SELECT_SHA256;
   desc->source      = (uint32_t)src;
   desc->destination = 0U;
   desc->size        = (uint32_t)len;
@@ -163,25 +173,25 @@ int imx23_dcp_sha256(IMX23DCPDriver *dcp, const uint8_t *in, size_t len,
   return rc;
 }
 
-int imx23_dcp_aes128(IMX23DCPDriver *dcp, const uint8_t *in, uint8_t *out,
+int mxs_dcp_aes128(MXSDCPDriver *dcp, const uint8_t *in, uint8_t *out,
                      size_t len, const uint8_t *key, uint8_t key_select,
                      bool encrypt, bool cbc, const uint8_t *iv) {
-  imx23_dcp_desc_t *desc = &dcp->desc;
+  mxs_dcp_desc_t *desc = &dcp->desc;
   const uint8_t *src = in;
   uint8_t *dst = out;
   int rc;
 
-  if ((len % IMX23_DCP_AES_BLOCK) != 0U) {
-    return IMX23_DCP_ERR_SIZE;
+  if ((len % MXS_DCP_AES_BLOCK) != 0U) {
+    return MXS_DCP_ERR_SIZE;
   }
   if (cbc && iv == NULL) {
-    return IMX23_DCP_ERR_ALIGN;
+    return MXS_DCP_ERR_ALIGN;
   }
 
   /* Bounce unaligned src/dst through the aligned chunk buffer. */
   if (need_bounce(in) || need_bounce(out)) {
     if (len > sizeof(dcp->bounce)) {
-      return IMX23_DCP_ERR_SIZE;
+      return MXS_DCP_ERR_SIZE;
     }
     memcpy(dcp->bounce, in, len);
     src = dcp->bounce;
@@ -200,21 +210,21 @@ int imx23_dcp_aes128(IMX23DCPDriver *dcp, const uint8_t *in, uint8_t *out,
   }
 
   memset(desc, 0, sizeof(*desc));
-  desc->control0 = IMX23_DCP_C0_DECR_SEMAPHORE | IMX23_DCP_C0_INTERRUPT |
-                    IMX23_DCP_C0_ENABLE_CIPHER | IMX23_DCP_C0_CIPHER_INIT;
+  desc->control0 = MXS_DCP_C0_DECR_SEMAPHORE | MXS_DCP_C0_INTERRUPT |
+                    MXS_DCP_C0_ENABLE_CIPHER | MXS_DCP_C0_CIPHER_INIT;
   if (encrypt) {
-    desc->control0 |= IMX23_DCP_C0_CIPHER_ENCRYPT;
+    desc->control0 |= MXS_DCP_C0_CIPHER_ENCRYPT;
   }
   if (key != NULL) {
-    desc->control0 |= IMX23_DCP_C0_PAYLOAD_KEY;
+    desc->control0 |= MXS_DCP_C0_PAYLOAD_KEY;
   }
-  else if (key_select == IMX23_DCP_KEY_OTP) {
-    desc->control0 |= IMX23_DCP_C0_OTP_KEY;
+  else if (key_select == MXS_DCP_KEY_OTP) {
+    desc->control0 |= MXS_DCP_C0_OTP_KEY;
   }
-  desc->control1 = IMX23_DCP_C1_CIPHER_SELECT_AES128 |
-                    (cbc ? IMX23_DCP_C1_CIPHER_MODE_CBC
-                         : IMX23_DCP_C1_CIPHER_MODE_ECB) |
-                    ((uint32_t)key_select << IMX23_DCP_C1_KEY_SELECT_SHIFT);
+  desc->control1 = MXS_DCP_C1_CIPHER_SELECT_AES128 |
+                    (cbc ? MXS_DCP_C1_CIPHER_MODE_CBC
+                         : MXS_DCP_C1_CIPHER_MODE_ECB) |
+                    ((uint32_t)key_select << MXS_DCP_C1_KEY_SELECT_SHIFT);
   desc->source      = (uint32_t)src;
   desc->destination = (uint32_t)dst;
   desc->size        = (uint32_t)len;
@@ -225,7 +235,7 @@ int imx23_dcp_aes128(IMX23DCPDriver *dcp, const uint8_t *in, uint8_t *out,
        bounced into one buffer, so src/dst already alias. */
   }
   rc = dcp_run(dcp, desc);
-  if (rc == IMX23_DCP_OK && dst == dcp->bounce && out != dcp->bounce) {
+  if (rc == MXS_DCP_OK && dst == dcp->bounce && out != dcp->bounce) {
     memcpy(out, dcp->bounce, len);
   }
   return rc;
