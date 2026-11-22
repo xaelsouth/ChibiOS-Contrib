@@ -355,6 +355,71 @@
 #define EFR32_DAC1SELCLK                EFR32_HFRCOEM23CLK
 #endif
 
+/*===========================================================================*/
+/* Clock management.                                                         */
+/*===========================================================================*/
+
+/**
+ * @name    Clock points identifiers for halClockGetPointX()
+ * @note    The frequency reported for each point is derived from the
+ *          compile-time clock configuration (mcuconf.h/board.h). When
+ *          HAL_LLD_USE_CLOCK_MANAGEMENT is enabled, the SYSCLK/HCLK/PCLK/
+ *          RHCLK/HFRCOEM23 points are updated at run-time by
+ *          hal_lld_clock_switch_mode().
+ * @{
+ */
+#define EFR32_CLK_SYSCLK          0U    /**< SYSCLK, selected by CMU_SYSCLKCTRL.  */
+#define EFR32_CLK_HCLK            1U    /**< HFBUSCLK, CPU and bus clock.          */
+#define EFR32_CLK_PCLK            2U    /**< PCLK, peripheral bus clock.           */
+#define EFR32_CLK_RHCLK           3U    /**< Radio HCLK (HCLK / RHCLKPRESC).       */
+#define EFR32_CLK_HFRCODPLL       4U    /**< HFRCODPLL clock.                      */
+#define EFR32_CLK_HFRCOEM23       5U    /**< HFRCOEM23 clock (EM2/EM3 HF clock).   */
+#define EFR32_CLK_FSRCO           6U    /**< FSRCO, 20 MHz.                        */
+#define EFR32_CLK_HFXO            7U    /**< HFXO crystal oscillator.              */
+#define EFR32_CLK_CLKIN0          8U    /**< CLKIN0 external clock input.          */
+#define EFR32_CLK_EM01GRPACLK     9U    /**< EM0/EM1 group A clock.                */
+#define EFR32_CLK_EM01GRPCCLK    10U    /**< EM0/EM1 group C clock.                */
+#define EFR32_CLK_EM23GRPACLK    11U    /**< EM2/EM3 group A clock.                */
+#define EFR32_CLK_EM4GRPACLK     12U    /**< EM4 group A clock.                    */
+#define EFR32_CLK_LFXO           13U    /**< 32.768 kHz crystal oscillator.        */
+#define EFR32_CLK_LFRCO          14U    /**< 32.768 kHz RC oscillator.             */
+#define EFR32_CLK_ULFRCO         15U    /**< 1 kHz ultra-low-power RC oscillator.  */
+#define EFR32_CLK_ARRAY_SIZE     16U    /**< Number of clock points.               */
+/** @} */
+
+/**
+ * @brief   Names of the clock points, for shell commands.
+ */
+#define EFR32_CLK_POINT_NAMES                                                 \
+  {                                                                           \
+    "SYSCLK", "HCLK", "PCLK", "RHCLK", "HFRCODPLL", "HFRCOEM23", "FSRCO",     \
+    "HFXO", "CLKIN0", "EM01GRPACLK", "EM01GRPCCLK", "EM23GRPACLK",            \
+    "EM4GRPACLK", "LFXO", "LFRCO", "ULFRCO"                                   \
+  }
+
+/* Generic aliases, same names as used by the STM32 ports, so that generic
+   shell clock commands (e.g. "clocks") work on SILABS ports too. */
+#define CLK_ARRAY_SIZE            EFR32_CLK_ARRAY_SIZE
+#define CLK_POINT_NAMES           EFR32_CLK_POINT_NAMES
+
+#if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
+/**
+ * @brief   Type of a clock configuration structure.
+ * @details Carries the run-time switchable part of the clock tree, i.e.
+ *          the fields of the CMU_SYSCLKCTRL register: SYSCLK source
+ *          (EFR32_SYSCLKSEL_*), HCLK/PCLK/RHCLK prescalers (EFR32_HPRE_*,
+ *          EFR32_PPRE_*, EFR32_RHPRE_*) and the HFRCO prescaler
+ *          (EFR32_HFRCOPRE_*).
+ */
+typedef struct {
+  uint32_t          sysclkctrl;   /**< Value for the CMU_SYSCLKCTRL register. */
+} halclkcfg_t;
+
+#if !defined(EFR32_CMU_SYSCLKCTRL)
+#define EFR32_CMU_SYSCLKCTRL      (EFR32_SYSCLKSEL | EFR32_HPRE | EFR32_PPRE | EFR32_RHPRE)
+#endif
+#endif /* defined(HAL_LLD_USE_CLOCK_MANAGEMENT) */
+
 
 /* Vector50 = Vector(40 + 4*TIMER0_IRQn) */
 #define EFR32_TIMER1_HANDLER            Vector50
@@ -480,6 +545,11 @@
 #define EFR32_SYSRTC_SEQ_HANDLER        Vector15C
 #define EFR32_SYSRTC_SEQ_NUMBER         SYSRTC_SEQ_IRQn
 
+/* Vector158 = Vector(40 + 4*SYSRTC_APP_IRQn) — group 0 compare/capture/overflow
+   events (GRP0_IF) are signalled on the APP interrupt, not SEQ. */
+#define EFR32_SYSRTC_APP_HANDLER        Vector158
+#define EFR32_SYSRTC_APP_NUMBER         SYSRTC_APP_IRQn
+
 /* Vector104 = Vector(40 + 4*AES_IRQn) */
 #define EFR32_AES_HANDLER               Vector104
 #define EFR32_AES_NUMBER                AES_IRQn
@@ -589,9 +659,11 @@ extern "C" {
   void efr32_get_lfxo_calibration_values(uint32_t *gain, uint32_t *captune);
   void efr32_escape_hatch(void);
   void hal_lld_init(void);
+  /* Always available: hal.h calls it unconditionally from
+     halClockGetPointX(). */
+  halfreq_t hal_lld_get_clock_point(halclkpt_t clkpt);
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
   bool hal_lld_clock_switch_mode(const halclkcfg_t *ccp);
-  halfreq_t hal_lld_get_clock_point(halclkpt_t clkpt);
 #endif /* defined(HAL_LLD_USE_CLOCK_MANAGEMENT) */
 #ifdef __cplusplus
 }

@@ -38,12 +38,12 @@
 #include <stdint.h>
 #include "rail_types.h"
 
-#define WMBUS_ACCELERATION_BUFFER wmbusAccelerationBuffer
-extern uint32_t wmbusAccelerationBuffer[];
+#define RADIO_ACCELERATION_BUFFER radioAccelerationBuffer
+extern uint32_t radioAccelerationBuffer[];
 
 #define RADIO_CONFIG_XTAL_FREQUENCY 39000000UL
 
-#define RAIL0_M2O_MODE_T_PHY_WMBUS_MODET_M2O_100K_FRAMEA
+#define RAIL0_M2O_MODE_T_PHY_RADIO_MODET_M2O_100K_FRAMEA
 #define RAIL0_M2O_MODE_T_PROFILE_MBUS
 extern const RAIL_ChannelConfig_t *channelConfigs[];
 

@@ -272,11 +272,8 @@ void cry_lld_init(void) {
 void cry_lld_start(CRYDriver *cryp) {
   (void)cryp;
 
-  /* Enable the RADIOAES bus clock and reset the engine. */
+  /* Enable the RADIOAES bus clock. */
   CMU->CLKEN0_SET = CMU_CLKEN0_RADIOAES;
-  RADIOAES->CTRL = AES_CTRL_SWRESET;
-  while ((RADIOAES->STATUS & AES_STATUS_SOFTRSTBSY) != 0U) {
-  }
 #if EFR32_CRYPTO_AES_IRQ_MODE == TRUE
   RADIOAES->IF_CLR = 0xFFFFFFFFUL;
   RADIOAES->IEN = 0U;
@@ -291,8 +288,9 @@ void cry_lld_stop(CRYDriver *cryp) {
   RADIOAES->IEN = 0U;
 #endif
   RADIOAES->CTRL = AES_CTRL_SWRESET;
-  while ((RADIOAES->STATUS & AES_STATUS_SOFTRSTBSY) != 0U) {
-  }
+  { volatile uint32_t sp = 1000000UL;
+    while (((RADIOAES->STATUS & AES_STATUS_SOFTRSTBSY) != 0U) && (--sp != 0U)) {
+    } }
   CMU->CLKEN0_CLR = CMU_CLKEN0_RADIOAES;
 }
 

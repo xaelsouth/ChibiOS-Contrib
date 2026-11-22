@@ -88,11 +88,18 @@ SPIDriver SPID3;
 /* Driver local functions.                                                   */
 /*===========================================================================*/
 
-static uint32_t spi_lld_clkdiv(uint32_t clock, uint32_t bitrate) {
-  uint32_t ovs = 16U; /* Default 16x oversampling for SPI. */
-  uint32_t clkdiv = (32U * clock) / (ovs * bitrate) - 32U;
-  clkdiv *= 8U;
-  return clkdiv;
+/* Sync-mode divider: goes into CFG2.SDIV, spi_clk = clock / (sdiv + 1). */
+static uint32_t spi_lld_sdiv(uint32_t clock, uint32_t bitrate) {
+  uint32_t sdiv;
+  if (bitrate == 0U || bitrate > clock) {
+    sdiv = 0U;
+  } else {
+    sdiv = clock / bitrate - 1U;
+  }
+  if (sdiv > (_EUSART_CFG2_SDIV_MASK >> _EUSART_CFG2_SDIV_SHIFT)) {
+    sdiv = (_EUSART_CFG2_SDIV_MASK >> _EUSART_CFG2_SDIV_SHIFT);
+  }
+  return sdiv;
 }
 
 /*===========================================================================*/
@@ -126,14 +133,17 @@ void spi_lld_start(SPIDriver *spip) {
   if (spip->state == SPI_STOP) {
     CMU->CLKEN1_SET = efr32_spi_clken[idx];
 
-    /* SPI mode: synchronous, MSB first. */
-    u->CFG0 = cfg->cfg0 | EUSART_CFG0_SYNC;
+    /* SPI mode: synchronous master, MSB first. The sync divider lives in
+       CFG2.SDIV (spi_clk = eusart_clk / (SDIV+1)), MASTER enables the
+       internal clock generator. CFG regs must be written while EN=0. */
+    clkdiv = spi_lld_sdiv(efr32_spi_clk[idx], cfg->bitrate);
+    u->CFG2 = (u->CFG2 & ~(_EUSART_CFG2_MASK)) |
+              _EUSART_CFG2_MASTER_MASTER | EUSART_CFG2_FORCELOAD |
+              (clkdiv << _EUSART_CFG2_SDIV_SHIFT);
+    u->CFG0 = cfg->cfg0 | EUSART_CFG0_SYNC | EUSART_CFG0_MSBF;
     u->FRAMECFG = cfg->framecfg;
 
     u->EN_SET = EUSART_EN_EN;
-
-    clkdiv = spi_lld_clkdiv(efr32_spi_clk[idx], cfg->bitrate);
-    u->CLKDIV = clkdiv;
 
     u->IF_CLR = u->IF;
     u->CMD_SET = EUSART_CMD_RXEN | EUSART_CMD_TXEN | EUSART_CMD_CLEARTX;
@@ -142,11 +152,11 @@ void spi_lld_start(SPIDriver *spip) {
     /* Allocate DMA streams if configured. */
 #if defined(EFR32_DMA_REQUIRED)
     if (efr32_spi_tx_dma_stream[idx] >= 0 && spip->dma_tx == NULL) {
-      spip->dma_tx = dmaStreamAlloc((uint32_t)efr32_spi_tx_dma_stream[idx],
+      spip->dma_tx = dmaStreamAllocI((uint32_t)efr32_spi_tx_dma_stream[idx],
                                      efr32_spi_dma_prio[idx], NULL, NULL);
     }
     if (efr32_spi_rx_dma_stream[idx] >= 0 && spip->dma_rx == NULL) {
-      spip->dma_rx = dmaStreamAlloc((uint32_t)efr32_spi_rx_dma_stream[idx],
+      spip->dma_rx = dmaStreamAllocI((uint32_t)efr32_spi_rx_dma_stream[idx],
                                      efr32_spi_dma_prio[idx], NULL, NULL);
     }
 #endif
@@ -160,11 +170,11 @@ void spi_lld_stop(SPIDriver *spip) {
   if (spip->state == SPI_READY) {
 #if defined(EFR32_DMA_REQUIRED)
     if (spip->dma_tx != NULL) {
-      dmaStreamFree(spip->dma_tx);
+      dmaStreamFreeI(spip->dma_tx);
       spip->dma_tx = NULL;
     }
     if (spip->dma_rx != NULL) {
-      dmaStreamFree(spip->dma_rx);
+      dmaStreamFreeI(spip->dma_rx);
       spip->dma_rx = NULL;
     }
 #endif
@@ -227,6 +237,10 @@ void spi_lld_exchange(SPIDriver *spip, size_t n, const void *txbuf, void *rxbuf)
       *rx++ = (uint8_t)frame;
     }
   }
+
+  /* Polled transfer is complete: restore READY so that spiSynchronizeS()
+     does not block waiting for an interrupt that never comes. */
+  spip->state = SPI_READY;
 }
 
 void spi_lld_send(SPIDriver *spip, size_t n, const void *txbuf) {

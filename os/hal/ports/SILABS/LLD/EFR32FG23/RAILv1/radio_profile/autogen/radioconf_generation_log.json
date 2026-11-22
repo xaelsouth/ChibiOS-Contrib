@@ -1,6 +1,6 @@
 [
   {
-    "channel_name": "wmbus_mode_t-m2o_mode_t",
+    "channel_name": "radio_mode_t-m2o_mode_t",
     "result_code": "0",
     "error_message": "",
     "logs": [],
@@ -112,7 +112,7 @@
     ]
   },
   {
-    "channel_name": "wmbus_mode_t-o2m_mode_t",
+    "channel_name": "radio_mode_t-o2m_mode_t",
     "result_code": "0",
     "error_message": "",
     "logs": [],
@@ -224,7 +224,7 @@
     ]
   },
   {
-    "channel_name": "wmbus_mode_c-m2o_mode_c",
+    "channel_name": "radio_mode_c-m2o_mode_c",
     "result_code": "0",
     "error_message": "",
     "logs": [],
@@ -352,7 +352,7 @@
     ]
   },
   {
-    "channel_name": "wmbus_mode_c-o2m_mode_c",
+    "channel_name": "radio_mode_c-o2m_mode_c",
     "result_code": "0",
     "error_message": "",
     "logs": [],
@@ -480,7 +480,7 @@
     ]
   },
   {
-    "channel_name": "wmbus_mode_s-m2o_mode_s",
+    "channel_name": "radio_mode_s-m2o_mode_s",
     "result_code": "0",
     "error_message": "",
     "logs": [],
@@ -592,7 +592,7 @@
     ]
   },
   {
-    "channel_name": "wmbus_mode_s-o2m_mode_s",
+    "channel_name": "radio_mode_s-o2m_mode_s",
     "result_code": "0",
     "error_message": "",
     "logs": [],

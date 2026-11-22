@@ -99,6 +99,7 @@ void icu_lld_start(ICUDriver *icup) {
     tim->TOP = 0xFFFFU;  /* 16-bit max for FG23 TIMER (or 32-bit if wide). */
     tim->CNT = 0;
     tim->EN_SET = TIMER_EN_EN;
+    while ((tim->STATUS & _TIMER_STATUS_SYNCBUSY_MASK) != 0U) {}
     while ((tim->SYNCBUSY & _TIMER_SYNCBUSY_MASK) != 0U) {}
     tim->CMD_SET = TIMER_CMD_START;
   }

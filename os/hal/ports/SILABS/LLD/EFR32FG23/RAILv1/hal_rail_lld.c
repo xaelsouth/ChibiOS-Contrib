@@ -109,6 +109,7 @@ CC_WEAK uint32_t SystemHFXOClockGet(void) {
 CC_WEAK uint32_t SystemHFRCODPLLClockGet(void) {
   /* Read HFRCODPLL frequency from hardware calibration. */
   uint32_t ret = 0U;
+  CMU->CLKEN0_SET = CMU_CLKEN0_HFRCO0;   /* HFRCO0 bus clock may be gated */
   switch ((HFRCO0->CAL & _HFRCO_CAL_FREQRANGE_MASK)
           >> _HFRCO_CAL_FREQRANGE_SHIFT) {
   case 0:

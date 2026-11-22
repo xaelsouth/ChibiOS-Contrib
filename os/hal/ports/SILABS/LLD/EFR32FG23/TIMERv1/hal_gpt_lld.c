@@ -53,6 +53,16 @@ static const uint32_t efr32_gpt_irqprio[5] = {
   EFR32_GPT_TIMER4_IRQ_PRIORITY
 };
 
+
+/* Compute TIMER prescaler (0=DIV1 .. 9=DIV512) for the given clock/frequency. */
+__STATIC_INLINE uint32_t efr32_timer_presc_for_freq(uint32_t clk, uint32_t freq) {
+  uint32_t div = (clk + freq - 1U) / freq;
+  uint32_t presc = 0U, d = 1U;
+  if (div == 0U) div = 1U;
+  while (presc < 9U && d < div) { d <<= 1U; presc++; }
+  return presc;
+}
+
 /*===========================================================================*/
 /* Driver exported variables.                                                */
 /*===========================================================================*/
@@ -110,18 +120,24 @@ void gpt_lld_init(void) {
 }
 
 void gpt_lld_start(GPTDriver *gptp) {
+  const GPTConfig *config = gptp->config;
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && !defined(__DOXYGEN__)
   if (gptp->letimer != NULL) {
     letimer_gpt_lld_start(gptp);
     return;
   }
+#endif
 
   TIMER_TypeDef *tim = gptp->timer;
 
   if (gptp->state == GPT_STOP) {
     CMU->CLKEN0_SET = efr32_gpt_clken[gptp->index];
+    /* Prescaler from the requested frequency, clock EM01GRPACLK (while EN=0). */
+    uint32_t presc = efr32_timer_presc_for_freq(EFR32_EM01GRPACLK, config->frequency);
+    tim->CFG = ((((1U << presc) - 1U) << _TIMER_CFG_PRESC_SHIFT) & _TIMER_CFG_PRESC_MASK) |
+               _TIMER_CFG_CLKSEL_PRESCEM01GRPACLK;
     tim->EN_SET = TIMER_EN_EN;
-    /* Prescaler DIV1, clock from EM01GRPACLK, up-count mode. */
-    tim->CFG = _TIMER_CFG_CLKSEL_PRESCEM01GRPACLK;
+    while ((tim->STATUS & _TIMER_STATUS_SYNCBUSY_MASK) != 0U) {}
     tim->IF_CLR = _TIMER_IF_MASK;
     tim->IEN = 0;
     nvicEnableVector(efr32_gpt_irqn[gptp->index], efr32_gpt_irqprio[gptp->index]);
@@ -129,10 +145,12 @@ void gpt_lld_start(GPTDriver *gptp) {
 }
 
 void gpt_lld_stop(GPTDriver *gptp) {
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && !defined(__DOXYGEN__)
   if (gptp->letimer != NULL) {
     letimer_gpt_lld_stop(gptp);
     return;
   }
+#endif
 
   TIMER_TypeDef *tim = gptp->timer;
 
@@ -147,10 +165,12 @@ void gpt_lld_stop(GPTDriver *gptp) {
 }
 
 void gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && !defined(__DOXYGEN__)
   if (gptp->letimer != NULL) {
     letimer_gpt_lld_start_timer(gptp, period);
     return;
   }
+#endif
 
   TIMER_TypeDef *tim = gptp->timer;
 
@@ -162,10 +182,12 @@ void gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
 }
 
 void gpt_lld_stop_timer(GPTDriver *gptp) {
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && !defined(__DOXYGEN__)
   if (gptp->letimer != NULL) {
     letimer_gpt_lld_stop_timer(gptp);
     return;
   }
+#endif
 
   TIMER_TypeDef *tim = gptp->timer;
 
@@ -175,10 +197,12 @@ void gpt_lld_stop_timer(GPTDriver *gptp) {
 }
 
 void gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval) {
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && !defined(__DOXYGEN__)
   if (gptp->letimer != NULL) {
     letimer_gpt_lld_polled_delay(gptp, interval);
     return;
   }
+#endif
 
   TIMER_TypeDef *tim = gptp->timer;
 
@@ -193,10 +217,12 @@ void gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval) {
 }
 
 void gpt_lld_serve_interrupt(GPTDriver *gptp) {
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && !defined(__DOXYGEN__)
   if (gptp->letimer != NULL) {
     letimer_gpt_lld_serve_interrupt(gptp);
     return;
   }
+#endif
 
   TIMER_TypeDef *tim = gptp->timer;
 

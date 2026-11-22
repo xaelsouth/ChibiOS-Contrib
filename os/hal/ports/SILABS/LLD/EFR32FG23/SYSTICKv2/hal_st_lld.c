@@ -42,8 +42,8 @@
 /* Driver local definitions.                                                 */
 /*===========================================================================*/
 
-#define ST_HANDLER      EFR32_SYSRTC_SEQ_HANDLER
-#define ST_NUMBER       EFR32_SYSRTC_SEQ_NUMBER
+#define ST_HANDLER      EFR32_SYSRTC_APP_HANDLER
+#define ST_NUMBER       EFR32_SYSRTC_APP_NUMBER
 
 /* SYSRTC clock — from EM23GRPACLK or LFACLK depending on config.
    Typically LFXO = 32768 Hz. The prescaler for SYSRTC is fixed at
@@ -72,25 +72,49 @@ void st_lld_init(void) {
   /* Enable SYSRTC clock. */
   CMU->CLKEN0_SET = CMU_CLKEN0_SYSRTC0;
 
-  /* Reset and configure SYSRTC. */
+  /* Select the LF clock source for SYSRTC. The reset default is LFRCO,
+     which may be disabled — without a running clock SYNCBUSY never clears.
+     CH_CFG_ST_FREQUENCY must match the selected source (LFXO = 32768 Hz). */
+#if EFR32_LFXO_ENABLED
+  CMU->SYSRTC0CLKCTRL = (CMU->SYSRTC0CLKCTRL & ~_CMU_SYSRTC0CLKCTRL_CLKSEL_MASK)
+                        | CMU_SYSRTC0CLKCTRL_CLKSEL_LFXO;
+#elif EFR32_LFRCO_ENABLED
+  CMU->SYSRTC0CLKCTRL = (CMU->SYSRTC0CLKCTRL & ~_CMU_SYSRTC0CLKCTRL_CLKSEL_MASK)
+                        | CMU_SYSRTC0CLKCTRL_CLKSEL_LFRCO;
+#elif EFR32_ULFRCO_ENABLED
+  CMU->SYSRTC0CLKCTRL = (CMU->SYSRTC0CLKCTRL & ~_CMU_SYSRTC0CLKCTRL_CLKSEL_MASK)
+                        | CMU_SYSRTC0CLKCTRL_CLKSEL_ULFRCO;
+#endif
+
+  /* Reset and configure SYSRTC.
+     NOTE: on Series 2 the LF-domain synchronization (SYNCBUSY) only runs
+     while the module is enabled, so EN must be set before writing CNT. */
   SYSRTC0->EN_CLR = SYSRTC_EN_EN;
   while (SYSRTC0->EN & SYSRTC_EN_DISABLING) {}
 
   SYSRTC0->SWRST = SYSRTC_SWRST_SWRST;
   while (SYSRTC0->SWRST & SYSRTC_SWRST_RESETTING) {}
 
+  /* Enable module (LF domain starts clocking). */
+  SYSRTC0->EN_SET = SYSRTC_EN_EN;
+  while ((SYSRTC0->EN & SYSRTC_EN_EN) == 0U) {}
+
   SYSRTC0->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
   SYSRTC0->GRP0_IEN = 0U;
 
-  /* Enable overflow interrupt for 32-bit wrap tracking. */
-  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IEN_OVF;
+  /* Arm compare channel 0 for the system tick: CH_CFG_ST_FREQUENCY equals
+     the LF clock rate (32768 Hz), so the compare fires every counter tick.
+     The ISR re-arms CMP0VALUE = CNT + 1 on each match. */
+  SYSRTC0->GRP0_CTRL_SET = _SYSRTC_GRP0_CTRL_CMP0EN_MASK;
+  SYSRTC0->GRP0_CMP0VALUE = (uint32_t)CH_CFG_ST_TIMEDELTA;
+  while (SYSRTC0->GRP0_SYNCBUSY & _SYSRTC_GRP0_SYNCBUSY_MASK) {}
+  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IEN_CMP0 | SYSRTC_GRP0_IEN_OVF;
 
   /* Start counter from 0. */
   SYSRTC0->CNT = 0U;
   while (SYSRTC0->SYNCBUSY & SYSRTC_SYNCBUSY_CNT) {}
 
   SYSRTC0->CMD = SYSRTC_CMD_START;
-  SYSRTC0->EN_SET = SYSRTC_EN_EN;
 
   nvicEnableVector(ST_NUMBER, EFR32_SYSRTC_ST_IRQ_PRIORITY);
 }
@@ -100,6 +124,10 @@ void st_lld_serve_interrupt(void) {
 
   if ((isr & SYSRTC_GRP0_IF_CMP0) != 0U) {
     SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP0;
+    /* Re-arm the compare CH_CFG_ST_TIMEDELTA ticks ahead (the LF-domain
+       sync takes ~2 ticks, so re-arming every single tick would not keep
+       up at 32768 Hz). */
+    SYSRTC0->GRP0_CMP0VALUE = SYSRTC0->CNT + (uint32_t)CH_CFG_ST_TIMEDELTA;
     osalSysLockFromISR();
     osalOsTimerHandlerI();
     osalSysUnlockFromISR();

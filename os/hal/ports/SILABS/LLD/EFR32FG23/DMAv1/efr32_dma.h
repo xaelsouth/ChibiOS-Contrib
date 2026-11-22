@@ -126,6 +126,49 @@
 #define EFR32_DMA_CH_CTRL_STRUCTTYPE_WRITE       (2U << 0)
 
 /*===========================================================================*/
+/* LDMAXBAR request routing constants.                                       */
+/*===========================================================================*/
+/* On FG23 the peripheral request routing lives in the LDMAXBAR peripheral:
+   each channel's CHx_REQSEL = SOURCESEL (bits 16-21, which peripheral) |
+   SIGSEL (bits 0-3, which signal of that peripheral).                        */
+
+/** @name Request sources (SOURCESEL field of CHx_REQSEL) @{ */
+#define EFR32_DMA_REQ_NONE        _LDMAXBAR_CH_REQSEL_SOURCESEL_NONE
+#define EFR32_DMA_REQ_SW          _LDMAXBAR_CH_REQSEL_SOURCESEL_LDMAXBAR /**< software/PRS (mem-to-mem) */
+#define EFR32_DMA_REQ_TIMER0      _LDMAXBAR_CH_REQSEL_SOURCESEL_TIMER0
+#define EFR32_DMA_REQ_TIMER1      _LDMAXBAR_CH_REQSEL_SOURCESEL_TIMER1
+#define EFR32_DMA_REQ_TIMER2      _LDMAXBAR_CH_REQSEL_SOURCESEL_TIMER2
+#define EFR32_DMA_REQ_TIMER3      _LDMAXBAR_CH_REQSEL_SOURCESEL_TIMER3
+#define EFR32_DMA_REQ_TIMER4      _LDMAXBAR_CH_REQSEL_SOURCESEL_TIMER4
+#define EFR32_DMA_REQ_USART0      _LDMAXBAR_CH_REQSEL_SOURCESEL_USART0
+#define EFR32_DMA_REQ_I2C0        _LDMAXBAR_CH_REQSEL_SOURCESEL_I2C0
+#define EFR32_DMA_REQ_I2C1        _LDMAXBAR_CH_REQSEL_SOURCESEL_I2C1
+#define EFR32_DMA_REQ_IADC0       _LDMAXBAR_CH_REQSEL_SOURCESEL_IADC0
+#define EFR32_DMA_REQ_MSC         _LDMAXBAR_CH_REQSEL_SOURCESEL_MSC
+#define EFR32_DMA_REQ_VDAC0       _LDMAXBAR_CH_REQSEL_SOURCESEL_VDAC0
+#define EFR32_DMA_REQ_EUSART0     _LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART0
+#define EFR32_DMA_REQ_EUSART1     _LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART1
+#define EFR32_DMA_REQ_EUSART2     _LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART2
+#define EFR32_DMA_REQ_LESENSE     _LDMAXBAR_CH_REQSEL_SOURCESEL_LESENSE
+#define EFR32_DMA_REQ_LCD         _LDMAXBAR_CH_REQSEL_SOURCESEL_LCD
+/** @} */
+
+/** @name Request signals (SIGSEL field of CHx_REQSEL) @{ */
+#define EFR32_DMA_SIG_TIMER_CC0(n)  _LDMAXBAR_CH_REQSEL_SIGSEL_TIMER##n##CC0
+#define EFR32_DMA_SIG_TIMER_CC1(n)  _LDMAXBAR_CH_REQSEL_SIGSEL_TIMER##n##CC1
+#define EFR32_DMA_SIG_TIMER_CC2(n)  _LDMAXBAR_CH_REQSEL_SIGSEL_TIMER##n##CC2
+#define EFR32_DMA_SIG_TIMER_UFOF(n) _LDMAXBAR_CH_REQSEL_SIGSEL_TIMER##n##UFOF
+#define EFR32_DMA_SIG_USART0_RX     _LDMAXBAR_CH_REQSEL_SIGSEL_USART0RXDATAV
+#define EFR32_DMA_SIG_USART0_TX     _LDMAXBAR_CH_REQSEL_SIGSEL_USART0TXBL
+#define EFR32_DMA_SIG_I2C_RX         _LDMAXBAR_CH_REQSEL_SIGSEL_I2C0RXDATAV
+#define EFR32_DMA_SIG_I2C_TX         _LDMAXBAR_CH_REQSEL_SIGSEL_I2C0TXBL
+#define EFR32_DMA_SIG_EUSART_RX      _LDMAXBAR_CH_REQSEL_SIGSEL_EUSART0RXFL
+#define EFR32_DMA_SIG_EUSART_TX      _LDMAXBAR_CH_REQSEL_SIGSEL_EUSART0TXFL
+#define EFR32_DMA_SIG_LESENSE_FIFO   _LDMAXBAR_CH_REQSEL_SIGSEL_LESENSEFIFO
+#define EFR32_DMA_SIG_MSC_WDATA      _LDMAXBAR_CH_REQSEL_SIGSEL_MSCWDATA
+/** @} */
+
+/*===========================================================================*/
 /* LOOP register constants.                                                  */
 /*===========================================================================*/
 
@@ -251,7 +294,8 @@ typedef struct {
  * @brief   Polled wait for DMA transfer end.
  */
 #define dmaWaitCompletion(dmastp) {                                         \
-  while ((LDMA->CHBUSY & (1U << (dmastp)->selfindex)) != 0U) {}             \
+  LDMA->IEN_CLR = (1U << (dmastp)->selfindex);                              \
+  while ((LDMA->IF & (1U << (dmastp)->selfindex)) == 0U) {}                 \
   dmaStreamClearInterrupt(dmastp);                                          \
 }
 

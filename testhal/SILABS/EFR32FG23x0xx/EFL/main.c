@@ -19,46 +19,69 @@
 #include "hal.h"
 #include "chprintf.h"
 
-/* VCOM console on EUSART2 (SIOD2), PA9=TX / PA10=RX, 115200 8N1. */
-static const SIOConfig console_cfg = {
-  .baud = 115200U,
-  .cfg0 = (0U << 0) | (0U << 5),
-  .framecfg = EFR32_SIO_LLD_EUSART_8N1,
-};
+/* Console via SEGGER RTT (up channel 0) — works over J-Link SWD.
+   View with: JLinkRTTLoggerExe -Device EFR32FG23B010F512IM48 -If SWD -Speed 4000 -RTTChannel 0 out.log */
+#include <string.h>
+#include <stdio.h>
+
+typedef struct {
+  char           id[16];        /* "SEGGER RTT" */
+  uint32_t       num_up;
+  uint32_t       num_down;
+  struct {
+    const char  *name;
+    uint8_t     *buf;
+    uint32_t     size;
+    volatile uint32_t wr;
+    volatile uint32_t rd;
+    uint32_t     flags;
+  } up[1];
+} rtt_cb_t;
+
+static rtt_cb_t rtt_cb __attribute__((aligned(32)));
+static uint8_t  rtt_buf[1024];
 
 static void console_init(void) {
-  palSetPadMode(GPIOA, 9, PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_ALTERNATE(EUSART1_TX));
-  palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP | PAL_MODE_ALTERNATE(EUSART1_RX));
-  sioStart(&SIOD2, &console_cfg);
+  memset(&rtt_cb, 0, sizeof(rtt_cb));
+  memcpy(rtt_cb.id, "SEGGER RTT", 10);
+  rtt_cb.num_up = 1;
+  rtt_cb.num_down = 0;
+  rtt_cb.up[0].name  = "Terminal";
+  rtt_cb.up[0].buf   = rtt_buf;
+  rtt_cb.up[0].size  = sizeof(rtt_buf);
+  rtt_cb.up[0].flags = 0;
 }
-#define PRINTF(...) chprintf((BaseSequentialStream *)&SIOD2, __VA_ARGS__)
 
-/* FG23: USERDATA page 1 KB at 0x0FE00000 (outside the 512 KB main flash). */
-#define TEST_ADDR   0x0FE00000UL
+static void rtt_write(const char *s, size_t n) {
+  uint32_t wp = rtt_cb.up[0].wr;
+  for (size_t i = 0; i < n; i++) {
+    rtt_buf[wp] = (uint8_t)s[i];
+    wp = (wp + 1U) % rtt_cb.up[0].size;
+  }
+  rtt_cb.up[0].wr = wp;
+}
+
+#define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
+
+/* FG23: USERDATA page 1 KB at 0x0FE00000 = flash offset EFR32_FLASH_SIZE. */
 #define TEST_LEN    256U
 
 int main(void) {
   halInit();
   chSysInit();
   console_init();
-  PRINTF("\r\nEFL test: USERDATA page @0x%08lX\r\n", (unsigned long)TEST_ADDR);
+  PRINTF("\r\nEFL test: USERDATA page (last sector)\r\n");
 
   static uint8_t wbuf[TEST_LEN], rbuf[TEST_LEN];
   for (unsigned i = 0; i < TEST_LEN; i++) wbuf[i] = (uint8_t)(i * 7 + 1);
 
   eflStart(&EFLD1, NULL);
 
-  /* Find the sector containing TEST_ADDR. */
   const flash_descriptor_t *d = flashGetDescriptor((BaseFlash *)&EFLD1);
-  flash_sector_t sec = 0;
-  for (flash_sector_t s = 0; s < d->sectors_count; s++) {
-    flash_offset_t off = flashGetSectorOffset((BaseFlash *)&EFLD1, s);
-    if (TEST_ADDR >= off && TEST_ADDR < off + flashGetSectorSize((BaseFlash *)&EFLD1, s)) {
-      sec = s;
-      break;
-    }
-  }
-  PRINTF("sector %u covers the USERDATA page\r\n", (unsigned)sec);
+  flash_sector_t sec = d->sectors_count - 1U;   /* last sector = USERDATA */
+  flash_offset_t TEST_ADDR = flashGetSectorOffset((BaseFlash *)&EFLD1, sec);
+  PRINTF("sector %u @ offset 0x%08lX covers the USERDATA page\r\n",
+         (unsigned)sec, (unsigned long)TEST_ADDR);
 
   bool ok = true;
   flash_error_t fe = flashStartEraseSector((BaseFlash *)&EFLD1, sec);

@@ -133,7 +133,7 @@ void lcd_lld_start(LCDDriver *lcdp, const LCDConfig *cfg) {
     /* Allocate DMA stream for SEGD updates. */
 #if defined(EFR32_DMA_REQUIRED)
     if (EFR32_LCD_DMA_STREAM >= 0 && lcdp->dma == NULL) {
-      lcdp->dma = dmaStreamAlloc(EFR32_LCD_DMA_STREAM,
+      lcdp->dma = dmaStreamAllocI(EFR32_LCD_DMA_STREAM,
                                   EFR32_LCD_DMA_IRQ_PRIORITY, NULL, NULL);
     }
 #endif
@@ -148,7 +148,7 @@ void lcd_lld_stop(LCDDriver *lcdp) {
   if (lcdp->state == LCD_READY) {
 #if defined(EFR32_DMA_REQUIRED)
     if (lcdp->dma != NULL) {
-      dmaStreamFree(lcdp->dma);
+      dmaStreamFreeI(lcdp->dma);
       lcdp->dma = NULL;
     }
 #endif

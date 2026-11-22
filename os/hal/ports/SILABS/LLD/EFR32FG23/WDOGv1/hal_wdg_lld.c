@@ -174,7 +174,7 @@ void wdg_lld_start(WDGDriver *wdgp) {
   while ((wdg->SYNCBUSY & _WDOG_SYNCBUSY_MASK) != 0U) {}
 
   /* Start the counter by clearing it. */
-  wdg->CMD_SET = WDOG_CMD_CLEAR;
+  wdg->CMD = WDOG_CMD_CLEAR;
 
   /* Optionally lock the configuration. */
   if (wdgp->config->lock) {
@@ -222,7 +222,9 @@ void wdg_lld_stop(WDGDriver *wdgp) {
  */
 void wdg_lld_reset(WDGDriver *wdgp) {
   /* Clear (kick) the watchdog counter. */
-  wdgp->wdg->CMD_SET = WDOG_CMD_CLEAR;
+  WDOG_TypeDef *wdg = wdgp->wdg;
+  while ((wdg->SYNCBUSY & _WDOG_SYNCBUSY_CMD_MASK) != 0U) {}
+  wdg->CMD = WDOG_CMD_CLEAR;
 }
 
 /**

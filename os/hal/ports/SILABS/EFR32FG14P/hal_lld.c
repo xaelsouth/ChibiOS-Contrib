@@ -49,6 +49,29 @@ const halclkcfg_t hal_clkcfg_default = {
 #endif
 
 /*===========================================================================*/
+/* Clock points table.                                                       */
+/*===========================================================================*/
+
+/**
+ * @brief   Run-time frequencies of the clock points, in Hz.
+ */
+static halfreq_t efr32_clk_point_freq[EFR32_CLK_ARRAY_SIZE];
+
+/**
+ * @brief   Initializes the clock points table from the compile-time
+ *          clock configuration.
+ */
+static void efr32_clock_points_init(void) {
+
+  efr32_clk_point_freq[EFR32_CLK_HCLK]      = EFR32_HCLK;
+  efr32_clk_point_freq[EFR32_CLK_RTCCCLK]   = EFR32_RTCCCLK;
+  efr32_clk_point_freq[EFR32_CLK_LETIM1CLK] = EFR32_LETIM1CLK;
+  efr32_clk_point_freq[EFR32_CLK_LFXO]      = EFR32_LFXOCLK;
+  efr32_clk_point_freq[EFR32_CLK_LFRCO]     = EFR32_LFRCOCLK;
+  efr32_clk_point_freq[EFR32_CLK_ULFRCO]    = EFR32_ULFRCOCLK;
+}
+
+/*===========================================================================*/
 /* Driver local variables and types.                                         */
 /*===========================================================================*/
 
@@ -161,26 +184,12 @@ void efr32_clock_init(void) {
  * @notapi
  */
 void hal_lld_init(void) {
+
+  /* Clock points table initialization from the compile-time config. */
+  efr32_clock_points_init();
+
   /* NVIC initialization.*/
   nvicInit();
-}
-
-#if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
-/**
- * @brief   Switches to a different clock configuration
- *
- * @param[in] ccp       pointer to clock a @p halclkcfg_t structure
- * @return              The clock switch result.
- * @retval false        if the clock switch succeeded
- * @retval true         if the clock switch failed
- *
- * @notapi
- */
-bool hal_lld_clock_switch_mode(const halclkcfg_t *ccp) {
-
-  (void)ccp;
-
-  return false;
 }
 
 /**
@@ -194,9 +203,32 @@ bool hal_lld_clock_switch_mode(const halclkcfg_t *ccp) {
  */
 halfreq_t hal_lld_get_clock_point(halclkpt_t clkpt) {
 
-  (void)clkpt;
+  if (clkpt >= (halclkpt_t)EFR32_CLK_ARRAY_SIZE) {
+    return 0U;
+  }
 
-  return 0U;
+  return efr32_clk_point_freq[clkpt];
+}
+
+#if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
+/**
+ * @brief   Switches to a different clock configuration
+ * @note    Not implemented on EFR32FG14P: the clock configuration is fixed
+ *          at compile time via mcuconf.h (emlib CMU calls in
+ *          efr32_clock_init()). Always fails.
+ *
+ * @param[in] ccp       pointer to clock a @p halclkcfg_t structure
+ * @return              The clock switch result.
+ * @retval false        if the clock switch succeeded
+ * @retval true         if the clock switch failed
+ *
+ * @notapi
+ */
+bool hal_lld_clock_switch_mode(const halclkcfg_t *ccp) {
+
+  (void)ccp;
+
+  return true;
 }
 #endif /* defined(HAL_LLD_USE_CLOCK_MANAGEMENT) */
 

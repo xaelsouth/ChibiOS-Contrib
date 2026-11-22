@@ -39,19 +39,49 @@ static void rail_event_cb(RAIL_Handle_t handle, RAIL_Events_t events) {
 }
 
 
-/* VCOM console on EUSART2 (SIOD2), PA9=TX / PA10=RX, 115200 8N1. */
-static const SIOConfig console_cfg = {
-  .baud = 115200U,
-  .cfg0 = (0U << 0) | (0U << 5),
-  .framecfg = EFR32_SIO_LLD_EUSART_8N1,
-};
+/* Console via SEGGER RTT (up channel 0) — works over J-Link SWD.
+   View with: JLinkRTTLoggerExe -Device EFR32FG23B010F512IM48 -If SWD -Speed 4000 -RTTChannel 0 out.log */
+#include <string.h>
+#include <stdio.h>
+
+typedef struct {
+  char           id[16];        /* "SEGGER RTT" */
+  uint32_t       num_up;
+  uint32_t       num_down;
+  struct {
+    const char  *name;
+    uint8_t     *buf;
+    uint32_t     size;
+    volatile uint32_t wr;
+    volatile uint32_t rd;
+    uint32_t     flags;
+  } up[1];
+} rtt_cb_t;
+
+static rtt_cb_t rtt_cb __attribute__((aligned(32)));
+static uint8_t  rtt_buf[1024];
 
 static void console_init(void) {
-  palSetPadMode(GPIOA, 9, PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_ALTERNATE(EUSART1_TX));
-  palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP | PAL_MODE_ALTERNATE(EUSART1_RX));
-  sioStart(&SIOD2, &console_cfg);
+  memset(&rtt_cb, 0, sizeof(rtt_cb));
+  memcpy(rtt_cb.id, "SEGGER RTT", 10);
+  rtt_cb.num_up = 1;
+  rtt_cb.num_down = 0;
+  rtt_cb.up[0].name  = "Terminal";
+  rtt_cb.up[0].buf   = rtt_buf;
+  rtt_cb.up[0].size  = sizeof(rtt_buf);
+  rtt_cb.up[0].flags = 0;
 }
-#define PRINTF(...) chprintf((BaseSequentialStream *)&SIOD2, __VA_ARGS__)
+
+static void rtt_write(const char *s, size_t n) {
+  uint32_t wp = rtt_cb.up[0].wr;
+  for (size_t i = 0; i < n; i++) {
+    rtt_buf[wp] = (uint8_t)s[i];
+    wp = (wp + 1U) % rtt_cb.up[0].size;
+  }
+  rtt_cb.up[0].wr = wp;
+}
+
+#define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
 
 static void radio_init(void) {
   RAIL_Config_t rail_config = { .eventsCallback = rail_event_cb };
@@ -79,8 +109,8 @@ static void radio_init(void) {
   chSemObjectInit(&tx_done_sem, 0);
 }
 
-/* wMBus SND-NR datagram (C-field 0x44), 868.95 MHz C1-A. */
-static const uint8_t wmbus_datagram[] = {
+/* Test datagram, 868.95 MHz. */
+static const uint8_t radio_datagram[] = {
   0x2A, 0x44, 0x34, 0x12, 0x78, 0x56, 0x00, 0x00,
   0x72, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
@@ -91,18 +121,18 @@ int main(void) {
   halInit();
   chSysInit();
   console_init();
-  PRINTF("\r\nRAIL-WMBUS test: wMBus C1-A datagram every 3 s\r\n");
+  PRINTF("\r\nRAIL-TX test: test datagram every 3 s\r\n");
 
   radio_init();
 
   unsigned n = 0;
   while (true) {
     RAIL_SetTxFifo(rail_handle, rail_tx_fifo, 0, sizeof(rail_tx_fifo));
-    memcpy(rail_tx_fifo, wmbus_datagram, sizeof(wmbus_datagram));
-    RAIL_SetTxFifo(rail_handle, rail_tx_fifo, sizeof(wmbus_datagram), sizeof(rail_tx_fifo));
+    memcpy(rail_tx_fifo, radio_datagram, sizeof(radio_datagram));
+    RAIL_SetTxFifo(rail_handle, rail_tx_fifo, sizeof(radio_datagram), sizeof(rail_tx_fifo));
     RAIL_StartTx(rail_handle, 0, RAIL_TX_OPTIONS_DEFAULT, NULL);
     (void)chSemWaitTimeout(&tx_done_sem, TIME_MS2I(1000));
-    PRINTF("sent #%u (%u bytes)\r\n", ++n, (unsigned)sizeof(wmbus_datagram));
+    PRINTF("sent #%u (%u bytes)\r\n", ++n, (unsigned)sizeof(radio_datagram));
     chThdSleepMilliseconds(3000);
   }
 }

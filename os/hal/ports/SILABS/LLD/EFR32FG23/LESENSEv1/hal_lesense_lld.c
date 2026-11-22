@@ -103,7 +103,7 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   /* Allocate DMA stream for result FIFO if configured. */
 #if defined(EFR32_DMA_REQUIRED)
   if (EFR32_LESENSE_DMA_STREAM >= 0 && lp->dma == NULL) {
-    lp->dma = dmaStreamAlloc(EFR32_LESENSE_DMA_STREAM,
+    lp->dma = dmaStreamAllocI(EFR32_LESENSE_DMA_STREAM,
                              EFR32_LESENSE_DMA_IRQ_PRIORITY, NULL, NULL);
   }
 #endif
@@ -115,7 +115,7 @@ void lesense_lld_stop(LESENSEDriver *lp) {
   nvicDisableVector(EFR32_LESENSE_NUMBER);
 #if defined(EFR32_DMA_REQUIRED)
   if (lp->dma != NULL) {
-    dmaStreamFree(lp->dma);
+    dmaStreamFreeI(lp->dma);
     lp->dma = NULL;
   }
 #endif

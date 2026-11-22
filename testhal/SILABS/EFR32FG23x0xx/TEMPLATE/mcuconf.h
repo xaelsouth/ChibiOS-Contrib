@@ -27,6 +27,9 @@
 
 #define EFR32FG23X_MCUCONF
 
+/* Enable run-time clock tree switching (halClockSwitchMode()). */
+#define HAL_LLD_USE_CLOCK_MANAGEMENT        TRUE
+
 /* Enable the shared DMA helper driver (required by SPI, I2C, ADC, DAC). */
 #define EFR32_DMA_REQUIRED
 
@@ -72,7 +75,7 @@
 #define EFR32_EM4GRPACLKSEL                 EFR32_EM4GRPACLKSEL_LFXO
 #define EFR32_EM4GRPACLK_ENABLED            (EFR32_EM4GRPACLKSEL != EFR32_EM4GRPACLKSEL_NOCLOCK)
 
-#define EFR32_EUSART1SEL                    EFR32_EUSART1SEL_LFXO
+#define EFR32_EUSART1SEL                    EFR32_EUSART1SEL_EM01GRPCCLK
 
 #define EFR32_EUSART23SEL                   EFR32_EUSART23SEL_HFRCODPLL
 

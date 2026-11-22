@@ -1,5 +1,5 @@
 ##############################################################################
-# testhal/SILABS/EFR32FG23x0xx/RAIL-WMBUS
+# testhal/SILABS/EFR32FG23x0xx/RAIL-TX
 ##############################################################################
 
 ifeq ($(USE_OPT),)
@@ -28,10 +28,10 @@ ifeq ($(USE_SMART_BUILD),)
 endif
 
 ifeq ($(USE_PROCESS_STACKSIZE),)
-  USE_PROCESS_STACKSIZE = 0x400
+  USE_PROCESS_STACKSIZE = 0x1000
 endif
 ifeq ($(USE_EXCEPTIONS_STACKSIZE),)
-  USE_EXCEPTIONS_STACKSIZE = 0x400
+  USE_EXCEPTIONS_STACKSIZE = 0x1000
 endif
 ifeq ($(USE_FPU),)
   USE_FPU = no
@@ -58,7 +58,7 @@ include $(CHIBIOS_CONTRIB)/os/hal/boards/SILABS_EFR32FG23_DK2600A/board.mk
 include $(CHIBIOS)/os/rt/rt.mk
 include $(CHIBIOS)/os/common/ports/ARMv8-M-ML/compilers/GCC/mk/port.mk
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
-include $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/RAILv1/wmbus_profile/raillib.mk
+include $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/RAILv1/radio_profile/raillib.mk
 
 # Define linker script file here
 LDSCRIPT = $(STARTUPLD_CONTRIB)/EFR32FG23XF512.ld
@@ -85,7 +85,7 @@ CPPWARN = -Wall -Wextra -Wundef
 UDEFS = -DEFR32FG23B010F512IM48=1 \
         -DCORTEX_ENABLE_WFI_IDLE \
         -DESCAPE_HATCH_ENABLE=TRUE \
-        -DSL_TRUSTZONE_NONSECURE \
+        -DSL_TRUSTZONE_SECURE \
         -DSYSTEM_NO_STATIC_MEMORY \
         -D_SILICON_LABS_32B_SERIES_1_CONFIG=0 \
         -DSL_RAIL_UTIL_PROTOCOL_IEEE802154_GB868_ENABLE=0 \

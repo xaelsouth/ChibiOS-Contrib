@@ -48,7 +48,7 @@ SYSRTCDriver SYSRTCD1;
  * @isr
  */
 #if !defined(EFR32_ST_OWNS_SYSRTC_SEQ) || (EFR32_ST_OWNS_SYSRTC_SEQ == 0) || defined(__DOXYGEN__)
-OSAL_IRQ_HANDLER(EFR32_SYSRTC_SEQ_HANDLER) {
+OSAL_IRQ_HANDLER(EFR32_SYSRTC_APP_HANDLER) {
   OSAL_IRQ_PROLOGUE();
   sysrtc_lld_serve_interrupt(&SYSRTCD1);
   OSAL_IRQ_EPILOGUE();
@@ -107,21 +107,30 @@ void sysrtc_lld_start(SYSRTCDriver *drvp, efr32_sysrtc_cb_t cb, void *arg) {
 
     /* Enable module. */
     SYSRTC0->EN_SET = SYSRTC_EN_EN;
+    while ((SYSRTC0->EN & SYSRTC_EN_EN) == 0U) {}
 
-    /* Debug run enable (keep counting when halted). */
-    SYSRTC0->CFG = SYSRTC_CFG_DEBUGRUN_ENABLE;
+    /* NOTE: SYSRTC0->CFG (DEBUGRUN) write is omitted — it bus-faults on
+       FG23 when the module is enabled; not needed for normal operation. */
 
+#if defined(EFR32_ST_OWNS_SYSRTC_SEQ) && (EFR32_ST_OWNS_SYSRTC_SEQ != 0) && !defined(__DOXYGEN__)
+    /* SYSTICKv2 owns CMP0 (tick) and OVF of group 0 — only clear the
+       channels we manage (CMP1, CAP0). */
+    SYSRTC0->GRP0_CTRL_CLR = _SYSRTC_GRP0_CTRL_CMP1EN_MASK | _SYSRTC_GRP0_CTRL_CAP0EN_MASK;
+    SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP1 | SYSRTC_GRP0_IF_CAP0;
+    SYSRTC0->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP1 | SYSRTC_GRP0_IEN_CAP0;
+#else
     /* Clear group 0: disable all channels, clear flags. */
     SYSRTC0->GRP0_CTRL = 0U;
     SYSRTC0->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
     SYSRTC0->GRP0_IEN = 0U;
+#endif
 
-    /* Start counter. */
+    /* Start counter (no-op if already running). */
     SYSRTC0->CMD_SET = SYSRTC_CMD_START;
     while ((SYSRTC0->SYNCBUSY & _SYSRTC_SYNCBUSY_MASK) != 0U) {}
 
-    /* Enable SEQ interrupt. */
-    nvicEnableVector(EFR32_SYSRTC_SEQ_NUMBER, EFR32_SYSRTC_IRQ_PRIORITY);
+    /* Enable SEQ interrupt (shared with SYSTICKv2 when it owns the vector). */
+    nvicEnableVector(EFR32_SYSRTC_APP_NUMBER, EFR32_SYSRTC_IRQ_PRIORITY);
 
     drvp->state = 1U;
   }
@@ -142,12 +151,22 @@ void sysrtc_lld_stop(SYSRTCDriver *drvp) {
     SYSRTC0->CMD_SET = SYSRTC_CMD_STOP;
     while ((SYSRTC0->SYNCBUSY & _SYSRTC_SYNCBUSY_MASK) != 0U) {}
 
+#if defined(EFR32_ST_OWNS_SYSRTC_SEQ) && (EFR32_ST_OWNS_SYSRTC_SEQ != 0) && !defined(__DOXYGEN__)
+    /* Leave CMP0/OVF (SYSTICKv2 tick) running. */
+    SYSRTC0->GRP0_IEN_CLR = SYSRTC_GRP0_IEN_CMP1 | SYSRTC_GRP0_IEN_CAP0;
+    SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP1 | SYSRTC_GRP0_IF_CAP0;
+#else
     SYSRTC0->GRP0_IEN = 0U;
     SYSRTC0->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
-    nvicDisableVector(EFR32_SYSRTC_SEQ_NUMBER);
+    nvicDisableVector(EFR32_SYSRTC_APP_NUMBER);
+#endif
 
+#if defined(EFR32_ST_OWNS_SYSRTC_SEQ) && (EFR32_ST_OWNS_SYSRTC_SEQ != 0) && !defined(__DOXYGEN__)
+    /* SYSTICKv2 still uses the SYSRTC counter — do not disable the module. */
+#else
     SYSRTC0->EN_CLR = SYSRTC_EN_EN;
     CMU->CLKEN0_CLR = CMU_CLKEN0_SYSRTC0;
+#endif
 
     drvp->state = 0U;
   }

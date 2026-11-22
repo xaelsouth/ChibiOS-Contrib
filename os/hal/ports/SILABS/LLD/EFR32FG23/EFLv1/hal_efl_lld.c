@@ -107,6 +107,9 @@ static void msc_wait_not_busy(void) {
 /*===========================================================================*/
 
 void efl_lld_init(void) {
+  /* Enable the MSC bus clock — without it register access bus-faults. */
+  CMU->CLKEN1_SET = CMU_CLKEN1_MSC;
+
   /* Build sector descriptors at init time. */
   for (uint32_t i = 0; i < EFR32_FLASH_PAGES; i++) {
     efl_sector_desc[i].offset = i * EFR32_FLASH_PAGE_SIZE;
@@ -143,13 +146,34 @@ const flash_descriptor_t *efl_lld_get_descriptor(void *instance) {
   return &desc;
 }
 
+/* Map a flash offset to an absolute address; offsets at/above
+   EFR32_FLASH_SIZE address the USERDATA page. */
+static uint32_t efl_lld_addr(flash_offset_t offset, size_t n, bool *ok) {
+  if (offset >= EFR32_FLASH_SIZE) {
+    if (offset + n > EFR32_FLASH_SIZE + EFR32_USERDATA_SIZE) {
+      *ok = false;
+      return 0U;
+    }
+    *ok = true;
+    return EFR32_USERDATA_BASE + (offset - EFR32_FLASH_SIZE);
+  }
+  if (offset + n > EFR32_FLASH_SIZE) {
+    *ok = false;
+    return 0U;
+  }
+  *ok = true;
+  return EFR32_FLASH_BASE + offset;
+}
+
 flash_error_t efl_lld_read(void *instance, flash_offset_t offset,
                            size_t n, uint8_t *rp) {
   (void)instance;
-  if (offset + n > EFR32_FLASH_SIZE) {
+  bool ok;
+  uint32_t addr = efl_lld_addr(offset, n, &ok);
+  if (!ok) {
     return FLASH_ERROR_READ;
   }
-  memcpy(rp, (const void *)(EFR32_FLASH_BASE + offset), n);
+  memcpy(rp, (const void *)addr, n);
   return FLASH_NO_ERROR;
 }
 
@@ -157,11 +181,13 @@ flash_error_t efl_lld_program(void *instance, flash_offset_t offset,
                               size_t n, const uint8_t *pp) {
   (void)instance;
 
-  if (offset + n > EFR32_FLASH_SIZE) {
-    return FLASH_ERROR_PROGRAM;
-  }
   if ((n % 4U) != 0U || (((uint32_t)pp & 3U) != 0U)) {
     /* FG23 MSC programs 32-bit words only, aligned. */
+    return FLASH_ERROR_PROGRAM;
+  }
+  bool ok;
+  uint32_t addr = efl_lld_addr(offset, n, &ok);
+  if (!ok) {
     return FLASH_ERROR_PROGRAM;
   }
 
@@ -169,7 +195,6 @@ flash_error_t efl_lld_program(void *instance, flash_offset_t offset,
   msc_unlock();
   msc_write_enable();
 
-  uint32_t addr = EFR32_FLASH_BASE + offset;
   for (size_t i = 0; i < n; i += 4) {
     uint32_t word;
     memcpy(&word, pp + i, 4);

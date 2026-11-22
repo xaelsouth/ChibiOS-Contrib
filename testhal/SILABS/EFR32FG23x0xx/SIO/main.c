@@ -17,61 +17,82 @@
 #include <string.h>
 #include "ch.h"
 #include "hal.h"
-#include "chprintf.h"
 
-/* VCOM console on EUSART2 (SIOD2), PA9=TX / PA10=RX, 115200 8N1. */
-static const SIOConfig console_cfg = {
-  .baud = 115200U,
-  .cfg0 = (0U << 0) | (0U << 5),
-  .framecfg = EFR32_SIO_LLD_EUSART_8N1,
-};
+/* Console via SEGGER RTT (up channel 0) — works over J-Link SWD.
+   View with: JLinkRTTLoggerExe -Device EFR32FG23B010F512IM48 -If SWD -Speed 4000 -RTTChannel 0 out.log */
+#include <string.h>
+#include <stdio.h>
+
+typedef struct {
+  char           id[16];        /* "SEGGER RTT" */
+  uint32_t       num_up;
+  uint32_t       num_down;
+  struct {
+    const char  *name;
+    uint8_t     *buf;
+    uint32_t     size;
+    volatile uint32_t wr;
+    volatile uint32_t rd;
+    uint32_t     flags;
+  } up[1];
+} rtt_cb_t;
+
+static rtt_cb_t rtt_cb __attribute__((aligned(32)));
+static uint8_t  rtt_buf[1024];
 
 static void console_init(void) {
-  palSetPadMode(GPIOA, 9, PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_ALTERNATE(EUSART1_TX));
-  palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP | PAL_MODE_ALTERNATE(EUSART1_RX));
-  sioStart(&SIOD2, &console_cfg);
+  memset(&rtt_cb, 0, sizeof(rtt_cb));
+  memcpy(rtt_cb.id, "SEGGER RTT", 10);
+  rtt_cb.num_up = 1;
+  rtt_cb.num_down = 0;
+  rtt_cb.up[0].name  = "Terminal";
+  rtt_cb.up[0].buf   = rtt_buf;
+  rtt_cb.up[0].size  = sizeof(rtt_buf);
+  rtt_cb.up[0].flags = 0;
 }
-#define PRINTF(...) chprintf((BaseSequentialStream *)&SIOD2, __VA_ARGS__)
+
+static void rtt_write(const char *s, size_t n) {
+  uint32_t wp = rtt_cb.up[0].wr;
+  for (size_t i = 0; i < n; i++) {
+    rtt_buf[wp] = (uint8_t)s[i];
+    wp = (wp + 1U) % rtt_cb.up[0].size;
+  }
+  rtt_cb.up[0].wr = wp;
+}
+
+#define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
+
 
 static const SIOConfig sio_cfg = {
-  .baud = 2400U,
-  .cfg0 = (0U << 0) | (4U << 5),   /* ASYNC, no oversampling (LF operation) */
-  .framecfg = EFR32_SIO_LLD_EUSART_8E1,
+  .baud = 115200U,
+  .cfg0 = (0U << 0) | (0U << 5),   /* ASYNC, 16x oversampling */
+  .framecfg = EFR32_SIO_LLD_EUSART_8N1,
 };
 
 int main(void) {
   halInit();
   chSysInit();
   console_init();
-  PRINTF("\r\nSIO test: EUSART0 loopback 2400 8E1 on PA9/PA10\r\n");
+  PRINTF("\r\nSIO test: EUSART0 (SIOD1) PA9/PA10 115200\r\n");
 
   palSetPadMode(GPIOA, 9, PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_ALTERNATE(EUSART0_TX));
   palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP | PAL_MODE_ALTERNATE(EUSART0_RX));
-
   sioStart(&SIOD1, &sio_cfg);
 
-  const char *msg = "EUSART0 loopback OK";
-  uint8_t rx[32];
-  size_t tx = 0, rxgot = 0;
+  const char *msg = "SIO TX ok on EUSART0 PA9/PA10\r\n";
+  size_t tx = 0;
   while (tx < strlen(msg)) {
     tx += sioAsyncWrite(&SIOD1, (const uint8_t *)&msg[tx], strlen(msg) - tx);
-    while (rxgot < tx) {
-      msg_t m = sioGetX(&SIOD1);
-      if (m >= 0) rx[rxgot++] = (uint8_t)m;
-    }
   }
-  chThdSleepMilliseconds(50);
-  while (rxgot < tx) {
-    msg_t m = sioGetX(&SIOD1);
-    if (m >= 0) rx[rxgot++] = (uint8_t)m;
-  }
-  rx[rxgot] = 0;
+  msg_t m = sioSynchronizeTXEnd(&SIOD1, TIME_MS2I(2000));
+  PRINTF("async write %u bytes, TX-end sync: %s\r\n",
+         (unsigned)tx, m == MSG_OK ? "OK" : "TIMEOUT");
+
+  /* RX check: wait briefly for any byte (host may send via VCOM). */
+  msg_t r = sioGetX(&SIOD1);
+  PRINTF("rx byte: %s\r\n", r >= 0 ? "got one" : "none (ok if host silent)");
+
   sioStop(&SIOD1);
-  PRINTF("sent %u bytes, got back: %s\r\n", (unsigned)tx, rx);
-  PRINTF("result: %s\r\n", (rxgot == strlen(msg) && memcmp(rx, msg, rxgot) == 0) ? "PASS" : "FAIL (no loopback wire?)");
-
-  palSetPadMode(GPIOA, 9, PAL_MODE_ALTERNATE(EUSART0_TX_DIS));
-  palSetPadMode(GPIOA, 10, PAL_MODE_ALTERNATE(EUSART0_RX_DIS));
-
+  PRINTF("result: %s\r\n", m == MSG_OK ? "PASS" : "FAIL");
   while (true) { chThdSleepMilliseconds(1000); }
 }

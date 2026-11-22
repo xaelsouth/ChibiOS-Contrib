@@ -19,19 +19,49 @@
 #include "hal.h"
 #include "chprintf.h"
 
-/* VCOM console on EUSART2 (SIOD2), PA9=TX / PA10=RX, 115200 8N1. */
-static const SIOConfig console_cfg = {
-  .baud = 115200U,
-  .cfg0 = (0U << 0) | (0U << 5),
-  .framecfg = EFR32_SIO_LLD_EUSART_8N1,
-};
+/* Console via SEGGER RTT (up channel 0) — works over J-Link SWD.
+   View with: JLinkRTTLoggerExe -Device EFR32FG23B010F512IM48 -If SWD -Speed 4000 -RTTChannel 0 out.log */
+#include <string.h>
+#include <stdio.h>
+
+typedef struct {
+  char           id[16];        /* "SEGGER RTT" */
+  uint32_t       num_up;
+  uint32_t       num_down;
+  struct {
+    const char  *name;
+    uint8_t     *buf;
+    uint32_t     size;
+    volatile uint32_t wr;
+    volatile uint32_t rd;
+    uint32_t     flags;
+  } up[1];
+} rtt_cb_t;
+
+static rtt_cb_t rtt_cb __attribute__((aligned(32)));
+static uint8_t  rtt_buf[1024];
 
 static void console_init(void) {
-  palSetPadMode(GPIOA, 9, PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_ALTERNATE(EUSART1_TX));
-  palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP | PAL_MODE_ALTERNATE(EUSART1_RX));
-  sioStart(&SIOD2, &console_cfg);
+  memset(&rtt_cb, 0, sizeof(rtt_cb));
+  memcpy(rtt_cb.id, "SEGGER RTT", 10);
+  rtt_cb.num_up = 1;
+  rtt_cb.num_down = 0;
+  rtt_cb.up[0].name  = "Terminal";
+  rtt_cb.up[0].buf   = rtt_buf;
+  rtt_cb.up[0].size  = sizeof(rtt_buf);
+  rtt_cb.up[0].flags = 0;
 }
-#define PRINTF(...) chprintf((BaseSequentialStream *)&SIOD2, __VA_ARGS__)
+
+static void rtt_write(const char *s, size_t n) {
+  uint32_t wp = rtt_cb.up[0].wr;
+  for (size_t i = 0; i < n; i++) {
+    rtt_buf[wp] = (uint8_t)s[i];
+    wp = (wp + 1U) % rtt_cb.up[0].size;
+  }
+  rtt_cb.up[0].wr = wp;
+}
+
+#define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
 
 static const SPIConfig spi_cfg = {
   .end_cb   = NULL,
@@ -40,7 +70,7 @@ static const SPIConfig spi_cfg = {
   .sspad    = 8,
 #endif
   .bitrate  = 1000000U,
-  .cfg0     = (0U << 0) | (16U << 5),
+  .cfg0     = (0U << 0) | (0U << 5),
   .framecfg = EFR32_SIO_LLD_EUSART_8N1,
 };
 
@@ -55,12 +85,15 @@ int main(void) {
   palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP  | PAL_MODE_ALTERNATE(EUSART0_RX));
 
   spiStart(&SPID1, &spi_cfg);
-  spiSelect(&SPID1);
 
   uint8_t tx[16], rx[16];
   for (int i = 0; i < 16; i++) { tx[i] = (uint8_t)(0xA0 + i); rx[i] = 0; }
-  spiExchange(&SPID1, 16, tx, rx);
-  spiUnselect(&SPID1);
+  /* Polled LLD: spiStartExchangeI completes the transfer synchronously. */
+  osalSysLock();
+  spiSelectI(&SPID1);
+  spiStartExchangeI(&SPID1, 16, tx, rx);
+  spiUnselectI(&SPID1);
+  osalSysUnlock();
   int ok = memcmp(tx, rx, 16) == 0;
   PRINTF("sent/received %s\r\n", ok ? "match: PASS" : "MISMATCH: FAIL (loopback wire?)");
   spiStop(&SPID1);

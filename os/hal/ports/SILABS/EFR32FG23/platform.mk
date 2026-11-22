@@ -46,8 +46,8 @@ endif
 # Drivers compatible with the platform.
 # System tick: SYSTICKv2 (SYSRTC-based, 32-bit, EM4-capable) is the default.
 # Alternative: SYSTICKv3 (LETIMER0, 24-bit, EM2) — swap the include below.
-include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv2/driver.mk
-# include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv3/driver.mk   # LETIMER0-based alternative
+# include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv2/driver.mk   # SYSRTC0-based alternative (shares SYSRTC with SYSRTCv1)
+include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SYSTICKv3/driver.mk   # LETIMER0-based system tick (default)
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/LETIMERv1/driver.mk   # LETIMER0 as GPT (HAL_USE_GPT + EFR32_LETIMER_GPT_USE_LETIMER0)
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/GPIOv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/EUSARTv1/driver.mk

@@ -126,6 +126,7 @@ OSAL_IRQ_HANDLER(EFR32_LDMA_HANDLER) {
 
   LDMA->IF_CLR = flags;
 
+  osalSysLockFromISR();
   for (i = 0U; i < EFR32_DMA_STREAMS; i++) {
     if (dma.streams[i].func) {
       uint32_t mask = EFR32_DMA_ISR_DONE_MASK(i);
@@ -139,6 +140,7 @@ OSAL_IRQ_HANDLER(EFR32_LDMA_HANDLER) {
       }
     }
   }
+  osalSysUnlockFromISR();
 
   OSAL_IRQ_EPILOGUE();
 }

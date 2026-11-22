@@ -234,7 +234,7 @@ static const uint32_t phyInfo_3[] = {
   (uint32_t) NULL,
 };
 
-const uint32_t wmbus_mode_t_modemConfigBase[] = {
+const uint32_t radio_mode_t_modemConfigBase[] = {
   0x0002400CUL, 0x000A8001UL,
   /*    4010 */ 0x000040FFUL,
   0x00024020UL, 0x00000000UL,
@@ -410,7 +410,7 @@ const uint32_t wmbus_mode_t_modemConfigBase[] = {
   0xFFFFFFFFUL,
 };
 
-const uint32_t wmbus_mode_c_modemConfigBase[] = {
+const uint32_t radio_mode_c_modemConfigBase[] = {
   0x0002400CUL, 0x000A8001UL,
   /*    4010 */ 0x000040FFUL,
   0x00024020UL, 0x00000000UL,
@@ -602,7 +602,7 @@ const uint32_t wmbus_mode_c_modemConfigBase[] = {
   0xFFFFFFFFUL,
 };
 
-const uint32_t wmbus_mode_s_modemConfigBase[] = {
+const uint32_t radio_mode_s_modemConfigBase[] = {
   0x03014FFCUL, (uint32_t) &phyInfo_1,
   0x0002400CUL, 0x000A8001UL,
   /*    4010 */ 0x000040FFUL,
@@ -1077,7 +1077,7 @@ const uint32_t o2m_mode_c_modemConfig[] = {
   0xFFFFFFFFUL,
 };
 
-const RAIL_ChannelConfigEntry_t wmbus_mode_t_channels[] = {
+const RAIL_ChannelConfigEntry_t radio_mode_t_channels[] = {
   {
     .phyConfigDeltaAdd = m2o_mode_t_modemConfig,
     .baseFrequency = 868950000,
@@ -1114,7 +1114,7 @@ const RAIL_ChannelConfigEntry_t wmbus_mode_t_channels[] = {
   },
 };
 
-const RAIL_ChannelConfigEntry_t wmbus_mode_c_channels[] = {
+const RAIL_ChannelConfigEntry_t radio_mode_c_channels[] = {
   {
     .phyConfigDeltaAdd = m2o_mode_c_modemConfig,
     .baseFrequency = 868950000,
@@ -1151,7 +1151,7 @@ const RAIL_ChannelConfigEntry_t wmbus_mode_c_channels[] = {
   },
 };
 
-const RAIL_ChannelConfigEntry_t wmbus_mode_s_channels[] = {
+const RAIL_ChannelConfigEntry_t radio_mode_s_channels[] = {
   {
     .phyConfigDeltaAdd = NULL,
     .baseFrequency = 868300000,
@@ -1188,38 +1188,38 @@ const RAIL_ChannelConfigEntry_t wmbus_mode_s_channels[] = {
   },
 };
 
-const RAIL_ChannelConfig_t wmbus_mode_t_channelConfig = {
-  .phyConfigBase = wmbus_mode_t_modemConfigBase,
+const RAIL_ChannelConfig_t radio_mode_t_channelConfig = {
+  .phyConfigBase = radio_mode_t_modemConfigBase,
   .phyConfigDeltaSubtract = NULL,
-  .configs = wmbus_mode_t_channels,
+  .configs = radio_mode_t_channels,
   .length = 2U,
   .signature = 0UL,
   .xtalFrequencyHz = 39000000UL,
 };
 
-const RAIL_ChannelConfig_t wmbus_mode_c_channelConfig = {
-  .phyConfigBase = wmbus_mode_c_modemConfigBase,
+const RAIL_ChannelConfig_t radio_mode_c_channelConfig = {
+  .phyConfigBase = radio_mode_c_modemConfigBase,
   .phyConfigDeltaSubtract = NULL,
-  .configs = wmbus_mode_c_channels,
+  .configs = radio_mode_c_channels,
   .length = 2U,
   .signature = 0UL,
   .xtalFrequencyHz = 39000000UL,
 };
 
-const RAIL_ChannelConfig_t wmbus_mode_s_channelConfig = {
-  .phyConfigBase = wmbus_mode_s_modemConfigBase,
+const RAIL_ChannelConfig_t radio_mode_s_channelConfig = {
+  .phyConfigBase = radio_mode_s_modemConfigBase,
   .phyConfigDeltaSubtract = NULL,
-  .configs = wmbus_mode_s_channels,
+  .configs = radio_mode_s_channels,
   .length = 2U,
   .signature = 0UL,
   .xtalFrequencyHz = 39000000UL,
 };
 
 const RAIL_ChannelConfig_t *channelConfigs[] = {
-  &wmbus_mode_t_channelConfig,
-  &wmbus_mode_c_channelConfig,
-  &wmbus_mode_s_channelConfig,
+  &radio_mode_t_channelConfig,
+  &radio_mode_c_channelConfig,
+  &radio_mode_s_channelConfig,
   NULL
 };
 
-uint32_t wmbusAccelerationBuffer[471];
+uint32_t radioAccelerationBuffer[471];

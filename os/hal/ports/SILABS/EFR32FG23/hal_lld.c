@@ -35,18 +35,57 @@
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) && !defined(__DOXYGEN__)
 /**
  * @brief   Post-reset configuration, must be implemented.
+ * @details After reset SYSCLK runs from HFRCODPLL (HFRCO 19 MHz passed
+ *          through the PLL) with all prescalers at /1.
  */
 const halclkcfg_t hal_clkcfg_reset = {
-  .dummy = 0U
+  .sysclkctrl = EFR32_SYSCLKSEL_HFRCODPLL | EFR32_HPRE_DIV1 |
+                EFR32_PPRE_DIV1 | EFR32_RHPRE_DIV1 | EFR32_HFRCOPRE_DIV1
 };
 
 /**
  * @brief   Configuration from mcuconf.h, must be implemented.
  */
 const halclkcfg_t hal_clkcfg_default = {
-  .dummy = 0U
+  .sysclkctrl = EFR32_CMU_SYSCLKCTRL
 };
 #endif
+
+/*===========================================================================*/
+/* Clock points table.                                                       */
+/*===========================================================================*/
+
+/**
+ * @brief   Run-time frequencies of the clock points, in Hz.
+ * @details Initialized from the compile-time configuration, updated by
+ *          hal_lld_clock_switch_mode() when HAL_LLD_USE_CLOCK_MANAGEMENT
+ *          is enabled.
+ */
+static halfreq_t efr32_clk_point_freq[EFR32_CLK_ARRAY_SIZE];
+
+/**
+ * @brief   Initializes the clock points table from the compile-time
+ *          clock configuration.
+ */
+static void efr32_clock_points_init(void) {
+
+  efr32_clk_point_freq[EFR32_CLK_SYSCLK]       = EFR32_SYSCLK;
+  efr32_clk_point_freq[EFR32_CLK_HCLK]         = EFR32_HCLK;
+  efr32_clk_point_freq[EFR32_CLK_PCLK]         = EFR32_PCLK;
+  efr32_clk_point_freq[EFR32_CLK_RHCLK]        = EFR32_RHCLK;
+  efr32_clk_point_freq[EFR32_CLK_HFRCODPLL]    = EFR32_HFRCODPLLCLK;
+  efr32_clk_point_freq[EFR32_CLK_HFRCOEM23]    = EFR32_HFRCOEM23CLK;
+  efr32_clk_point_freq[EFR32_CLK_FSRCO]        = EFR32_FSRCOCLK;
+  efr32_clk_point_freq[EFR32_CLK_HFXO]         = EFR32_HFXOCLK;
+  efr32_clk_point_freq[EFR32_CLK_CLKIN0]       = EFR32_CLKIN0CLK;
+  efr32_clk_point_freq[EFR32_CLK_EM01GRPACLK]  = EFR32_EM01GRPACLK;
+  efr32_clk_point_freq[EFR32_CLK_EM01GRPCCLK]  = EFR32_EM01GRPCCLK;
+  efr32_clk_point_freq[EFR32_CLK_EM23GRPACLK]  = EFR32_EM23GRPACLK;
+  efr32_clk_point_freq[EFR32_CLK_EM4GRPACLK]   = EFR32_EM4GRPACLK;
+  efr32_clk_point_freq[EFR32_CLK_LFXO]         = EFR32_LFXOCLK;
+  efr32_clk_point_freq[EFR32_CLK_LFRCO]        = EFR32_LFRCOCLK;
+  efr32_clk_point_freq[EFR32_CLK_ULFRCO]       = EFR32_ULFRCOCLK;
+}
 
 /*===========================================================================*/
 /* Driver local variables and types.                                         */
@@ -65,10 +104,12 @@ __STATIC_INLINE void efr32_calibrate_lfxo(void) {
 
   gain = (LFXO->CAL & _LFXO_CAL_GAIN_MASK) >> _LFXO_CAL_GAIN_SHIFT;
   if (gain != gain_cal_value) {
-    while ((LFXO->SYNCBUSY & _LFXO_SYNCBUSY_CAL_MASK) == LFXO_SYNCBUSY_CAL);
+    { volatile uint32_t sp = 1000000UL;
+      while (((LFXO->SYNCBUSY & _LFXO_SYNCBUSY_CAL_MASK) == LFXO_SYNCBUSY_CAL) && (--sp != 0U)); }
     LFXO->CAL = (LFXO->CAL & ~_LFXO_CAL_GAIN_MASK) |
                 ((gain_cal_value << _LFXO_CAL_GAIN_SHIFT) & _LFXO_CAL_GAIN_MASK);
-    while ((LFXO->SYNCBUSY & _LFXO_SYNCBUSY_CAL_MASK) != 0U);
+    { volatile uint32_t sp = 1000000UL;
+      while (((LFXO->SYNCBUSY & _LFXO_SYNCBUSY_CAL_MASK) != 0U) && (--sp != 0U)); }
   }
 
   while (true) {
@@ -84,10 +125,12 @@ __STATIC_INLINE void efr32_calibrate_lfxo(void) {
       break;
     }
 
-    while ((LFXO->SYNCBUSY & _LFXO_SYNCBUSY_CAL_MASK) == LFXO_SYNCBUSY_CAL);
+    { volatile uint32_t sp = 1000000UL;
+      while (((LFXO->SYNCBUSY & _LFXO_SYNCBUSY_CAL_MASK) == LFXO_SYNCBUSY_CAL) && (--sp != 0U)); }
     LFXO->CAL = (LFXO->CAL & ~_LFXO_CAL_CAPTUNE_MASK) |
                 ((captune << _LFXO_CAL_CAPTUNE_SHIFT) & _LFXO_CAL_CAPTUNE_MASK);
-    while ((LFXO->SYNCBUSY & _LFXO_SYNCBUSY_CAL_MASK) == LFXO_SYNCBUSY_CAL);
+    { volatile uint32_t sp = 1000000UL;
+      while (((LFXO->SYNCBUSY & _LFXO_SYNCBUSY_CAL_MASK) == LFXO_SYNCBUSY_CAL) && (--sp != 0U)); }
   }
 }
 
@@ -96,7 +139,8 @@ __STATIC_INLINE void efr32_set_voltage_scaling(void) {
   EMU->CTRL = (EMU->CTRL & ~_EMU_CTRL_EM23VSCALE_MASK) | EFR32_EM23_VSCALE;
 
   EMU->CMD = (EMU->CMD & ~(_EMU_CMD_EM01VSCALE1_MASK | _EMU_CMD_EM01VSCALE2_MASK)) | EFR32_EM01_VSCALE;
-  while ((EMU->STATUS & _EMU_STATUS_VSCALEBUSY_MASK) == EMU_STATUS_VSCALEBUSY);
+  { volatile uint32_t sp = 1000000UL;
+    while (((EMU->STATUS & _EMU_STATUS_VSCALEBUSY_MASK) == EMU_STATUS_VSCALEBUSY) && (--sp != 0U)); }
 }
 
 __STATIC_INLINE void efr32_enable_clock_sources(void) {
@@ -105,10 +149,17 @@ __STATIC_INLINE void efr32_enable_clock_sources(void) {
   /* Enable clock. */
   CMU->CLKEN0_SET = CMU_CLKEN0_LFXO;
 
-  /* Disable LFXO. */
+  /* Disable LFXO. Note: the LFXO lives in the backup domain and may survive
+     a system reset still enabled and demanded by e.g. SYSRTC — bound the
+     wait so we never hang forever. */
   LFXO->CTRL_SET = LFXO_CTRL_DISONDEMAND;
   LFXO->CTRL_CLR = LFXO_CTRL_FORCEEN;
-  while ((LFXO->STATUS & _LFXO_STATUS_ENS_MASK) == LFXO_STATUS_ENS);
+  {
+    volatile uint32_t spin = 1000000UL;
+    while (((LFXO->STATUS & _LFXO_STATUS_ENS_MASK) == LFXO_STATUS_ENS) &&
+           (--spin != 0U)) {
+    }
+  }
 
   uint32_t gain_cal_value, captune_cal_value;
   efr32_get_lfxo_calibration_values(&gain_cal_value, &captune_cal_value);
@@ -120,15 +171,31 @@ __STATIC_INLINE void efr32_enable_clock_sources(void) {
 
   LFXO->CTRL_SET = LFXO_CTRL_FORCEEN;
 
-  while ((LFXO->STATUS & (_LFXO_STATUS_RDY_MASK | _LFXO_STATUS_ENS_MASK)) !=
-           (LFXO_STATUS_RDY | LFXO_STATUS_ENS));
+  {
+    volatile uint32_t spin = 4000000UL;
+    while (((LFXO->STATUS & (_LFXO_STATUS_RDY_MASK | _LFXO_STATUS_ENS_MASK)) !=
+            (LFXO_STATUS_RDY | LFXO_STATUS_ENS)) && (--spin != 0U)) {
+    }
+  }
 #else
   CMU->CLKEN0_CLR = CMU_CLKEN0_LFXO;
 #endif
 
 #if EFR32_HFXO_ENABLED
   CMU->CLKEN0_SET = CMU_CLKEN0_HFXO0;
+  /* Load factory crystal tuning from DEVINFO so the HFXO starts. */
+  {
+    uint32_t modxocal = DEVINFO->MODXOCAL;
+    HFXO0->XTALCTRL = ((modxocal & _DEVINFO_MODXOCAL_HFXOCTUNEXIANA_MASK) << 8) |
+                      ((modxocal & _DEVINFO_MODXOCAL_HFXOCTUNEXOANA_MASK) << 8);
+  }
   HFXO0->CTRL |= HFXO_CTRL_FORCEEN;
+  {
+    volatile uint32_t spin = 4000000UL;
+    while (((HFXO0->STATUS & _HFXO_STATUS_RDY_MASK) != HFXO_STATUS_RDY) &&
+           (--spin != 0U)) {
+    }
+  }
 #else
   CMU->CLKEN0_CLR = CMU_CLKEN0_HFXO0;
 #endif
@@ -308,6 +375,14 @@ __STATIC_INLINE void efr32_enable_vdacclk(void) {
 
 void efr32_chip_init(void) {
 
+  /* Disable any watchdog left running by the bootloader or a previous
+     application — the WDOG lives in the always-on domain and its enable
+     survives system resets, causing spurious resets otherwise. */
+#if defined(WDOG0)
+  CMU->CLKEN0_SET = CMU_CLKEN0_WDOG0;
+  WDOG0->LOCK = 0x0000ABE8UL;   /* unlock (bootloader may have locked it) */
+  WDOG0->EN_CLR = 1U;
+#endif
 }
 
 CC_WEAK void efr32_get_lfxo_calibration_values(uint32_t *gain, uint32_t *captune) {
@@ -401,6 +476,9 @@ void efr32_escape_hatch(void) {
  */
 void hal_lld_init(void) {
 
+  /* Clock points table initialization from the compile-time config. */
+  efr32_clock_points_init();
+
   /* DMA subsystems initialization.*/
 #if defined(EFR32_DMA_REQUIRED)
   dmaInit();
@@ -408,24 +486,6 @@ void hal_lld_init(void) {
 
   /* NVIC initialization.*/
   nvicInit();
-}
-
-#if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
-/**
- * @brief   Switches to a different clock configuration
- *
- * @param[in] ccp       pointer to clock a @p halclkcfg_t structure
- * @return              The clock switch result.
- * @retval false        if the clock switch succeeded
- * @retval true         if the clock switch failed
- *
- * @notapi
- */
-bool hal_lld_clock_switch_mode(const halclkcfg_t *ccp) {
-
-  (void)ccp;
-
-  return false;
 }
 
 /**
@@ -439,9 +499,121 @@ bool hal_lld_clock_switch_mode(const halclkcfg_t *ccp) {
  */
 halfreq_t hal_lld_get_clock_point(halclkpt_t clkpt) {
 
-  (void)clkpt;
+  if (clkpt >= (halclkpt_t)EFR32_CLK_ARRAY_SIZE) {
+    return 0U;
+  }
 
-  return 0U;
+  return efr32_clk_point_freq[clkpt];
+}
+
+#if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
+/**
+ * @brief   Decodes the HCLK prescaler field of CMU_SYSCLKCTRL.
+ * @return  The divider, or 0 if the field encoding is invalid.
+ */
+static uint32_t efr32_hclkpresc_div(uint32_t sysclkctrl) {
+
+  switch ((sysclkctrl >> _CMU_SYSCLKCTRL_HCLKPRESC_SHIFT) &
+          _CMU_SYSCLKCTRL_HCLKPRESC_MASK) {
+  case _CMU_SYSCLKCTRL_HCLKPRESC_DIV1:  return 1U;
+  case _CMU_SYSCLKCTRL_HCLKPRESC_DIV2:  return 2U;
+  case _CMU_SYSCLKCTRL_HCLKPRESC_DIV4:  return 4U;
+  case _CMU_SYSCLKCTRL_HCLKPRESC_DIV8:  return 8U;
+  case _CMU_SYSCLKCTRL_HCLKPRESC_DIV16: return 16U;
+  default:                              return 0U;
+  }
+}
+
+/**
+ * @brief   Decodes the HFRCO prescaler field of CMU_SYSCLKCTRL.
+ * @return  The divider, or 0 if the field encoding is invalid.
+ */
+static uint32_t efr32_hfrcopresc_div(uint32_t sysclkctrl) {
+
+  switch ((sysclkctrl >> 24U) & 0x1FU) {
+  case 0U: return 1U;
+  case 1U: return 2U;
+  case 2U: return 4U;
+  default: return 0U;
+  }
+}
+
+/**
+ * @brief   Switches to a different clock configuration
+ * @details Applies the SYSCLK source and prescalers carried by @p ccp to
+ *          CMU_SYSCLKCTRL and updates the run-time clock points table.
+ *          Only the source/divider fields are switchable at run-time; the
+ *          oscillator enables remain as configured at init.
+ *
+ * @param[in] ccp       pointer to clock a @p halclkcfg_t structure
+ * @return              The clock switch result.
+ * @retval false        if the clock switch succeeded
+ * @retval true         if the clock switch failed
+ *
+ * @notapi
+ */
+bool hal_lld_clock_switch_mode(const halclkcfg_t *ccp) {
+  uint32_t newctrl, hpre_div, hfrcopre_div;
+  halfreq_t sysclk, hclk;
+
+  if (ccp == NULL) {
+    return true;
+  }
+
+  newctrl = ccp->sysclkctrl & _CMU_SYSCLKCTRL_MASK;
+
+  /* Resolve the new SYSCLK frequency from the selected source. */
+  switch (newctrl & _CMU_SYSCLKCTRL_CLKSEL_MASK) {
+  case _CMU_SYSCLKCTRL_CLKSEL_FSRCO:     sysclk = EFR32_FSRCOCLK;    break;
+  case _CMU_SYSCLKCTRL_CLKSEL_HFRCODPLL: sysclk = EFR32_HFRCODPLLCLK; break;
+  case _CMU_SYSCLKCTRL_CLKSEL_HFXO:
+#if EFR32_HFXO_ENABLED
+    sysclk = EFR32_HFXOCLK;
+#else
+    return true;  /* HFXO not enabled at init */
+#endif
+    break;
+  case _CMU_SYSCLKCTRL_CLKSEL_CLKIN0:
+    if (EFR32_CLKIN0CLK == 0U) {
+      return true;  /* no external clock frequency known */
+    }
+    sysclk = EFR32_CLKIN0CLK;
+    break;
+  default:
+    return true;
+  }
+
+  hpre_div = efr32_hclkpresc_div(newctrl);
+  if (hpre_div == 0U) {
+    return true;
+  }
+  hclk = sysclk / hpre_div;
+
+  /* The voltage scaling is fixed at compile time: refuse configurations
+     that would exceed the limits of the configured scaling level. */
+  if (hclk > VSCALE_1V1_MAX_FREQ) {
+    return true;
+  }
+  if ((hclk > VSCALE_1V0_MAX_FREQ) && (EFR32_EM01_VSCALE != EFR32_EM01_VSCALE_1V1)) {
+    return true;
+  }
+
+  hfrcopre_div = efr32_hfrcopresc_div(newctrl);
+  if (hfrcopre_div == 0U) {
+    return true;
+  }
+
+  /* Apply the new settings. */
+  CMU->SYSCLKCTRL = (CMU->SYSCLKCTRL & ~_CMU_SYSCLKCTRL_MASK) | newctrl;
+
+  /* Update the run-time clock points table. */
+  efr32_clk_point_freq[EFR32_CLK_SYSCLK]     = sysclk;
+  efr32_clk_point_freq[EFR32_CLK_HCLK]       = hclk;
+  efr32_clk_point_freq[EFR32_CLK_PCLK]       = hclk / (((newctrl >> _CMU_SYSCLKCTRL_PCLKPRESC_SHIFT) & 1U) + 1U);
+  efr32_clk_point_freq[EFR32_CLK_RHCLK]      = hclk / (((newctrl >> _CMU_SYSCLKCTRL_RHCLKPRESC_SHIFT) & 1U) + 1U);
+  efr32_clk_point_freq[EFR32_CLK_HFRCOEM23]  = EFR32_HFRCODPLL_FREQ / hfrcopre_div;
+
+  return false;
 }
 #endif /* defined(HAL_LLD_USE_CLOCK_MANAGEMENT) */
 

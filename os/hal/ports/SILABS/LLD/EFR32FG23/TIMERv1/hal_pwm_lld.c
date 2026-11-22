@@ -53,6 +53,16 @@ static const uint32_t efr32_timer_irqprio[5] = {
   EFR32_PWM_TIMER4_IRQ_PRIORITY
 };
 
+
+/* Compute TIMER prescaler (0=DIV1 .. 9=DIV512) for the given clock/frequency. */
+__STATIC_INLINE uint32_t efr32_timer_presc_for_freq(uint32_t clk, uint32_t freq) {
+  uint32_t div = (clk + freq - 1U) / freq;
+  uint32_t presc = 0U, d = 1U;
+  if (div == 0U) div = 1U;
+  while (presc < 9U && d < div) { d <<= 1U; presc++; }
+  return presc;
+}
+
 /*===========================================================================*/
 /* Driver exported variables.                                                */
 /*===========================================================================*/
@@ -148,23 +158,25 @@ void pwm_lld_start(PWMDriver *pwmp) {
     /* Enable clock. */
     CMU->CLKEN0_SET = efr32_timer_clken[index];
 
-    /* Enable timer module. */
-    tim->EN_SET = TIMER_EN_EN;
-
-    /* Configure prescaler and clock source (EM01GRPACLK). */
-    tim->CFG = (tim->CFG & ~_TIMER_CFG_PRESC_MASK) |
-               ((config->prescaler & 0xFFU) << _TIMER_CFG_PRESC_SHIFT) |
+    /* Prescaler from frequency (fall back to the prescaler field if set),
+       clock EM01GRPACLK, while disabled — CFG writes fault while EN=1. */
+    uint32_t presc = (config->prescaler != 0U) ? config->prescaler
+                                               : efr32_timer_presc_for_freq(EFR32_EM01GRPACLK, config->frequency);
+    tim->CFG = ((((1U << presc) - 1U) << _TIMER_CFG_PRESC_SHIFT) & _TIMER_CFG_PRESC_MASK) |
                _TIMER_CFG_CLKSEL_PRESCEM01GRPACLK;
 
-    /* Set period (TOP). */
-    tim->TOP = config->period - 1U;
-    pwmp->period = config->period;
-
-    /* Configure all 3 CC channels for PWM mode. */
+    /* CCx_CFG is writable only while EN=0 on FG23. */
     for (uint32_t ch = 0; ch < PWM_CHANNELS; ch++) {
       /* PWM mode in CC_CFG. */
       tim->CC[ch].CFG = (tim->CC[ch].CFG & ~_TIMER_CC_CFG_MODE_MASK) |
                         _TIMER_CC_CFG_MODE_PWM;
+    }
+
+    /* Enable the module: CCx_CTRL / CCx_OC bus-fault while EN=0. */
+    tim->EN_SET = TIMER_EN_EN;
+    while ((tim->STATUS & _TIMER_STATUS_SYNCBUSY_MASK) != 0U) {}
+
+    for (uint32_t ch = 0; ch < PWM_CHANNELS; ch++) {
       /* On overflow: set output. On compare match: clear output.
          This gives active-high PWM with duty = width/period. */
       tim->CC[ch].CTRL = (tim->CC[ch].CTRL &
@@ -176,6 +188,10 @@ void pwm_lld_start(PWMDriver *pwmp) {
       /* Initial duty cycle 0 (channels are enabled via pwmEnableChannel). */
       tim->CC[ch].OC = 0U;
     }
+
+    /* Set period (TOP). */
+    tim->TOP = config->period - 1U;
+    pwmp->period = config->period;
 
     /* Clear interrupt flags, start counter. */
     tim->IF_CLR = _TIMER_IF_MASK;
