@@ -422,14 +422,54 @@ static uint32_t lfs_base_lblock(void) {
   return imx23_romboot_lfs_base(&IMX23NAND1, IMX23_ROMBOOT_RESERVE_BLOCKS);
 }
 
+/* nand_lfs_bd_t operations wrapping the GPMI NAND logical block device. */
+static uint32_t nand_bd_lblocks(void *ctx) {
+
+  return imx23_nand_lblocks((IMX23NANDDriver *)ctx);
+}
+
+static int nand_bd_lread(void *ctx, uint32_t lblock, uint32_t off,
+                         uint8_t *buf, uint32_t len) {
+
+  return imx23_nand_lread((IMX23NANDDriver *)ctx, lblock, off, buf, len);
+}
+
+static int nand_bd_lwrite_page(void *ctx, uint32_t lblock, uint32_t page,
+                               const uint8_t *data, uint32_t len) {
+
+  return imx23_nand_lwrite_page((IMX23NANDDriver *)ctx, lblock, page, data,
+                                len);
+}
+
+static int nand_bd_lerase(void *ctx, uint32_t lblock) {
+
+  return imx23_nand_lerase((IMX23NANDDriver *)ctx, lblock);
+}
+
+/* page_size/block_size are filled in by nand_ensure() once the chip is
+   probed. */
+static nand_lfs_bd_t nand_bd = {
+  .ctx         = &IMX23NAND1,
+  .page_size   = 0U,
+  .block_size  = 0U,
+  .lblocks     = nand_bd_lblocks,
+  .lread       = nand_bd_lread,
+  .lwrite_page = nand_bd_lwrite_page,
+  .lerase      = nand_bd_lerase,
+};
+
 /* Lazily initialize the GPMI NAND (the BBT scan takes a moment). */
 static int nand_ensure(void) {
 
   if (!nand_ready) {
+    const imx23_nand_geo_t *g;
     int rc = imx23_nand_init(&IMX23NAND1, 0U);
     if (rc != IMX23_NAND_OK) {
       return rc;
     }
+    g = imx23_nand_geo(&IMX23NAND1);
+    nand_bd.page_size  = g->page_size;
+    nand_bd.block_size = g->block_size;
     nand_ready = true;
   }
   return IMX23_NAND_OK;
@@ -549,7 +589,7 @@ static void cmd_nand(BaseSequentialStream *chp, int argc, char *argv[]) {
              (unsigned long)g->blocks, (unsigned long)g->pages);
     chprintf(chp, "BCH: ecc %u bits/512B, %u chunks, layout0=0x%08lx layout1=0x%08lx\r\n",
              g->ecc_strength, g->ecc_chunks,
-             (unsigned long)g->layout0, (unsigned long)g->layout1);
+             (unsigned long)IMX23NAND1.layout0, (unsigned long)IMX23NAND1.layout1);
     for (b = 0U; b < g->blocks; b++) {
       if (imx23_nand_is_bad(&IMX23NAND1, b)) {
         bad++;
@@ -730,7 +770,7 @@ static void cmd_lfs(BaseSequentialStream *chp, int argc, char *argv[]) {
       chprintf(chp, "nand init failed: %d\r\n", rc);
       return;
     }
-    rc = nand_lfs_mount(&nand_lfs, &IMX23NAND1, lfs_base_lblock(), format);
+    rc = nand_lfs_mount(&nand_lfs, &nand_bd, lfs_base_lblock(), format);
     chprintf(chp, "lfs mount: %s (%d)\r\n",
              rc == LFS_ERR_OK ? "OK" : "FAILED", rc);
     return;
@@ -1077,7 +1117,7 @@ int main(void) {
 #if defined(BOARD_IMX23_EVK)
   /* Mount NAND LittleFS at startup and expose it over TFTP (UDP 69). */
   if (nand_ensure() == IMX23_NAND_OK && !nand_lfs.mounted) {
-    int rc = nand_lfs_mount(&nand_lfs, &IMX23NAND1, lfs_base_lblock(), false);
+    int rc = nand_lfs_mount(&nand_lfs, &nand_bd, lfs_base_lblock(), false);
     if (rc == LFS_ERR_OK) {
       log_line("NAND LittleFS mounted");
 #if HAL_USE_USB
