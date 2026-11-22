@@ -52,7 +52,7 @@
 #endif
 
 /*
- * Console + xshell on the PL011 DUART (pins configured in board.c).
+ * Console + shell on the PL011 DUART (pins configured in board.c).
  */
 static const SIOConfig sio_console = {
   .baud     = 115200U,
@@ -1208,13 +1208,13 @@ int main(void) {
   usb_net_start();
 #endif
 
-  /* xshell on the debug serial port. */
+  /* shell on the debug serial.port. */
   shellInit();
   chThdCreateStatic(waShell, sizeof(waShell), NORMALPRIO + 1,
                     shellThread, (void *)&shell_cfg);
 
 #if HAL_USE_USB
-  /* telnetd: same xshell command table over TCP port 23 (via RNDIS). */
+  /* telnetd: same shell command table over TCP port 23 (via RNDIS). */
   telnetdStart(commands);
 #endif
 

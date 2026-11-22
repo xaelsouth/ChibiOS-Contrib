@@ -50,7 +50,7 @@ include $(CHIBIOS)/os/common/ports/ARM/compilers/GCC/mk/port_generic.mk
 # Other files.
 include $(CHIBIOS)/tools/mk/autobuild.mk
 
-# HAL streams lib (chprintf) and xshell on the debug serial.
+# HAL streams lib (chprintf) and shell on the debug serial.
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 include $(CHIBIOS)/os/various/shell/shell.mk
 

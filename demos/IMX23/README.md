@@ -40,7 +40,7 @@ vectors into OCRAM at `0x0`, disables MMU/caches and clears the CP15 V bit.
 - `ChibiOS-Contrib/os/hal/boards/IMX233_OLINUXINO_MINI/` — 64MB, `IMX23_RAM_SIZE 0x4000000`
 - `ChibiOS-Contrib/os/hal/boards/IMX23_EVK/` — 128MB, LCD panel + ENC28J60 defines
 - `ChibiOS-Contrib/os/various/devices_lib/ethernet/enc28j60_lld.c` — SPI MAC LLD
-- `ChibiOS-Contrib/demos/IMX23/RT-IMX23-HELLO/` — demo with xshell on the DUART
+- `ChibiOS-Contrib/demos/IMX23/RT-IMX23-HELLO/` — demo with shell on the DUART
 
 RAM size: one `#define IMX23_RAM_SIZE` in the board's `board.h`
 (`0x4000000` OLIMEX / `0x8000000` EVK); `heap_end` is 0x44000000 / 0x48000000.
