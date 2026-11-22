@@ -723,4 +723,17 @@ void net_shell_cmd_slip(BaseSequentialStream *chp, int argc, char *argv[]) {
   }
 }
 
+/*===========================================================================*/
+/* xshell adapters (only when xshell is part of the build).                  */
+/*===========================================================================*/
+
+#if CLI_HAS_XSHELL
+CLI_XSHELL_ADAPTER(net_shell_cmd_ifconfig)
+CLI_XSHELL_ADAPTER(net_shell_cmd_dhcpc)
+CLI_XSHELL_ADAPTER(net_shell_cmd_ping)
+CLI_XSHELL_ADAPTER(net_shell_cmd_arp)
+CLI_XSHELL_ADAPTER(net_shell_cmd_ntp)
+CLI_XSHELL_ADAPTER(net_shell_cmd_slip)
+#endif
+
 /** @} */

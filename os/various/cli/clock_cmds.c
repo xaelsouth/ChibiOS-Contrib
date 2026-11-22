@@ -16,13 +16,17 @@
 
 /**
  * @file    clock_cmds.c
- * @brief   Generic xshell clock commands.
+ * @brief   Generic clock commands, usable with both shell and xshell.
  *
  * @details Port-generic: the flat list uses CLK_ARRAY_SIZE/CLK_POINT_NAMES
  *          and halClockGetPointX() from the port. The "clocks w" tree view
  *          goes through the weak cli_clock_tree_print() hook — ports with
  *          a real clock tree (e.g. EFR32FG23/efr32_clocks.c) override it
  *          with a strong definition; otherwise the flat list is printed.
+ *
+ *          The cli_cmd_*() cores have the classic shell signature; the
+ *          cli_xshell_*() adapters (compiled when xshell is in the build)
+ *          forward xshp->stream to them — see cli.h.
  *
  * @addtogroup CLI_CLOCK_CMDS
  * @{
@@ -32,8 +36,8 @@
 
 #include "hal.h"
 #include "chprintf.h"
-#include "xshell.h"
 
+#include "cli.h"
 #include "clock_cmds.h"
 
 #if defined(CLK_ARRAY_SIZE) || defined(__DOXYGEN__)
@@ -69,54 +73,50 @@ CC_WEAK void cli_clock_tree_print(BaseSequentialStream *ssp) {
 }
 
 /*===========================================================================*/
-/* Commands.                                                                 */
+/* Core commands (classic shell signature).                                  */
 /*===========================================================================*/
 
 /**
  * @brief   "clocks" command: list clock points, "clocks w" for the tree.
  */
-void cmd_clocks(xshell_t *xshp, int argc, char *argv[], char *envp[]) {
-
-  (void)envp;
+void cli_cmd_clocks(BaseSequentialStream *chp, int argc, char *argv[]) {
 
   if (argc == 2 && strcmp(argv[1], "w") == 0) {
-    cli_clock_tree_print(xshp->stream);
+    cli_clock_tree_print(chp);
     return;
   }
 
   if (argc != 1) {
-    xshellUsage(xshp, "clocks [w]");
+    chprintf(chp, "Usage: clocks [w]\r\n");
     return;
   }
 
-  clock_points_print(xshp->stream);
+  clock_points_print(chp);
 }
 
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
 /**
  * @brief   "clock" command: switch clock configuration at run-time.
  */
-void cmd_clock(xshell_t *xshp, int argc, char *argv[], char *envp[]) {
+void cli_cmd_clock(BaseSequentialStream *chp, int argc, char *argv[]) {
   bool result;
   const halclkcfg_t *ccp;
 
-  (void)envp;
-
   if (argc != 2) {
-    xshellUsage(xshp, "clock reset|default");
+    chprintf(chp, "Usage: clock reset|default\r\n");
     return;
   }
 
   if (strcmp(argv[1], "reset") == 0) {
-    chprintf(xshp->stream, XSHELL_NEWLINE_STR "Switching to post-reset clock settings: ");
+    chprintf(chp, "\r\nSwitching to post-reset clock settings: ");
     ccp = &hal_clkcfg_reset;
   }
   else if (strcmp(argv[1], "default") == 0) {
-    chprintf(xshp->stream, XSHELL_NEWLINE_STR "Switching to default mcuconf.h clock settings: ");
+    chprintf(chp, "\r\nSwitching to default mcuconf.h clock settings: ");
     ccp = &hal_clkcfg_default;
   }
   else {
-    xshellUsage(xshp, "clock reset|default");
+    chprintf(chp, "Usage: clock reset|default\r\n");
     return;
   }
 
@@ -128,13 +128,24 @@ void cmd_clock(xshell_t *xshp, int argc, char *argv[], char *envp[]) {
 
   /* Printing result. */
   if (result) {
-    chprintf(xshp->stream, "failed" XSHELL_NEWLINE_STR);
+    chprintf(chp, "failed\r\n");
   }
   else {
-    chprintf(xshp->stream, "done" XSHELL_NEWLINE_STR);
+    chprintf(chp, "done\r\n");
   }
 }
 #endif /* defined(HAL_LLD_USE_CLOCK_MANAGEMENT) */
+
+/*===========================================================================*/
+/* xshell adapters.                                                          */
+/*===========================================================================*/
+
+#if CLI_HAS_XSHELL
+CLI_XSHELL_ADAPTER(cli_cmd_clocks)
+#if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
+CLI_XSHELL_ADAPTER(cli_cmd_clock)
+#endif
+#endif /* CLI_HAS_XSHELL */
 
 #endif /* defined(CLK_ARRAY_SIZE) */
 

@@ -16,10 +16,9 @@
 
 /**
  * @file    clock_cmds.h
- * @brief   Generic xshell clock commands.
+ * @brief   Generic clock commands, usable with both shell and xshell.
  *
- * @details Commands (register them in the application's xshell command
- *          table, e.g. {"clocks", cmd_clocks}):
+ * @details Commands:
  *          - clocks        flat list of all clock points and their rates
  *          - clocks w      clock tree view, if the port provides one via
  *                          the cli_clock_tree_print() hook (e.g. EFR32FG23
@@ -27,10 +26,25 @@
  *          - clock reset|default   (only when HAL_LLD_USE_CLOCK_MANAGEMENT)
  *                          switch the clock configuration at run-time
  *
- *          Works for any port that defines CLK_ARRAY_SIZE and
- *          CLK_POINT_NAMES in its hal_lld.h (SILABS EFR32 ports, STM32
- *          xhal ports, ...). The whole module compiles to nothing on
- *          ports without clock points.
+ *          The core functions have the classic shell signature and work
+ *          for any port that defines CLK_ARRAY_SIZE and CLK_POINT_NAMES in
+ *          its hal_lld.h (SILABS EFR32 ports, STM32 xhal ports, ...).
+ *          Register them with CLI_SHELL_ENTRY()/CLI_XSHELL_ENTRY() from
+ *          cli.h, depending on which shell(s) the application uses:
+ *
+ *          classic shell:  static const ShellCommand cmds[] = {
+ *                            CLI_SHELL_ENTRY(cli_cmd_clocks, "clocks")
+ *                            CLI_CLOCK_SHELL_ENTRY
+ *                            {NULL, NULL}
+ *                          };
+ *          xshell:         static const xshell_command_t cmds[] = {
+ *                            CLI_XSHELL_ENTRY(cli_cmd_clocks, "clocks")
+ *                            CLI_CLOCK_XSHELL_ENTRY
+ *                            {NULL, NULL}
+ *                          };
+ *
+ *          The whole module compiles to nothing on ports without clock
+ *          points (no CLK_ARRAY_SIZE).
  *
  * @addtogroup CLI_CLOCK_CMDS
  * @{
@@ -39,26 +53,50 @@
 #ifndef CLOCK_CMDS_H
 #define CLOCK_CMDS_H
 
-#include "hal.h"
-#include "xshell.h"
+#include "cli.h"
+
+#if defined(CLK_ARRAY_SIZE) || defined(__DOXYGEN__)
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#if defined(CLK_ARRAY_SIZE) || defined(__DOXYGEN__)
-  void cmd_clocks(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+  void cli_cmd_clocks(BaseSequentialStream *chp, int argc, char *argv[]);
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
-  void cmd_clock(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+  void cli_cmd_clock(BaseSequentialStream *chp, int argc, char *argv[]);
 #endif
+
   /* Tree-view hook: weak default prints the flat list; ports with a real
-     clock tree (e.g. EFR32FG23) override it with a strong definition. */
+     clock tree (e.g. EFR32FG23/efr32_clocks.c) override it with a strong
+     definition. */
   void cli_clock_tree_print(BaseSequentialStream *ssp);
+
+#if CLI_HAS_XSHELL
+  /* xshell adapters (defined in clock_cmds.c), for CLI_XSHELL_ENTRY(). */
+  void cli_xshell_cli_cmd_clocks(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+#if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
+  void cli_xshell_cli_cmd_clock(xshell_t *xshp, int argc, char *argv[], char *envp[]);
 #endif
+#endif /* CLI_HAS_XSHELL */
 
 #ifdef __cplusplus
 }
 #endif
+
+/* Registration entries. CLI_CLOCK_*_ENTRY expands to nothing when
+   HAL_LLD_USE_CLOCK_MANAGEMENT is disabled. */
+#define CLI_CLOCKS_SHELL_ENTRY    CLI_SHELL_ENTRY(cli_cmd_clocks, "clocks")
+#define CLI_CLOCKS_XSHELL_ENTRY   CLI_XSHELL_ENTRY(cli_cmd_clocks, "clocks")
+
+#if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
+#define CLI_CLOCK_SHELL_ENTRY     CLI_SHELL_ENTRY(cli_cmd_clock, "clock")
+#define CLI_CLOCK_XSHELL_ENTRY    CLI_XSHELL_ENTRY(cli_cmd_clock, "clock")
+#else
+#define CLI_CLOCK_SHELL_ENTRY
+#define CLI_CLOCK_XSHELL_ENTRY
+#endif
+
+#endif /* defined(CLK_ARRAY_SIZE) */
 
 #endif /* CLOCK_CMDS_H */
 

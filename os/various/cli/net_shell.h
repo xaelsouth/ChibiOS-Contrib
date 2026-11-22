@@ -16,18 +16,21 @@
 
 /**
  * @file    cli/net_shell.h
- * @brief   lwIP shell commands (ifconfig/dhcpc/ping/arp/ntp/slip).
+ * @brief   lwIP commands (ifconfig/dhcpc/ping/arp/ntp/slip), shell + xshell.
  *
  * @details Network diagnostic and configuration commands operating on the
- *          lwIP netif list. Register them in the application ShellCommand
- *          table, e.g.:
+ *          lwIP netif list. The net_shell_cmd_*() cores have the classic
+ *          shell signature; register them with CLI_SHELL_ENTRY() or, when
+ *          xshell is in the build, with CLI_XSHELL_ENTRY():
  *          @code
- *            { "ifconfig", net_shell_cmd_ifconfig },
- *            { "dhcpc",    net_shell_cmd_dhcpc },
- *            { "ping",     net_shell_cmd_ping },
- *            { "arp",      net_shell_cmd_arp },
- *            { "ntp",      net_shell_cmd_ntp },
- *            { "slip",     net_shell_cmd_slip },
+ *          static const ShellCommand cmds[] = {          // classic shell
+ *            CLI_NET_SHELL_CMDS
+ *            {NULL, NULL}
+ *          };
+ *          static const xshell_command_t xcmds[] = {     // xshell
+ *            CLI_NET_XSHELL_CMDS
+ *            {NULL, NULL}
+ *          };
  *          @endcode
  *
  * @addtogroup NET_SERVICES
@@ -38,6 +41,7 @@
 #define NET_SHELL_H
 
 #include "hal.h"
+#include "cli.h"
 
 /*===========================================================================*/
 /* External declarations.                                                    */
@@ -54,9 +58,38 @@ extern "C" {
   void net_shell_cmd_slip(BaseSequentialStream *chp, int argc, char *argv[]);
   /* Hook referenced by SNTP_SET_SYSTEM_TIME in lwipopts.h. */
   void lwip_sntp_time_hook(uint32_t sec);
+#if CLI_HAS_XSHELL
+  /* xshell adapters, for CLI_XSHELL_ENTRY(). */
+  void cli_xshell_net_shell_cmd_ifconfig(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+  void cli_xshell_net_shell_cmd_dhcpc(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+  void cli_xshell_net_shell_cmd_ping(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+  void cli_xshell_net_shell_cmd_arp(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+  void cli_xshell_net_shell_cmd_ntp(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+  void cli_xshell_net_shell_cmd_slip(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+#endif
 #ifdef __cplusplus
 }
 #endif
+
+/*===========================================================================*/
+/* Registration entries.                                                     */
+/*===========================================================================*/
+
+#define CLI_NET_SHELL_CMDS                                                  \
+  CLI_SHELL_ENTRY(net_shell_cmd_ifconfig, "ifconfig")                       \
+  CLI_SHELL_ENTRY(net_shell_cmd_dhcpc,    "dhcpc")                          \
+  CLI_SHELL_ENTRY(net_shell_cmd_ping,     "ping")                           \
+  CLI_SHELL_ENTRY(net_shell_cmd_arp,      "arp")                            \
+  CLI_SHELL_ENTRY(net_shell_cmd_ntp,      "ntp")                            \
+  CLI_SHELL_ENTRY(net_shell_cmd_slip,     "slip")
+
+#define CLI_NET_XSHELL_CMDS                                                 \
+  CLI_XSHELL_ENTRY(net_shell_cmd_ifconfig, "ifconfig")                      \
+  CLI_XSHELL_ENTRY(net_shell_cmd_dhcpc,    "dhcpc")                         \
+  CLI_XSHELL_ENTRY(net_shell_cmd_ping,     "ping")                          \
+  CLI_XSHELL_ENTRY(net_shell_cmd_arp,      "arp")                           \
+  CLI_XSHELL_ENTRY(net_shell_cmd_ntp,      "ntp")                           \
+  CLI_XSHELL_ENTRY(net_shell_cmd_slip,     "slip")
 
 #endif /* NET_SHELL_H */
 
