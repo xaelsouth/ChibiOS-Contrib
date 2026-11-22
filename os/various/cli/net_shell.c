@@ -697,10 +697,8 @@ void net_shell_cmd_slip(BaseSequentialStream *chp, int argc, char *argv[]) {
     }
 
     memset(&cfg, 0, sizeof(cfg));
-    cfg.baud = baud;
-#if defined(IMX23_SIO_LLD_8N1)
-    cfg.framecfg = IMX23_SIO_LLD_8N1;
-#endif
+    cfg.baud = baud;    /* framecfg left 0: the LLD applies its default
+                           frame format (8N1+FIFO on i.MX23) */
     sioStart(siop, &cfg);
 
     memset(&slip_netif, 0, sizeof(slip_netif));

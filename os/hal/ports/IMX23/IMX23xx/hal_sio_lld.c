@@ -241,9 +241,15 @@ void sio_lld_init(void) {
  */
 msg_t sio_lld_start(SIODriver *siop) {
   uint32_t baud = siop->config->baud;
+  uint32_t framecfg = siop->config->framecfg;
 
   if (baud == 0U) {
     baud = 115200U;
+  }
+  /* framecfg == 0 (e.g. after memset of SIOConfig) means the default
+     frame format: 8 data bits, no parity, 1 stop bit, FIFO enabled. */
+  if (framecfg == 0U) {
+    framecfg = IMX23_SIO_LLD_8N1;
   }
 
   /* UART clock: 24MHz XTAL, divider 1 (shared gate with the DUART). */
@@ -261,7 +267,7 @@ msg_t sio_lld_start(SIODriver *siop) {
     u->ICR = 0x7FFU;
     u->IBRD  = ibrd;
     u->FBRD  = fbrd;
-    u->LCR_H = siop->config->framecfg;
+    u->LCR_H = framecfg;
     u->IFLS  = 0x12U;
     u->IMSC  = IMX23_PL011_RIS_RX | IMX23_PL011_RIS_RT;
     u->CR    = IMX23_PL011_CR_UARTEN | IMX23_PL011_CR_RXE | IMX23_PL011_CR_TXE;
@@ -276,7 +282,7 @@ msg_t sio_lld_start(SIODriver *siop) {
     }
     IMX23_REG((uint32_t)(uintptr_t)&u->CTRL0 + 8U) = IMX23_AUART_CTRL0_CLKGATE;
 
-    u->LINECTRL = siop->config->framecfg |
+    u->LINECTRL = framecfg |
                   IMX23_AUART_LINECTRL_BAUD_DIVINT(div >> 6) |
                   IMX23_AUART_LINECTRL_BAUD_DIVFRAC(div & 0x3FU);
     u->INTR = 0x7FFU;    /* clear all status bits */

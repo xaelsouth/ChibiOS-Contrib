@@ -79,7 +79,8 @@
 #define sio_lld_config_fields                                               \
   /* Bit rate in bit/s. */                                                  \
   uint32_t                  baud;                                          \
-  /* LCR_H frame configuration (IMX23_SIO_LLD_8N1 etc.).*/                 \
+  /* LCR_H frame configuration (IMX23_SIO_LLD_8N1 etc.); 0 = default       \
+     8N1 with FIFO (applied by sio_lld_start). */                            \
   uint32_t                  framecfg;
 
 #if (IMX23_SIO_USE_DUART == TRUE) && !defined(__DOXYGEN__)
