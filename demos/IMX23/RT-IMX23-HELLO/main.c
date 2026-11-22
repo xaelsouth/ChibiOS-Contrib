@@ -640,8 +640,19 @@ static void cmd_nand(BaseSequentialStream *chp, int argc, char *argv[]) {
    ramdisk/LittleFS into SDRAM and jump to it. The binary must be linked for
    exactly <loadaddr> (objcopy -O binary); entry = loadaddr + entry_off
    (default 0). Caches are disabled in this port, so no cache maintenance is
-   needed. The loaded code runs on the current stack and normally never
+   needed. The payload runs on a dedicated 16KB stack and normally never
    returns. */
+static void (*exec_entry)(void);
+static THD_WORKING_AREA(exec_wa, 16384U);
+
+static THD_FUNCTION(exec_thread, arg) {
+
+  (void)arg;
+  chRegSetThreadName("exec");
+  exec_entry();
+  chThdExit(MSG_OK);
+}
+
 static void cmd_exec(BaseSequentialStream *chp, int argc, char *argv[]) {
   lfs_t *lfs;
   lfs_file_t f;
@@ -692,8 +703,12 @@ static void cmd_exec(BaseSequentialStream *chp, int argc, char *argv[]) {
            (unsigned long)(addr + entry_off));
   /* Drain the console TX so the message is out before we jump. */
   sioSynchronizeTXEnd(&SIOD1, TIME_INFINITE);
-  entry = (void (*)(void))(uintptr_t)(addr + entry_off);
-  entry();
+  /* Run the payload on a dedicated large stack (the shell thread's 1KB
+     working area is too small for a UI app). The payload normally never
+     returns; if it does, the thread exits and the shell resumes. */
+  exec_entry = (void (*)(void))(uintptr_t)(addr + entry_off);
+  chThdCreateStatic(exec_wa, sizeof(exec_wa), NORMALPRIO, exec_thread, NULL);
+  chThdSleepMilliseconds(100U);   /* let the payload start */
   chprintf(chp, "exec: target returned\r\n");
 }
 
