@@ -44,13 +44,6 @@
 #include "mbedtls/sha256.h"
 #include "mbedtls/pem.h"
 
-#if defined(IMX23_H)          /* i.MX23 port: DCP hardware crypto present */
-#include "imx23_dcp.h"
-#define HTTPSD_HAVE_DCP         1
-#else
-#define HTTPSD_HAVE_DCP         0
-#endif
-
 /*===========================================================================*/
 /* Module local definitions.                                                 */
 /*===========================================================================*/
@@ -65,7 +58,6 @@
 
 #define UPDATE_FILE             "update.bin"
 #define UPDATE_SHA_FILE         "update.sha256"
-#define UPDATE_ENC_FILE         "update_enc.bin"  /* DCP re-encrypted image  */
 #define CERT_FILE               "cert.pem"
 #define KEY_FILE                "key.pem"
 
@@ -284,100 +276,14 @@ static void index_page(https_conn_t *c) {
       "<input type=\"submit\" value=\"Upload\">"
       "</form>"
       "<p>POST the raw firmware binary to /update. "
-      "If %s exists it must hold the expected SHA-256 (hex).</p>"
-#if HTTPSD_HAVE_DCP
-      "<p>On i.MX23 the image is then re-encrypted with the DCP "
-      "(AES-128-CBC, zero key -&gt; device-unique key) into %s.</p>"
-#endif
+      "If %s exists it must hold the expected SHA-256 (hex). "
+      "The file is stored as-is; any device-specific re-encryption "
+      "(e.g. i.MX23 DCP) is done separately, see the port's sbtool.</p>"
       "</body></html>",
-      ip, UPDATE_SHA_FILE
-#if HTTPSD_HAVE_DCP
-      , UPDATE_ENC_FILE
-#endif
-      );
+      ip, UPDATE_SHA_FILE);
   send_response(c, 200, "OK", body);
 }
 
-#if HTTPSD_HAVE_DCP
-/*
- * Re-encrypt the uploaded image with the DCP: the distributed image is
- * AES-128-CBC (zero IV) encrypted with the well-known zero key; decrypt it
- * with that key and re-encrypt with the device-unique key (OTP-derived)
- * into update_enc.bin. Returns IMX23_DCP_OK or a negative error.
- */
-static int dcp_reencrypt(lfs_t *lfs) {
-  static const uint8_t zero_key[16] = { 0 };
-  static bool dcp_ready;
-  uint8_t *in = NULL, *tmp = NULL, *out = NULL;
-  uint8_t iv_in[16], iv_out[16];
-  lfs_file_t fi, fo;
-  lfs_ssize_t n;
-  int rc = IMX23_DCP_OK;
-
-  if (!dcp_ready) {
-    rc = imx23_dcp_init(&IMX23DCP1);
-    if (rc != IMX23_DCP_OK) {
-      return rc;
-    }
-    dcp_ready = true;
-  }
-  in  = malloc(IMX23_DCP_CHUNK);
-  tmp = malloc(IMX23_DCP_CHUNK);
-  out = malloc(IMX23_DCP_CHUNK);
-  if (in == NULL || tmp == NULL || out == NULL) {
-    rc = IMX23_DCP_ERR_HW;
-    goto done;
-  }
-  if (lfs_file_open(lfs, &fi, UPDATE_FILE, LFS_O_RDONLY) != LFS_ERR_OK) {
-    rc = IMX23_DCP_ERR_HW;
-    goto done;
-  }
-  if (lfs_file_open(lfs, &fo, UPDATE_ENC_FILE,
-                    LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) != LFS_ERR_OK) {
-    lfs_file_close(lfs, &fi);
-    rc = IMX23_DCP_ERR_HW;
-    goto done;
-  }
-  memset(iv_in, 0, sizeof(iv_in));      /* CBC, zero IV on both sides */
-  memset(iv_out, 0, sizeof(iv_out));
-  while ((n = lfs_file_read(lfs, &fi, in, IMX23_DCP_CHUNK)) > 0) {
-    uint32_t len = (uint32_t)n;
-    uint32_t pad = (16U - (len % 16U)) % 16U;
-    uint8_t ct_blk[16];
-
-    if (pad != 0U) {                    /* pad final chunk to AES block */
-      memset(in + len, 0xFF, pad);
-      len += pad;
-    }
-    memcpy(ct_blk, in + len - 16U, 16U);  /* save last ciphertext block */
-    /* decrypt with the zero key (input CBC chain) */
-    rc = imx23_dcp_aes128(&IMX23DCP1, in, tmp, len, zero_key,
-                          IMX23_DCP_KEY_SLOT(0), false, true, iv_in);
-    if (rc != IMX23_DCP_OK) {
-      break;
-    }
-    /* re-encrypt with the device-unique key (output CBC chain) */
-    rc = imx23_dcp_aes128(&IMX23DCP1, tmp, out, len, NULL,
-                          IMX23_DCP_KEY_UNIQUE, true, true, iv_out);
-    if (rc != IMX23_DCP_OK) {
-      break;
-    }
-    if (lfs_file_write(lfs, &fo, out, len) != (lfs_ssize_t)len) {
-      rc = IMX23_DCP_ERR_HW;
-      break;
-    }
-    memcpy(iv_in, ct_blk, 16U);
-    memcpy(iv_out, out + len - 16U, 16U);
-  }
-  lfs_file_close(lfs, &fo);
-  lfs_file_close(lfs, &fi);
-done:
-  free(in);
-  free(tmp);
-  free(out);
-  return rc;
-}
-#endif /* HTTPSD_HAVE_DCP */
 
 /* Finish an upload: close file, compute SHA-256, compare with update.sha256
    if present, respond. */
@@ -429,27 +335,6 @@ static void finish_upload(https_conn_t *c, bool ok) {
     }
     verified = (strncmp(expect, hash_hex, 64U) == 0);
   }
-
-#if HTTPSD_HAVE_DCP
-  /* Verified (or unchecked) image: re-encrypt zero-key -> device-unique
-     key with the DCP into update_enc.bin. */
-  {
-    int drc = dcp_reencrypt(c->lfs);
-    snprintf(body, sizeof(body),
-        "<html><body><h1>Upload complete</h1>"
-        "<p>Bytes: %ld</p><p>SHA-256: %s</p>"
-        "<p>Expected-hash file: %s</p><p>Result: %s</p>"
-        "<p>DCP re-encrypt (zero key -&gt; unique key, AES-128-CBC) into "
-        "%s: %s</p>"
-        "</body></html>",
-        c->received, hash_hex,
-        have_expect ? "present" : "absent",
-        have_expect ? (verified ? "VERIFIED" : "MISMATCH") : "not checked",
-        UPDATE_ENC_FILE, drc == IMX23_DCP_OK ? "OK" : "FAILED");
-    send_response(c, 200, "OK", body);
-    return;
-  }
-#endif
 
   snprintf(body, sizeof(body),
       "<html><body><h1>Upload complete</h1>"

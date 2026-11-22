@@ -854,6 +854,109 @@ static void cmd_lfs(BaseSequentialStream *chp, int argc, char *argv[]) {
 
   chprintf(chp, "usage: lfs mount [format]|ls [path]|cat <path>|write <path> <text>|rm <path>|unmount\r\n");
 }
+
+/*
+ * "sbtool [lfs-in [lfs-out]]" - repack a firmware image for NAND boot.
+ *
+ * The distributed image is AES-128-CBC (zero IV) encrypted with the
+ * well-known all-zero key. sbtool decrypts it with that key and
+ * re-encrypts it with the device-unique DCP key (OTP-derived) into the
+ * output file (AES-128-CBC, zero IV). Feed the output file to
+ * kobs-ng/elftosb on the host to build the .sb bootstream that programs
+ * NAND flash; the BootROM/DCP on this device decrypts it with the same
+ * unique key.
+ *
+ * Defaults: in = update.bin (as uploaded via HTTPS/TFTP), out =
+ * update_enc.bin.
+ */
+static void cmd_sbtool(BaseSequentialStream *chp, int argc, char *argv[]) {
+  static const uint8_t zero_key[16] = { 0 };
+  const char *in_name  = (argc >= 1U) ? argv[0] : "update.bin";
+  const char *out_name = (argc >= 2U) ? argv[1] : "update_enc.bin";
+  uint8_t *in = NULL, *tmp = NULL, *out = NULL;
+  uint8_t iv_in[16], iv_out[16];
+  lfs_file_t fi, fo;
+  lfs_ssize_t n;
+  uint32_t total = 0U;
+  int rc = IMX23_DCP_OK;
+
+  if (!nand_lfs.mounted) {
+    chprintf(chp, "lfs not mounted\r\n");
+    return;
+  }
+  if (imx23_dcp_init(&IMX23DCP1) != IMX23_DCP_OK) {
+    chprintf(chp, "dcp init failed\r\n");
+    return;
+  }
+
+  in  = malloc(IMX23_DCP_CHUNK);
+  tmp = malloc(IMX23_DCP_CHUNK);
+  out = malloc(IMX23_DCP_CHUNK);
+  if (in == NULL || tmp == NULL || out == NULL) {
+    chprintf(chp, "out of memory\r\n");
+    goto done;
+  }
+  if (lfs_file_open(&nand_lfs.lfs, &fi, in_name, LFS_O_RDONLY) != LFS_ERR_OK) {
+    chprintf(chp, "cannot open %s\r\n", in_name);
+    rc = IMX23_DCP_ERR_HW;
+    goto done;
+  }
+  if (lfs_file_open(&nand_lfs.lfs, &fo, out_name,
+                    LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) != LFS_ERR_OK) {
+    chprintf(chp, "cannot create %s\r\n", out_name);
+    lfs_file_close(&nand_lfs.lfs, &fi);
+    rc = IMX23_DCP_ERR_HW;
+    goto done;
+  }
+
+  memset(iv_in, 0, sizeof(iv_in));      /* CBC, zero IV on both sides */
+  memset(iv_out, 0, sizeof(iv_out));
+  while ((n = lfs_file_read(&nand_lfs.lfs, &fi, in, IMX23_DCP_CHUNK)) > 0) {
+    uint32_t len = (uint32_t)n;
+    uint32_t pad = (16U - (len % 16U)) % 16U;
+    uint8_t ct_blk[16];
+
+    if (pad != 0U) {                    /* pad final chunk to AES block */
+      memset(in + len, 0xFF, pad);
+      len += pad;
+    }
+    memcpy(ct_blk, in + len - 16U, 16U);  /* save last ciphertext block */
+    /* decrypt with the zero distribution key (input CBC chain) */
+    rc = imx23_dcp_aes128(&IMX23DCP1, in, tmp, len, zero_key,
+                          IMX23_DCP_KEY_SLOT(0), false, true, iv_in);
+    if (rc != IMX23_DCP_OK) {
+      break;
+    }
+    /* re-encrypt with the device-unique key (output CBC chain) */
+    rc = imx23_dcp_aes128(&IMX23DCP1, tmp, out, len, NULL,
+                          IMX23_DCP_KEY_UNIQUE, true, true, iv_out);
+    if (rc != IMX23_DCP_OK) {
+      break;
+    }
+    if (lfs_file_write(&nand_lfs.lfs, &fo, out, len) != (lfs_ssize_t)len) {
+      rc = IMX23_DCP_ERR_HW;
+      break;
+    }
+    total += len;
+    memcpy(iv_in, ct_blk, 16U);
+    memcpy(iv_out, out + len - 16U, 16U);
+  }
+  if (n < 0) {
+    rc = IMX23_DCP_ERR_HW;              /* read error */
+  }
+  lfs_file_close(&nand_lfs.lfs, &fo);
+  lfs_file_close(&nand_lfs.lfs, &fi);
+
+  chprintf(chp, "sbtool %s -> %s: %s, %lu bytes (AES-128-CBC zero key -> "
+           "device-unique DCP key)\r\n",
+           in_name, out_name, rc == IMX23_DCP_OK ? "OK" : "FAILED",
+           (unsigned long)total);
+
+done:
+  free(in);
+  free(tmp);
+  free(out);
+}
 #endif /* BOARD_IMX23_EVK */
 
 /*
@@ -985,6 +1088,7 @@ static const ShellCommand commands[] = {
   { "exec", cmd_exec },
   { "adc", cmd_adc },
   { "keypad", cmd_keypad },
+  { "sbtool", cmd_sbtool },
 #endif
   { "dcp", cmd_dcp },
 #if HAL_USE_USB
