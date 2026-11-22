@@ -29,9 +29,15 @@ else
 endif
 
 # Drivers compatible with the platform.
-# NOTE: SYSTICKv1 (Cortex-M SysTick) is NOT included here — FG14P uses its
-# own SYSTICKv3 (LETIMER-based, supports EM2 low-power).
+# System tick driver selection:
+#   default                 -> SYSTICKv3 (LETIMER-based, keeps running in EM2)
+#   EFR32_USE_SYSTICKV1=yes -> SYSTICKv1 (ARM core SysTick, stops in EM2/EM3,
+#                              supports PERIODIC and FREERUNNING modes)
+ifeq ($(EFR32_USE_SYSTICKV1),yes)
+include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/SYSTICKv1/driver.mk   # core SysTick (optional)
+else
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG14P/SYSTICKv3/driver.mk
+endif
 
 # Shared variables
 ALLCSRC += $(PLATFORMSRC_CONTRIB)
