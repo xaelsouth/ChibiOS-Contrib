@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    demos/IMX23/RT-IMX23-HELLO/lvgl_imx23/imx23_lvgl.h
+ * @file    demos/IMX23/RT-IMX23-HELLO/lvgl/imx23_lvgl.h
  * @brief   LVGL display port for the i.MX23 LCDIF + PXP.
  *
  * @details LVGL renders RGB565 into a small partial draw buffer; the flush

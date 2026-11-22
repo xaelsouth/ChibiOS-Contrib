@@ -99,10 +99,10 @@ include $(CHIBIOS_CONTRIB)/os/various/mbedtls_bindings/mbedtls.mk
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/net_services/net_services.mk
 
 # LVGL + i.MX23 LCDIF/PXP port layer (EVK has the 4.3" LCD; the LVGL port
-# layer itself is demo-local, see lvgl_imx23/).
+# layer itself is demo-local, see lvgl/).
 ifeq ($(BOARD),IMX23_EVK)
 include $(CHIBIOS_CONTRIB)/os/various/lvgl_bindings/lvgl.mk
-include lvgl_imx23/lvgl_imx23.mk
+include lvgl/lvgl.mk
 endif
 
 ##############################################################################
