@@ -140,6 +140,10 @@ ASMSRC = $(ALLASMSRC)
 # List ASM with preprocessor source files here.
 ASMXSRC = $(ALLXASMSRC)
 
+# Configuration files directory (chconf.h, halconf.h, mcuconf.h, lwipopts.h,
+# mbedtls_config.h).
+CONFDIR = cfg
+
 # Inclusion directories.
 INCDIR = $(CONFDIR) $(ALLINC)
 
