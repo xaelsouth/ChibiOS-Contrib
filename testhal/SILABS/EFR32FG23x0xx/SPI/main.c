@@ -86,16 +86,30 @@ int main(void) {
 
   spiStart(&SPID1, &spi_cfg);
 
-  uint8_t tx[16], rx[16];
-  for (int i = 0; i < 16; i++) { tx[i] = (uint8_t)(0xA0 + i); rx[i] = 0; }
-  /* Polled LLD: spiStartExchangeI completes the transfer synchronously. */
+  /* Small transfer (4 bytes < EFR32_SPI_DMA_MIN_TRANSFER): polled path. */
+  uint8_t tx[100], rx[100];
+  for (int i = 0; i < 100; i++) { tx[i] = (uint8_t)(0xA0 + (i & 0x3F)); rx[i] = 0; }
+
   osalSysLock();
   spiSelectI(&SPID1);
-  spiStartExchangeI(&SPID1, 16, tx, rx);
+  spiStartExchangeI(&SPID1, 4, tx, rx);
   spiUnselectI(&SPID1);
   osalSysUnlock();
-  int ok = memcmp(tx, rx, 16) == 0;
-  PRINTF("sent/received %s\r\n", ok ? "match: PASS" : "MISMATCH: FAIL (loopback wire?)");
+  int ok4 = memcmp(tx, rx, 4) == 0;
+  PRINTF("polled 4B exchange: %s\r\n", ok4 ? "match: PASS" : "MISMATCH: FAIL (loopback wire?)");
+
+  /* Large transfer (100 bytes >= EFR32_SPI_DMA_MIN_TRANSFER): DMA path
+     (TX mem->TXDATA + RX RXDATA->mem via the LDMA streams). */
+  memset(rx, 0, sizeof(rx));
+  osalSysLock();
+  spiSelectI(&SPID1);
+  spiStartExchangeI(&SPID1, 100, tx, rx);
+  spiUnselectI(&SPID1);
+  osalSysUnlock();
+  int ok100 = memcmp(tx, rx, 100) == 0;
+  PRINTF("DMA 100B exchange: %s\r\n", ok100 ? "match: PASS" : "MISMATCH: FAIL (loopback wire?)");
+
   spiStop(&SPID1);
+  PRINTF("result: %s\r\n", (ok4 && ok100) ? "PASS" : "FAIL");
   while (true) chThdSleepMilliseconds(1000);
 }

@@ -22,6 +22,7 @@
  * @{
  */
 
+#include <string.h>
 #include "hal.h"
 #include "efr32_irda.h"
 
@@ -115,6 +116,162 @@ __STATIC_INLINE bool _sio_lld_is_usart(SIODriver* siop) {
 
   return false;
 }
+
+#if EFR32_SIO_USE_DMA || defined(__DOXYGEN__)
+
+/*===========================================================================*/
+/* SIO TX DMA support.                                                       */
+/*===========================================================================*/
+
+/* Instance index: 0=EUSART0(SIOD1), 1=EUSART1(SIOD2), 2=EUSART2(SIOD3),
+   3=USART0(SIOD4). */
+__STATIC_INLINE uint32_t _sio_lld_index(SIODriver* siop) {
+
+  if (false) {
+    (void)siop;
+  }
+#if (EFR32_SIO_USE_EUSART1 == TRUE)
+  else if (siop == &SIOD1) {
+    return 0U;
+  }
+#endif
+#if (EFR32_SIO_USE_EUSART2 == TRUE)
+  else if (siop == &SIOD2) {
+    return 1U;
+  }
+#endif
+#if (EFR32_SIO_USE_EUSART3 == TRUE)
+  else if (siop == &SIOD3) {
+    return 2U;
+  }
+#endif
+#if (EFR32_SIO_USE_USART1 == TRUE)
+  else if (siop == &SIOD4) {
+    return 3U;
+  }
+#endif
+
+  return 0U;
+}
+
+/* LDMAXBAR request source (SOURCESEL field, unshifted) per instance. */
+static const uint32_t efr32_sio_dma_src[4] = {
+  _LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART0,
+  _LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART1,
+  _LDMAXBAR_CH_REQSEL_SOURCESEL_EUSART2,
+  _LDMAXBAR_CH_REQSEL_SOURCESEL_USART0
+};
+
+/* LDMAXBAR signal (SIGSEL field) for TX: EUSARTx TXFL = 1, USART0 TXBL = 2. */
+static const uint32_t efr32_sio_dma_sig_tx[4] = { 1U, 1U, 1U, 2U };
+
+/* Configured TX DMA stream per instance (-1 = disabled). */
+static const int32_t efr32_sio_tx_dma_stream[4] = {
+  EFR32_SIO_EUSART1_DMA_TX_STREAM,
+  EFR32_SIO_EUSART2_DMA_TX_STREAM,
+  EFR32_SIO_EUSART3_DMA_TX_STREAM,
+  EFR32_SIO_USART1_DMA_TX_STREAM
+};
+
+/**
+ * @brief   Returns the TXDATA register address of the instance.
+ */
+__STATIC_INLINE volatile uint32_t* _sio_lld_txdata_addr(SIODriver* siop) {
+
+  if (_sio_lld_is_usart(siop)) {
+    return &((USART_TypeDef*)siop->usart)->TXDATA;
+  }
+  return &((EUSART_TypeDef*)siop->usart)->TXDATA;
+}
+
+/**
+ * @brief   LDMA ISR callback for SIO TX DMA completion.
+ *
+ * @isr
+ */
+static void sio_lld_dma_tx_isr(void* p, uint32_t flags) {
+  SIODriver* siop = (SIODriver*)p;
+
+  siop->dma_tx_busy = false;
+  dmaStreamDisable(siop->dma_tx);
+
+  /* NOTE: this callback is invoked from the shared LDMA handler which
+     already holds the system lock (osalSysLockFromISR), therefore only
+     I-class APIs may be used here — the __sio_wakeup_*() macros would
+     take the lock a second time and panic with SV#6. */
+#if SIO_USE_SYNCHRONIZATION == TRUE
+  if ((flags & EFR32_DMA_ISR_ERROR_MASK) == 0U) {
+    /* Transfer done: wake the TX/TX-end waiters so the upper layer
+       continues pumping the remaining data. */
+    osalThreadResumeI(&siop->sync_tx, MSG_OK);
+    osalThreadResumeI(&siop->sync_txend, MSG_OK);
+  } else {
+    osalThreadResumeI(&siop->sync_rx, SIO_MSG_ERRORS);
+    osalThreadResumeI(&siop->sync_rxidle, SIO_MSG_ERRORS);
+  }
+#endif
+}
+
+/**
+ * @brief   Allocates the TX DMA stream for the instance (if enabled).
+ */
+__STATIC_INLINE void _sio_lld_dma_alloc(SIODriver* siop) {
+  uint32_t idx = _sio_lld_index(siop);
+
+  siop->dma_tx = NULL;
+  siop->dma_tx_busy = false;
+
+  if (efr32_sio_tx_dma_stream[idx] >= 0) {
+    siop->dma_tx = dmaStreamAllocI((uint32_t)efr32_sio_tx_dma_stream[idx],
+                                   EFR32_SIO_DMA_IRQ_PRIORITY,
+                                   sio_lld_dma_tx_isr, siop);
+  }
+}
+
+/**
+ * @brief   Frees the TX DMA stream of the instance.
+ */
+__STATIC_INLINE void _sio_lld_dma_free(SIODriver* siop) {
+
+  if (siop->dma_tx != NULL) {
+    if (siop->dma_tx_busy) {
+      dmaStreamDisable(siop->dma_tx);
+      siop->dma_tx_busy = false;
+    }
+    dmaStreamFreeI(siop->dma_tx);
+    siop->dma_tx = NULL;
+  }
+}
+
+/**
+ * @brief   Starts a DMA TX transfer of up to EFR32_SIO_DMA_TX_BUFSIZE bytes.
+ * @return  The number of bytes accepted (0 if DMA busy/unavailable).
+ */
+__STATIC_INLINE size_t _sio_lld_write_dma(SIODriver* siop,
+                                          const uint8_t* buffer, size_t n) {
+  size_t len;
+
+  if (siop->dma_tx == NULL || siop->dma_tx_busy ||
+      n < (size_t)EFR32_SIO_DMA_MIN_TRANSFER) {
+    return 0U;
+  }
+
+  len = (n > (size_t)EFR32_SIO_DMA_TX_BUFSIZE) ? (size_t)EFR32_SIO_DMA_TX_BUFSIZE : n;
+
+  memcpy(siop->dma_tx_buf, buffer, len);
+
+  dmaStreamSetRequestSource(siop->dma_tx,
+                            efr32_sio_dma_src[_sio_lld_index(siop)],
+                            efr32_sio_dma_sig_tx[_sio_lld_index(siop)]);
+  dmaStartMemToPeriph(siop->dma_tx, siop->dma_tx_buf,
+                      _sio_lld_txdata_addr(siop), len,
+                      EFR32_DMA_CH_CTRL_SIZE_BYTE);
+  siop->dma_tx_busy = true;
+
+  return len;
+}
+
+#endif /* EFR32_SIO_USE_DMA */
 
 __STATIC_INLINE uint32_t _sio_lld_get_clkdiv(uint32_t clock, uint32_t ovs, uint32_t bitrate) {
 
@@ -414,6 +571,10 @@ msg_t sio_lld_start(SIODriver* siop) {
       nvicEnableVector(EFR32_USART1_TX_NUMBER, EFR32_USART1_TX_IRQ_PRIORITY);
     }
 #endif
+
+#if EFR32_SIO_USE_DMA
+    _sio_lld_dma_alloc(siop);
+#endif
   }
 
   return HAL_RET_SUCCESS;
@@ -515,6 +676,10 @@ void sio_lld_stop(SIODriver* siop) {
       _sio_lld_stop_usart(siop);
       CMU->CLKEN0_CLR = CMU_CLKEN0_USART0;
     }
+#endif
+
+#if EFR32_SIO_USE_DMA
+    _sio_lld_dma_free(siop);
 #endif
   }
 }
@@ -890,6 +1055,23 @@ size_t sio_lld_read(SIODriver* siop, uint8_t* buffer, size_t n) {
 size_t sio_lld_write(SIODriver* siop, const uint8_t* buffer, size_t n) {
 
   size_t wr;
+
+#if EFR32_SIO_USE_DMA
+  /* DMA TX path: large transfers go through the LDMA stream using the
+     driver-owned bounce buffer. The TXC interrupt is still enabled below
+     (via usart_enable_tx_end_irq) so that sioSynchronizeTXEnd() works. */
+  if (n >= (size_t)EFR32_SIO_DMA_MIN_TRANSFER) {
+    size_t dma_wr = _sio_lld_write_dma(siop, buffer, n);
+    if (dma_wr > 0U) {
+      usart_enable_tx_end_irq(siop);
+      return dma_wr;
+    }
+    /* DMA busy: report 0, the DMA ISR wakes the TX waiters. */
+    if (siop->dma_tx_busy) {
+      return 0U;
+    }
+  }
+#endif
 
   wr = 0U;
   while (true) {

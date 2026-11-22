@@ -295,7 +295,10 @@ typedef struct {
  */
 #define dmaWaitCompletion(dmastp) {                                         \
   LDMA->IEN_CLR = (1U << (dmastp)->selfindex);                              \
-  while ((LDMA->IF & (1U << (dmastp)->selfindex)) == 0U) {}                 \
+  /* Poll both IF.DONE and CHBUSY: the shared LDMA ISR clears IF, so IF    \
+     alone may never be observed even though the transfer completed. */     \
+  while (((LDMA->IF & (1U << (dmastp)->selfindex)) == 0U) &&                \
+         ((LDMA->CHBUSY & (1U << (dmastp)->selfindex)) != 0U)) {}           \
   dmaStreamClearInterrupt(dmastp);                                          \
 }
 
@@ -351,7 +354,7 @@ typedef struct {
                    EFR32_DMA_CH_CTRL_DSTINC_NONE      |                     \
                    EFR32_DMA_CH_CTRL_SRCINC_ONE      |                     \
                    EFR32_DMA_CH_CTRL_REQMODE_BLOCK    |                     \
-                   EFR32_DMA_CH_CTRL_BLOCKSIZE_ALL    |                     \
+                   EFR32_DMA_CH_CTRL_BLOCKSIZE(1U)    |                     \
                    EFR32_DMA_CH_CTRL_XFERCNT(n)       |                     \
                    EFR32_DMA_CH_CTRL_DONEIEN);                              \
   dmaStreamEnable(dmastp);                                                  \
@@ -378,7 +381,7 @@ typedef struct {
                    EFR32_DMA_CH_CTRL_DSTINC_ONE      |                     \
                    EFR32_DMA_CH_CTRL_SRCINC_NONE     |                     \
                    EFR32_DMA_CH_CTRL_REQMODE_BLOCK    |                     \
-                   EFR32_DMA_CH_CTRL_BLOCKSIZE_ALL    |                     \
+                   EFR32_DMA_CH_CTRL_BLOCKSIZE(1U)    |                     \
                    EFR32_DMA_CH_CTRL_XFERCNT(n)       |                     \
                    EFR32_DMA_CH_CTRL_DONEIEN);                              \
   dmaStreamEnable(dmastp);                                                  \

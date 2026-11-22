@@ -226,7 +226,35 @@ void spi_lld_ignore(SPIDriver *spip, size_t n) {
   }
 }
 
-void spi_lld_exchange(SPIDriver *spip, size_t n, const void *txbuf, void *rxbuf) {
+#if defined(EFR32_DMA_REQUIRED) || defined(__DOXYGEN__)
+/* DMA variants are defined below; forward declarations for dispatch. */
+void spi_lld_exchange_dma(SPIDriver *spip, size_t n, const void *txbuf, void *rxbuf);
+void spi_lld_send_dma(SPIDriver *spip, size_t n, const void *txbuf);
+void spi_lld_receive_dma(SPIDriver *spip, size_t n, void *rxbuf);
+
+/**
+ * @brief   True if the DMA path can be used for this transfer.
+ */
+static bool spi_lld_dma_usable(SPIDriver *spip, size_t n, bool need_tx, bool need_rx) {
+
+  if (n < (size_t)EFR32_SPI_DMA_MIN_TRANSFER) {
+    return false;
+  }
+  if (need_tx && (spip->dma_tx == NULL)) {
+    return false;
+  }
+  if (need_rx && (spip->dma_rx == NULL)) {
+    return false;
+  }
+  return true;
+}
+#endif /* EFR32_DMA_REQUIRED */
+
+/**
+ * @brief   Polled (non-DMA) exchange loop.
+ */
+static void spi_lld_exchange_polled(SPIDriver *spip, size_t n,
+                                    const void *txbuf, void *rxbuf) {
   const uint8_t *tx = txbuf;
   uint8_t *rx = rxbuf;
 
@@ -243,12 +271,35 @@ void spi_lld_exchange(SPIDriver *spip, size_t n, const void *txbuf, void *rxbuf)
   spip->state = SPI_READY;
 }
 
+void spi_lld_exchange(SPIDriver *spip, size_t n, const void *txbuf, void *rxbuf) {
+#if defined(EFR32_DMA_REQUIRED) || defined(__DOXYGEN__)
+  if (spi_lld_dma_usable(spip, n, true, false) &&
+      (rxbuf == NULL || spip->dma_rx != NULL)) {
+    spi_lld_exchange_dma(spip, n, txbuf, rxbuf);
+    return;
+  }
+#endif
+  spi_lld_exchange_polled(spip, n, txbuf, rxbuf);
+}
+
 void spi_lld_send(SPIDriver *spip, size_t n, const void *txbuf) {
-  spi_lld_exchange(spip, n, txbuf, NULL);
+#if defined(EFR32_DMA_REQUIRED) || defined(__DOXYGEN__)
+  if (spi_lld_dma_usable(spip, n, true, false)) {
+    spi_lld_send_dma(spip, n, txbuf);
+    return;
+  }
+#endif
+  spi_lld_exchange_polled(spip, n, txbuf, NULL);
 }
 
 void spi_lld_receive(SPIDriver *spip, size_t n, void *rxbuf) {
-  spi_lld_exchange(spip, n, NULL, rxbuf);
+#if defined(EFR32_DMA_REQUIRED) || defined(__DOXYGEN__)
+  if (spi_lld_dma_usable(spip, n, false, true)) {
+    spi_lld_receive_dma(spip, n, rxbuf);
+    return;
+  }
+#endif
+  spi_lld_exchange_polled(spip, n, NULL, rxbuf);
 }
 
 /*===========================================================================*/
@@ -278,30 +329,43 @@ void spi_lld_exchange_dma(SPIDriver *spip, size_t n,
     if (rxbuf != NULL) {
       dmaStartPeriphToMem(rx_st, &u->RXDATA, rxbuf, n,
                           EFR32_DMA_CH_CTRL_SIZE_BYTE);
-    } else {
-      /* Dummy RX to drain. */
-      static uint8_t dummy_rx[256];
-      size_t dn = (n > sizeof(dummy_rx)) ? sizeof(dummy_rx) : n;
-      dmaStartPeriphToMem(rx_st, &u->RXDATA, dummy_rx, dn,
-                          EFR32_DMA_CH_CTRL_SIZE_BYTE);
     }
 
     /* Start TX. */
     dmaStartMemToPeriph(tx_st, txbuf, &u->TXDATA, n,
                         EFR32_DMA_CH_CTRL_SIZE_BYTE);
 
+    /* If no RX buffer was given, drain the incoming data with a dummy
+       buffer in chunks so the RX FIFO cannot overflow for n > 256. */
+    if (rxbuf == NULL) {
+      static uint8_t dummy_rx[256];
+      size_t left = n;
+      while (left > 0U) {
+        size_t c = (left > sizeof(dummy_rx)) ? sizeof(dummy_rx) : left;
+        dmaStartPeriphToMem(rx_st, &u->RXDATA, dummy_rx, c,
+                            EFR32_DMA_CH_CTRL_SIZE_BYTE);
+        dmaWaitCompletion(rx_st);
+        dmaStreamDisable(rx_st);
+        left -= c;
+      }
+    }
+
     /* Wait for both transfers. */
     dmaWaitCompletion(tx_st);
     dmaStreamDisable(tx_st);
-    dmaWaitCompletion(rx_st);
-    dmaStreamDisable(rx_st);
+    if (rxbuf != NULL) {
+      dmaWaitCompletion(rx_st);
+      dmaStreamDisable(rx_st);
+    }
 
     /* Wait for TX complete (all bits shifted out). */
     while ((u->IF & EUSART_IF_TXC) == 0U) {}
     u->IF_CLR = EUSART_IF_TXC;
+
+    spip->state = SPI_READY;
   } else {
     /* Fallback to polling. */
-    spi_lld_exchange(spip, n, txbuf, rxbuf);
+    spi_lld_exchange_polled(spip, n, txbuf, rxbuf);
   }
 }
 
@@ -323,8 +387,10 @@ void spi_lld_send_dma(SPIDriver *spip, size_t n, const void *txbuf) {
 
     while ((u->IF & EUSART_IF_TXC) == 0U) {}
     u->IF_CLR = EUSART_IF_TXC;
+
+    spip->state = SPI_READY;
   } else {
-    spi_lld_send(spip, n, txbuf);
+    spi_lld_exchange_polled(spip, n, txbuf, NULL);
   }
 }
 
@@ -363,8 +429,10 @@ void spi_lld_receive_dma(SPIDriver *spip, size_t n, void *rxbuf) {
 
     while ((u->IF & EUSART_IF_TXC) == 0U) {}
     u->IF_CLR = EUSART_IF_TXC;
+
+    spip->state = SPI_READY;
   } else {
-    spi_lld_receive(spip, n, rxbuf);
+    spi_lld_exchange_polled(spip, n, NULL, rxbuf);
   }
 }
 

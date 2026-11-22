@@ -73,6 +73,12 @@
 #define EFR32_SPI_EUSART3_RX_DMA_STREAM    EFR32_DMA_STREAM_ID_ANY
 #endif
 
+#if !defined(EFR32_SPI_DMA_MIN_TRANSFER) || defined(__DOXYGEN__)
+/* Transfers of at least this many frames use DMA (when the streams are
+   allocated); smaller ones use the polled path. */
+#define EFR32_SPI_DMA_MIN_TRANSFER         8U
+#endif
+
 #if !defined(EFR32_SPI_EUSART1_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
 #define EFR32_SPI_EUSART1_DMA_IRQ_PRIORITY  5
 #endif

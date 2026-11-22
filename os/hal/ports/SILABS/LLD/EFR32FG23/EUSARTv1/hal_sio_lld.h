@@ -143,6 +143,50 @@
 #define EFR32_SIO_USE_USART1              FALSE
 #endif
 
+/**
+ * @brief   SIO DMA support switch.
+ * @details If set to @p TRUE the SIO drivers allocate an LDMA stream per
+ *          instance and use it for TX transfers of at least
+ *          EFR32_SIO_DMA_MIN_TRANSFER bytes (through a bounce buffer in the
+ *          driver structure). RX stays FIFO/interrupt driven.
+ * @note    The default is @p FALSE.
+ */
+#if !defined(EFR32_SIO_USE_DMA) || defined(__DOXYGEN__)
+#define EFR32_SIO_USE_DMA                 FALSE
+#endif
+
+#if EFR32_SIO_USE_DMA && !defined(EFR32_DMA_REQUIRED)
+#define EFR32_DMA_REQUIRED
+#endif
+
+/* TX DMA stream assignment per instance: EFR32_DMA_STREAM_ID_ANY for
+   auto-alloc, a stream number 0-7 to pin it, or -1 to disable DMA TX. */
+#if !defined(EFR32_SIO_EUSART1_DMA_TX_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SIO_EUSART1_DMA_TX_STREAM   EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_SIO_EUSART2_DMA_TX_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SIO_EUSART2_DMA_TX_STREAM   EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_SIO_EUSART3_DMA_TX_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SIO_EUSART3_DMA_TX_STREAM   EFR32_DMA_STREAM_ID_ANY
+#endif
+#if !defined(EFR32_SIO_USART1_DMA_TX_STREAM) || defined(__DOXYGEN__)
+#define EFR32_SIO_USART1_DMA_TX_STREAM    EFR32_DMA_STREAM_ID_ANY
+#endif
+
+#if !defined(EFR32_SIO_DMA_TX_BUFSIZE) || defined(__DOXYGEN__)
+/* Bounce buffer size (bytes) for DMA TX. */
+#define EFR32_SIO_DMA_TX_BUFSIZE          64U
+#endif
+#if !defined(EFR32_SIO_DMA_MIN_TRANSFER) || defined(__DOXYGEN__)
+/* Transfers of at least this many bytes use DMA TX (when enabled). */
+#define EFR32_SIO_DMA_MIN_TRANSFER        8U
+#endif
+#if !defined(EFR32_SIO_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_SIO_DMA_IRQ_PRIORITY        5
+#endif
+/** @} */
+
 /*===========================================================================*/
 /* Derived constants and error checks.                                       */
 /*===========================================================================*/
@@ -173,13 +217,30 @@
 /*===========================================================================*/
 
 /**
+ * @brief   DMA-related fields of the SIO driver structure (TX DMA only).
+ */
+#if EFR32_SIO_USE_DMA || defined(__DOXYGEN__)
+#define sio_lld_dma_fields                                                  \
+  /* LDMA stream used for TX (NULL if not allocated). */                    \
+  const efr32_dma_stream_t *dma_tx;                                         \
+  /* Bounce buffer for DMA TX (driver-owned, so the caller buffer does     \
+     not have to stay valid until the transfer ends). */                    \
+  uint8_t dma_tx_buf[EFR32_SIO_DMA_TX_BUFSIZE];                             \
+  /* True while a DMA TX transfer is in flight. */                         \
+  volatile bool dma_tx_busy
+#else
+#define sio_lld_dma_fields
+#endif
+
+/**
  * @brief   Low level fields of the SIO driver structure.
  */
 #define sio_lld_driver_fields                                               \
   /* Pointer to the EUSARTx or USARTx registers block.*/                    \
   void *usart;                                                              \
 /* Clock frequency for the associated USART/UART.*/                         \
-  uint32_t clock
+  uint32_t clock;                                                           \
+  sio_lld_dma_fields
 
 /**
  * @brief   Low level fields of the SIO configuration structure.

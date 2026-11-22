@@ -92,6 +92,42 @@ int main(void) {
   msg_t r = sioGetX(&SIOD1);
   PRINTF("rx byte: %s\r\n", r >= 0 ? "got one" : "none (ok if host silent)");
 
+  /* DMA TX test: 64 bytes (>= EFR32_SIO_DMA_MIN_TRANSFER) go through the
+     LDMA stream into the driver bounce buffer. With the PA9<->PA10 loopback
+     wire the same bytes come back on RX. */
+  {
+    uint8_t pattern[64], rxbuf[64];
+    for (int i = 0; i < 64; i++) { pattern[i] = (uint8_t)(0x30 + (i % 40)); rxbuf[i] = 0; }
+
+    size_t w = 0;
+    while (w < sizeof(pattern)) {
+      size_t n = sioAsyncWrite(&SIOD1, &pattern[w], sizeof(pattern) - w);
+      if (n == 0U) {
+        /* DMA in flight: wait for TX-not-full (woken by the DMA ISR). */
+        sioSynchronizeTX(&SIOD1, TIME_MS2I(2000));
+        continue;
+      }
+      w += n;
+    }
+    msg_t dm = sioSynchronizeTXEnd(&SIOD1, TIME_MS2I(2000));
+    PRINTF("DMA TX write %u bytes, TX-end sync: %s\r\n",
+           (unsigned)w, dm == MSG_OK ? "OK" : "TIMEOUT");
+
+    /* Read back (loopback wire PA9<->PA10 required). */
+    size_t got = 0;
+    systime_t deadline = osalOsGetSystemTimeX() + TIME_MS2I(2000);
+    while (got < sizeof(rxbuf) && osalOsGetSystemTimeX() < deadline) {
+      got += sioAsyncRead(&SIOD1, &rxbuf[got], sizeof(rxbuf) - got);
+      if (got < sizeof(rxbuf)) {
+        chThdSleepMilliseconds(5);
+      }
+    }
+    int lok = (got == sizeof(rxbuf)) && (memcmp(pattern, rxbuf, sizeof(rxbuf)) == 0);
+    PRINTF("DMA TX loopback: got %u/%u bytes, %s\r\n", (unsigned)got,
+           (unsigned)sizeof(rxbuf),
+           lok ? "match: PASS" : (got == 0U ? "no RX (loopback wire?)" : "MISMATCH: FAIL"));
+  }
+
   sioStop(&SIOD1);
   PRINTF("result: %s\r\n", m == MSG_OK ? "PASS" : "FAIL");
   while (true) { chThdSleepMilliseconds(1000); }
