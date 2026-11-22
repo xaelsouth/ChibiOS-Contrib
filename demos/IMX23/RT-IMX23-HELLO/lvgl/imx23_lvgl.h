@@ -25,6 +25,10 @@
  *          A dedicated thread runs lv_timer_handler(); the LVGL tick is
  *          driven by lv_tick_set_cb() from the system tick.
  *
+ *          This is why the shared lv_conf.h (os/various/lvgl_bindings)
+ *          defaults LV_COLOR_FORMAT_DEFAULT to LV_COLOR_FORMAT_RGB565:
+ *          the PXP here converts RGB565 to the LCDIF's XRGB8888 framebuffer.
+ *
  * @addtogroup LVGL_IMX23
  * @{
  */

@@ -35,8 +35,10 @@
 /*--------------------------------------------------------------------------*/
 /* Display / color.                                                          */
 /*--------------------------------------------------------------------------*/
-/* RGB565: the i.MX23 port flushes through the PXP, which converts to the
-   LCDIF's XRGB8888 framebuffer (see the i.MX23 LVGL port layer). */
+/* Default color format: RGB565 (16 bpp) — compact, and the usual choice for
+   small embedded displays; ports with a hardware pixel converter (e.g. the
+   i.MX23 PXP RGB565->XRGB8888 pipeline) override/flush accordingly, see the
+   port's LVGL glue. Override per project with -DLV_COLOR_FORMAT_DEFAULT=... */
 #define LV_COLOR_FORMAT_DEFAULT     LV_COLOR_FORMAT_RGB565
 
 /*--------------------------------------------------------------------------*/
