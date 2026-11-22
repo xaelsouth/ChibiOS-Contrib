@@ -1,5 +1,5 @@
 ifeq ($(USE_SMART_BUILD),yes)
-ifneq ($(findstring HAL_USE_CRC TRUE,$(HALCONF)),)
+ifneq ($(findstring EFR32_CRC_USE_GPCRC TRUE,$(HALCONF)),)
 PLATFORMSRC_CONTRIB += $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/CRCv1/hal_crc_lld.c
 endif
 else

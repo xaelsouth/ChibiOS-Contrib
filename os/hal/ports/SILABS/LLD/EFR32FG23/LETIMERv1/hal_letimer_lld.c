@@ -50,6 +50,7 @@ GPTDriver GPTD_LETIMER0;
 
 /* LETIMER0 clock in Hz (EM23GRPACLK = LFXO = 32768 Hz typically). */
 static uint32_t letimer_clock_hz;
+static gptcnt_t letimer_period;
 
 /*===========================================================================*/
 /* Driver local functions.                                                   */
@@ -106,23 +107,26 @@ void letimer_gpt_lld_start(GPTDriver *gptp) {
 
     LETIMER_TypeDef *lt = gptp->letimer;
 
-    /* Disable and reset. */
-    lt->EN_CLR = LETIMER_EN_EN;
+    /* Enable clock and module first (LF-domain sync only runs while EN=1). */
+    CMU->CLKEN0_SET = CMU_CLKEN0_LETIMER0;
+    lt->EN_SET = LETIMER_EN_EN;
     while (lt->SYNCBUSY != 0U) {}
+
     lt->IF_CLR = _LETIMER_IF_MASK;
     lt->IEN = 0U;
 
     /* Set prescaler from frequency. */
     uint32_t presc = letimer_presc_for_freq(letimer_clock_hz, config->frequency);
     lt->CTRL = LETIMER_CTRL_REPMODE_FREE | (presc << _LETIMER_CTRL_CNTPRESC_SHIFT);
-
-    /* Enable. */
-    lt->EN_SET = LETIMER_EN_EN;
+    lt->COMP0 = 0U;
+    lt->TOP = 0xFFFFU;
     while (lt->SYNCBUSY != 0U) {}
 
-    /* Clear counter. */
-    lt->CNT = 0U;
+    /* NOTE: CNT is never written here — on xG23 writing CNT while the
+       module runs in the LF domain bus-faults; free-running mode does not
+       need it. */
     lt->CMD = LETIMER_CMD_START;
+    while (lt->SYNCBUSY & (LETIMER_SYNCBUSY_START | LETIMER_SYNCBUSY_STOP)) {}
 
     nvicEnableVector(EFR32_LETIM1_NUMBER, EFR32_LETIMER_IRQ_PRIORITY);
   }
@@ -147,13 +151,16 @@ void letimer_gpt_lld_stop(GPTDriver *gptp) {
 void letimer_gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
   LETIMER_TypeDef *lt = gptp->letimer;
 
-  /* LETIMER counts down from COMP0 to 0 (underflow). */
-  lt->COMP0 = (uint32_t)period - 1U;
+  /* Continuous mode via COMP0 compare: LETIMER counts down free-running,
+     COMP0 fires when CNT reaches COMP0. Arm COMP0 = CNT - period, the ISR
+     re-arms COMP0 -= period. CNT is never written (bus-faults on xG23
+     while the module runs). */
+  lt->IF_CLR = _LETIMER_IF_MASK;
+  while (lt->SYNCBUSY != 0U) {}
+  letimer_period = period;
+  lt->COMP0 = lt->CNT - (uint32_t)period;
+  while (lt->SYNCBUSY != 0U) {}
   lt->IEN_SET = LETIMER_IEN_COMP0;
-
-  /* Restart counter from top. */
-  lt->CNT = (uint32_t)period - 1U;
-  lt->CMD = LETIMER_CMD_START;
 
   gptp->state = GPT_CONTINUOUS;
 }
@@ -161,24 +168,21 @@ void letimer_gpt_lld_start_timer(GPTDriver *gptp, gptcnt_t period) {
 void letimer_gpt_lld_stop_timer(GPTDriver *gptp) {
   LETIMER_TypeDef *lt = gptp->letimer;
   lt->IEN_CLR = LETIMER_IEN_COMP0;
-  lt->CMD = LETIMER_CMD_STOP;
   gptp->state = GPT_READY;
 }
 
 void letimer_gpt_lld_polled_delay(GPTDriver *gptp, gptcnt_t interval) {
   LETIMER_TypeDef *lt = gptp->letimer;
 
-  /* Simple polled delay: set COMP0, wait for underflow flag. */
+  /* Polled delay: arm COMP0 = CNT - interval, wait for the COMP0 flag. */
   lt->IF_CLR = LETIMER_IF_COMP0;
-  lt->COMP0 = (uint32_t)interval - 1U;
-  lt->CNT = (uint32_t)interval - 1U;
-  lt->CMD = LETIMER_CMD_START;
-
+  while (lt->SYNCBUSY != 0U) {}
+  lt->COMP0 = lt->CNT - (uint32_t)interval;
+  while (lt->SYNCBUSY != 0U) {}
   while ((lt->IF & LETIMER_IF_COMP0) == 0U) {
     /* busy wait */
   }
   lt->IF_CLR = LETIMER_IF_COMP0;
-  lt->CMD = LETIMER_CMD_STOP;
 }
 
 void letimer_gpt_lld_serve_interrupt(GPTDriver *gptp) {
@@ -187,9 +191,9 @@ void letimer_gpt_lld_serve_interrupt(GPTDriver *gptp) {
 
   if ((isr & LETIMER_IF_COMP0) != 0U) {
     lt->IF_CLR = LETIMER_IF_COMP0;
-    /* In continuous mode, reload and continue. */
+    /* Re-arm one period ahead (LF-domain writes take a couple of ticks). */
     if (gptp->state == GPT_CONTINUOUS) {
-      lt->CNT = lt->COMP0;
+      lt->COMP0 = lt->CNT - (uint32_t)letimer_period;
     }
     _gpt_isr_invoke_cb(gptp);
   }

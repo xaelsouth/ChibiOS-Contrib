@@ -102,13 +102,13 @@ void st_lld_init(void) {
   SYSRTC0->GRP0_IF_CLR = _SYSRTC_GRP0_IF_MASK;
   SYSRTC0->GRP0_IEN = 0U;
 
-  /* Arm compare channel 0 for the system tick: CH_CFG_ST_FREQUENCY equals
-     the LF clock rate (32768 Hz), so the compare fires every counter tick.
-     The ISR re-arms CMP0VALUE = CNT + 1 on each match. */
+  /* FREERUNNING mode: the counter runs freely and the kernel drives alarms
+     through CMP0 (st_lld_start_alarm/st_lld_set_alarm), so init must NOT
+     arm CMP0 itself — leave CMP0 to the kernel, enable only OVF here. */
   SYSRTC0->GRP0_CTRL_SET = _SYSRTC_GRP0_CTRL_CMP0EN_MASK;
-  SYSRTC0->GRP0_CMP0VALUE = (uint32_t)CH_CFG_ST_TIMEDELTA;
+  SYSRTC0->GRP0_CMP0VALUE = 0U;
   while (SYSRTC0->GRP0_SYNCBUSY & _SYSRTC_GRP0_SYNCBUSY_MASK) {}
-  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IEN_CMP0 | SYSRTC_GRP0_IEN_OVF;
+  SYSRTC0->GRP0_IEN_SET = SYSRTC_GRP0_IEN_OVF;
 
   /* Start counter from 0. */
   SYSRTC0->CNT = 0U;
@@ -124,10 +124,8 @@ void st_lld_serve_interrupt(void) {
 
   if ((isr & SYSRTC_GRP0_IF_CMP0) != 0U) {
     SYSRTC0->GRP0_IF_CLR = SYSRTC_GRP0_IF_CMP0;
-    /* Re-arm the compare CH_CFG_ST_TIMEDELTA ticks ahead (the LF-domain
-       sync takes ~2 ticks, so re-arming every single tick would not keep
-       up at 32768 Hz). */
-    SYSRTC0->GRP0_CMP0VALUE = SYSRTC0->CNT + (uint32_t)CH_CFG_ST_TIMEDELTA;
+    /* FREERUNNING: CMP0 is the kernel alarm — do not re-arm here, the
+       kernel sets the next alarm via stSetAlarm(). */
     osalSysLockFromISR();
     osalOsTimerHandlerI();
     osalSysUnlockFromISR();

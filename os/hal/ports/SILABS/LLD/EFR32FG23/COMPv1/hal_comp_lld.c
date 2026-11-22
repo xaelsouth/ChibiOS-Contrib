@@ -32,6 +32,15 @@ COMPDriver COMPD1;
 COMPDriver COMPD2;
 #endif
 
+static uint32_t comp_idx_of(COMPDriver *cp) {
+#if EFR32_COMP_USE_ACMP1
+  if (cp == &COMPD2) return 1U;
+#else
+  (void)cp;
+#endif
+  return 0U;
+}
+
 static COMPDriver *comp_get(uint32_t idx) {
 #if EFR32_COMP_USE_ACMP0
   if (idx == 0) return &COMPD1;
@@ -66,28 +75,41 @@ void comp_lld_init(void) {
 #endif
 }
 
-void comp_lld_start(COMPDriver *cp, const COMPConfig *cfg) {
-  uint32_t idx = (cp == &COMPD2) ? 1U : 0U;
+void comp_lld_start(COMPDriver *cp) {
+  uint32_t idx = comp_idx_of(cp);
   ACMP_TypeDef *a = comp_periph[idx];
+  const COMPConfig *cfg = cp->config;
 
-  cp->config = cfg;
   CMU->CLKEN1_SET = comp_clken[idx];
 
   a->EN_CLR = ACMP_EN_EN;
+  while ((a->EN & ACMP_EN_DISABLING) == ACMP_EN_DISABLING) {}
   a->CFG = cfg->cfg;
   a->CTRL = cfg->ctrl;
+  a->EN_SET = ACMP_EN_EN;
+  /* On xG23 INPUTCTRL must only be written while the ACMP is enabled,
+     writing it while disabled bus-faults. */
   a->INPUTCTRL = cfg->inputctrl;
   a->IF_CLR = _ACMP_IF_MASK;
   a->IEN_SET = ACMP_IEN_RISE | ACMP_IEN_FALL;
-  a->EN_SET = ACMP_EN_EN;
   while ((a->STATUS & ACMP_STATUS_ACMPRDY) == 0U) {}
 
   nvicEnableVector(comp_irqn[idx], comp_irqprio[idx]);
   cp->state = COMP_READY;
 }
 
+void comp_lld_enable(COMPDriver *cp) {
+  uint32_t idx = comp_idx_of(cp);
+  comp_periph[idx]->IEN_SET = ACMP_IEN_RISE | ACMP_IEN_FALL;
+}
+
+void comp_lld_disable(COMPDriver *cp) {
+  uint32_t idx = comp_idx_of(cp);
+  comp_periph[idx]->IEN_CLR = _ACMP_IEN_MASK;
+}
+
 void comp_lld_stop(COMPDriver *cp) {
-  uint32_t idx = (cp == &COMPD2) ? 1U : 0U;
+  uint32_t idx = comp_idx_of(cp);
   ACMP_TypeDef *a = comp_periph[idx];
 
   nvicDisableVector(comp_irqn[idx]);
@@ -96,22 +118,22 @@ void comp_lld_stop(COMPDriver *cp) {
   while ((a->EN & ACMP_EN_DISABLING) == ACMP_EN_DISABLING) {}
   CMU->CLKEN1_CLR = comp_clken[idx];
   cp->state = COMP_STOP;
-  cp->config = NULL;
 }
 
 bool comp_lld_get_output(COMPDriver *cp) {
-  uint32_t idx = (cp == &COMPD2) ? 1U : 0U;
+  uint32_t idx = comp_idx_of(cp);
   return (comp_periph[idx]->STATUS & ACMP_STATUS_ACMPOUT) != 0U;
 }
 
 void comp_lld_serve_interrupt(COMPDriver *cp) {
-  uint32_t idx = (cp == &COMPD2) ? 1U : 0U;
+  uint32_t idx = comp_idx_of(cp);
   ACMP_TypeDef *a = comp_periph[idx];
   uint32_t isr = a->IF;
   a->IF_CLR = isr;
 
-  if (cp->config && cp->config->callback)
-    cp->config->callback(cp->config->callback_arg, isr);
+  (void)isr;
+  if (cp->config && cp->config->cb)
+    _comp_isr_invoke_cb(cp);
 }
 
 #endif /* HAL_USE_COMP */

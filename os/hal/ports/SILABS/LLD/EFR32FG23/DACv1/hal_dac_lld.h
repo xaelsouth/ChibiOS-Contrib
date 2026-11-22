@@ -89,6 +89,8 @@
  */
 #if EFR32_DAC_DUAL_MODE == TRUE
 #define DAC_MAX_CHANNELS                    2
+#elif EFR32_DAC_USE_DAC1_CH1 && EFR32_DAC_USE_DAC1_CH2
+#define DAC_MAX_CHANNELS                    2
 #else
 #define DAC_MAX_CHANNELS                    1
 #endif

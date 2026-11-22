@@ -32,24 +32,20 @@
 #define EFR32_COMP_ACMP1_IRQ_PRIORITY   3
 #endif
 
-typedef enum {
-  COMP_UNINIT = 0, COMP_STOP = 1, COMP_READY = 2
-} compstate_t;
-
-typedef void (*compcallback_t)(void *arg, uint32_t flags);
+/* compstate_t, compcallback_t and the forward declaration of COMPDriver
+   come from the upper hal_comp.h. */
 
 typedef struct {
+  compcallback_t cb;    /**< Notification callback (upper-layer contract). */
   uint32_t  cfg;        /**< ACMP_CFG (bias, hysteresis, input range, accuracy). */
   uint32_t  ctrl;       /**< ACMP_CTRL (invert, etc.). */
   uint32_t  inputctrl;  /**< ACMP_INPUTCTRL (pos/neg input select, VREFDIV). */
-  compcallback_t callback;
-  void     *callback_arg;
 } COMPConfig;
 
-typedef struct {
+struct COMPDriver {
   compstate_t       state;
   const COMPConfig *config;
-} COMPDriver;
+};
 
 #if EFR32_COMP_USE_ACMP0 && !defined(__DOXYGEN__)
 extern COMPDriver COMPD1;
@@ -62,8 +58,10 @@ extern COMPDriver COMPD2;
 extern "C" {
 #endif
   void comp_lld_init(void);
-  void comp_lld_start(COMPDriver *cp, const COMPConfig *cfg);
+  void comp_lld_start(COMPDriver *cp);
   void comp_lld_stop(COMPDriver *cp);
+  void comp_lld_enable(COMPDriver *cp);
+  void comp_lld_disable(COMPDriver *cp);
   bool comp_lld_get_output(COMPDriver *cp);
   void comp_lld_serve_interrupt(COMPDriver *cp);
 #ifdef __cplusplus

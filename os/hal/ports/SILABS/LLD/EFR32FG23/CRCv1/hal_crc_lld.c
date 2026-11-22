@@ -20,8 +20,9 @@
  */
 
 #include "hal.h"
+#include "hal_crc_lld.h"
 
-#if (HAL_USE_CRC == TRUE) || defined(__DOXYGEN__)
+#if (HAL_USE_CRC == TRUE) || (defined(EFR32_CRC_USE_GPCRC) && (EFR32_CRC_USE_GPCRC == TRUE)) || defined(__DOXYGEN__)
 
 #if EFR32_CRC_USE_GPCRC || defined(__DOXYGEN__)
 
@@ -40,10 +41,22 @@ void crc_lld_start(const CRCLLDConfig *cfg) {
   GPCRC->POLY = cfg->poly;
   GPCRC->INIT = cfg->init;
   GPCRC->EN_SET = GPCRC_EN_EN;
+  /* Seed the data register with the init value (after EN, since
+     enabling the module clears the data register). */
+  GPCRC->CMD = GPCRC_CMD_INIT;
 }
 
 void crc_lld_stop(void) {
+  /* Make stop idempotent: ensure the bus clock is on before touching
+     registers, so a double-stop cannot bus-fault. */
+  CMU->CLKEN0_SET = CMU_CLKEN0_GPCRC;
   GPCRC->EN_CLR = GPCRC_EN_EN;
+  /* Wait until the module has actually disabled before gating its bus
+     clock, otherwise the CLKEN0_CLR write can bus-fault. */
+  {
+    volatile uint32_t sp = 1000000UL;
+    while (((GPCRC->EN & GPCRC_EN_EN) != 0U) && (--sp != 0U)) {}
+  }
   CMU->CLKEN0_CLR = CMU_CLKEN0_GPCRC;
 }
 

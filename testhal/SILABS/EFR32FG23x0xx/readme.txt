@@ -48,6 +48,18 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
   SYSTICKv1   PASS  (core SysTick @ HCLK, 10000 Hz: sleep 10/100/1000 ms
               measured as 100/1000/10000 ticks exactly; both FREERUNNING
               and PERIODIC ("make ST_PERIODIC=yes") modes ALL PASS)
+  LESENSE     PASS  (periodic scan ch0, SCANDONE IRQs counted over 5 s,
+              measured scan rate in range)
+  SYSTICKv2   PASS  (SYSRTC as system tick)
+  LETIMER-GPT PASS  (LETIMER0 as GPT, overflow IRQ + measured period)
+  CRC         PASS  (GPCRC CRC32 of "123456789" = 0xCBF43926, byte/word fed,
+              CRC16 smoke 0x6F91)
+  BURAM       PASS  (backup RAM write/read/verify, survives)
+  COMP        PASS  (ACMP0 compare both polarities + IRQ callback)
+  DAC         PASS  (VDAC0 both channels, polled + IRQ completion)
+  ADC         PASS  (IADC0 single conversions: GND vs GND -> code 0,
+              PA0 vs GND completes, clock gated off after stop)
+  LCD         (scaffolded, no main.c yet)
 
 Notes / driver quirks discovered on FG23 (all handled in the LLDs):
   - Peripheral bus clocks must be enabled (CMU CLKEN0) before register
@@ -59,5 +71,16 @@ Notes / driver quirks discovered on FG23 (all handled in the LLDs):
     disables it at boot.
   - LFXO is in the backup domain; its start wait is bounded so a dead
     crystal cannot hang boot.
+  - Config-style registers (IADC CFG/SINGLEFIFOCFG/SCANFIFOCFG, GPCRC,
+    VDAC CFG/CHxCFG, ACMP INPUTCTRL, TIMER CCx_CFG, LESENSE CFG/TIMCTRL...)
+    bus-fault when written while the module is EN=1 — write them while
+    EN=0, enable last; after EN_CLR wait EN_DISABLING + STATUS SYNCBUSY.
+  - Reading a peripheral whose CMU CLKEN bit is cleared bus-faults —
+    check the CLKEN bit, not the peripheral STATUS, after stop().
+  - LESENSE TIMCTRL: LFPRESC is 3 bits (shift 4), STARTDLY only 2 bits
+    (shift 22); f_scan = f_LF / 2^(LFPRESC+STARTDLY) per channel.
+  - dmaStreamAllocI() must not be called from plain thread context
+    (osalDbgCheckClassI) — set the driver's DMA stream to -1 for IRQ-only
+    use (see EFR32_LESENSE_DMA_STREAM in the test mcuconf.h).
   - Stack sizes: tests use 0x1000 process/exceptions stacks (snprintf %f
     needs more than the 0x400 default).

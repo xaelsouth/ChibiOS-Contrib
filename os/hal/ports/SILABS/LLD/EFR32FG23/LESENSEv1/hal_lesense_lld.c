@@ -29,6 +29,7 @@
  */
 
 #include "hal.h"
+#include "hal_lesense_lld.h"
 
 #if EFR32_LESENSE_USE_LESENSE || defined(__DOXYGEN__)
 
@@ -71,8 +72,15 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   /* Enable bus clock. */
   CMU->CLKEN0_SET = CMU_CLKEN0_LESENSE;
 
-  /* Enable LESENSE. */
-  LESENSE->EN_SET = LESENSE_EN_EN;
+  /* LESENSE registers are clocked from LESENSEHFCLK; the reset default is
+     FSRCO which may be disabled — select HFRCOEM23 (always available in
+     EM0-EM2), otherwise register access faults. */
+  CMU->LESENSEHFCLKCTRL = (CMU->LESENSEHFCLKCTRL & ~_CMU_LESENSEHFCLKCTRL_CLKSEL_MASK) |
+                          CMU_LESENSEHFCLKCTRL_CLKSEL_HFRCOEM23;
+
+  /* Configuration registers must be written while the module is disabled
+     (EN=0); writing them while enabled bus-faults on xG23. */
+  osalDbgAssert((LESENSE->EN & LESENSE_EN_EN) == 0U, "LESENSE already enabled");
 
   /* Configure scan mode. */
   LESENSE->CFG = (LESENSE->CFG & ~_LESENSE_CFG_SCANMODE_MASK) |
@@ -98,6 +106,9 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   /* Enable interrupts for all active channels + scan done + result watermark. */
   LESENSE->IEN_SET = chen | LESENSE_IEN_SCANDONE | LESENSE_IEN_RESWL;
 
+  /* Enable LESENSE last, after all configuration. */
+  LESENSE->EN_SET = LESENSE_EN_EN;
+
   nvicEnableVector(EFR32_LESENSE_NUMBER, EFR32_LESENSE_IRQ_PRIORITY);
 
   /* Allocate DMA stream for result FIFO if configured. */
@@ -120,8 +131,16 @@ void lesense_lld_stop(LESENSEDriver *lp) {
   }
 #endif
   LESENSE->IEN_CLR = _LESENSE_IEN_MASK;
-  LESENSE->CMD_SET = LESENSE_CMD_STOP;
+  /* Disable the module first (a scan should have been stopped with
+     lesense_lld_stop_scan() already); wait for register synchronization
+     before touching the bus clock, otherwise the writes can bus-fault. */
   LESENSE->EN_CLR = LESENSE_EN_EN;
+  {
+    volatile uint32_t sp = 1000000UL;
+    while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
+  }
+  /* Note: no CMD STOP here — writing CMD while SYNCBUSY is set bus-faults;
+     EN_CLR already stops the scan engine. */
   CMU->CLKEN0_CLR = CMU_CLKEN0_LESENSE;
   lp->state = LESENSE_STOP;
   lp->config = NULL;

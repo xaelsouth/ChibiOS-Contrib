@@ -22,7 +22,7 @@
 #ifndef HAL_CRC_LLD_H
 #define HAL_CRC_LLD_H
 
-#if (HAL_USE_CRC == TRUE) || defined(__DOXYGEN__)
+#if (HAL_USE_CRC == TRUE) || (defined(EFR32_CRC_USE_GPCRC) && (EFR32_CRC_USE_GPCRC == TRUE)) || defined(__DOXYGEN__)
 
 /*===========================================================================*/
 /* Driver constants.                                                         */
@@ -80,7 +80,7 @@ extern "C" {
 }
 #endif
 
-#endif /* HAL_USE_CRC == TRUE */
+#endif /* HAL_USE_CRC or EFR32_CRC_USE_GPCRC */
 
 #endif /* HAL_CRC_LLD_H */
 

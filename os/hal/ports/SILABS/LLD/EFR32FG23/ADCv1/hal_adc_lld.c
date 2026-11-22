@@ -50,20 +50,20 @@ OSAL_IRQ_HANDLER(EFR32_IADC_HANDLER) {
   uint32_t isr = IADC0->IF;
   IADC0->IF_CLR = isr;
 
-  if ((isr & IADC_IF_SCANFIFODVL) != 0U) {
-    osalSysLockFromISR();
-    adc_lld_isr_complete_code(&ADCD1, 0U);
-    osalSysUnlockFromISR();
-  }
-  if ((isr & IADC_IF_SINGLEFIFODVL) != 0U) {
-    osalSysLockFromISR();
-    adc_lld_isr_complete_code(&ADCD1, 0U);
-    osalSysUnlockFromISR();
-  }
-  if ((isr & IADC_IF_SCANTABLEDONE) != 0U) {
-    osalSysLockFromISR();
-    adc_lld_isr_complete_code(&ADCD1, 0U);
-    osalSysUnlockFromISR();
+  if ((isr & (IADC_IF_SCANFIFODVL | IADC_IF_SINGLEFIFODVL | IADC_IF_SCANTABLEDONE)) != 0U) {
+    /* Drain result FIFO(s) into the samples buffer. */
+    if (ADCD1.grpp != NULL && ADCD1.samples != NULL) {
+      size_t n = ADCD1.depth;
+      if ((isr & IADC_IF_SINGLEFIFODVL) != 0U) {
+        if (n > 0U) { ADCD1.samples[0] = (adcsample_t)(IADC0->SINGLEFIFODATA & 0xFFFFU); }
+      }
+      while (((isr & IADC_IF_SCANFIFODVL) != 0U) && (n > 0U)) {
+        ADCD1.samples[ADCD1.depth - n] = (adcsample_t)(IADC0->SCANFIFODATA & 0xFFFFU);
+        n--;
+        if ((IADC0->SCANFIFOSTAT & _IADC_SCANFIFOSTAT_FIFOREADCNT_MASK) == 0U) break;
+      }
+    }
+    _adc_isr_full_code(&ADCD1);
   }
 
   OSAL_IRQ_EPILOGUE();
@@ -93,17 +93,26 @@ msg_t adc_lld_start(ADCDriver *adcp) {
     CMU->IADCCLKCTRL = (CMU->IADCCLKCTRL & ~_CMU_IADCCLKCTRL_CLKSEL_MASK)
                        | CMU_IADCCLKCTRL_CLKSEL_EM01GRPACLK;
 
+    /* On xG23 CFG must be written while the module is disabled (EN=0). */
+    IADC0->EN_CLR = IADC_EN_EN;
+    while ((IADC0->EN & IADC_EN_DISABLING) != 0U) {}
+
+    /* Configure config 0: normal mode, VBGR reference, HiSpeed2x OSR. */
+    IADC0->CFG[0].CFG = IADC_CFG_ADCMODE_NORMAL
+                      | IADC_CFG_REFSEL_VBGR
+                      | IADC_CFG_OSRHS_HISPD2;
+
+    /* FIFO data-valid level = 1 for both queues.  Like CFG, the FIFO
+       config registers are only writable while the module is disabled. */
+    IADC0->SINGLEFIFOCFG = IADC_SINGLEFIFOCFG_DVL_VALID1;
+    IADC0->SCANFIFOCFG   = IADC_SCANFIFOCFG_DVL_VALID1;
+
     /* Enable IADC module. */
     IADC0->EN_SET = IADC_EN_EN;
 
-    /* Configure: normal mode, default oversampling, VBGR reference. */
-    IADC0->CFG = IADC_CFG_ADCMODE_NORMAL
-               | IADC_CFG_REFSEL_VBGR
-               | IADC_CFG_OSRHS_HISPD2;
-
     /* Clear flags. */
     IADC0->IF_CLR = _IADC_IF_MASK;
-    IADC0->IEN = 0U;
+    IADC0->IEN_CLR = _IADC_IEN_MASK;
 
     /* Allocate DMA stream for scan FIFO. */
 #if defined(EFR32_DMA_REQUIRED)
@@ -123,7 +132,7 @@ void adc_lld_stop(ADCDriver *adcp) {
 #if EFR32_ADC_USE_IADC0
   if (adcp->state == ADC_READY) {
     IADC0->CMD = IADC_CMD_SINGLESTOP | IADC_CMD_SCANSTOP;
-    IADC0->IEN = 0U;
+    IADC0->IEN_CLR = _IADC_IEN_MASK;
     IADC0->IF_CLR = _IADC_IF_MASK;
     nvicDisableVector(EFR32_IADC_NUMBER);
 
@@ -140,16 +149,16 @@ void adc_lld_stop(ADCDriver *adcp) {
 
 void adc_lld_start_conversion(ADCDriver *adcp) {
 #if EFR32_ADC_USE_IADC0
-  const ADCSingleConversionGroup *grpp = &adcp->grp[0];
+  const ADCConversionGroup *grpp = adcp->grpp;
 
   /* Configure single conversion input from group. */
   IADC0->SINGLE = ((uint32_t)grpp->portneg << _IADC_SINGLE_PORTNEG_SHIFT)
                 | ((uint32_t)grpp->portpos << _IADC_SINGLE_PORTPOS_SHIFT)
-                | ((uint32_t)grpp->pin    << _IADC_SINGLE_PIN_SHIFT);
+                | ((uint32_t)grpp->pin    << _IADC_SINGLE_PINPOS_SHIFT);
 
-  /* Set reference. */
-  IADC0->CFG = (IADC0->CFG & ~_IADC_CFG_REFSEL_MASK)
-               | ((uint32_t)grpp->refsel << _IADC_CFG_REFSEL_SHIFT);
+  /* Note: on xG23 CFG is only writable while EN=0, so the reference is
+     fixed at adc_lld_start() time; grpp->refsel is informational. */
+  (void)grpp->refsel;
 
   /* Trigger single conversion. */
   IADC0->IF_CLR = IADC_IF_SINGLEFIFODVL;
@@ -157,7 +166,7 @@ void adc_lld_start_conversion(ADCDriver *adcp) {
   IADC0->CMD = IADC_CMD_SINGLESTART;
 
   /* If DMA is used for scan, start scan conversion. */
-  if (adcp->dma != NULL && adcp->grp[0].num_channels > 1U) {
+  if (adcp->dma != NULL && adcp->grpp != NULL && adcp->grpp->num_channels > 1U) {
     IADC0->IF_CLR = IADC_IF_SCANFIFODVL | IADC_IF_SCANTABLEDONE;
     IADC0->IEN_SET = IADC_IF_SCANFIFODVL | IADC_IF_SCANTABLEDONE;
     IADC0->CMD = IADC_CMD_SCANSTART;
