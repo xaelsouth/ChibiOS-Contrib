@@ -109,6 +109,13 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   /* Enable LESENSE last, after all configuration. */
   LESENSE->EN_SET = LESENSE_EN_EN;
 
+  /* Wait for LF-domain synchronization of EN before any CMD write —
+     writing CMD while SYNCBUSY is set bus-faults. */
+  {
+    volatile uint32_t sp = 1000000UL;
+    while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
+  }
+
   nvicEnableVector(EFR32_LESENSE_NUMBER, EFR32_LESENSE_IRQ_PRIORITY);
 
   /* Allocate DMA stream for result FIFO if configured. */
@@ -148,11 +155,16 @@ void lesense_lld_stop(LESENSEDriver *lp) {
 
 void lesense_lld_start_scan(LESENSEDriver *lp) {
   (void)lp;
+  /* CMD writes bus-fault while SYNCBUSY is set — wait first. */
+  volatile uint32_t sp = 1000000UL;
+  while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
   LESENSE->CMD_SET = LESENSE_CMD_START;
 }
 
 void lesense_lld_stop_scan(LESENSEDriver *lp) {
   (void)lp;
+  volatile uint32_t sp = 1000000UL;
+  while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
   LESENSE->CMD_SET = LESENSE_CMD_STOP;
 }
 

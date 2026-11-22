@@ -82,5 +82,12 @@ Notes / driver quirks discovered on FG23 (all handled in the LLDs):
   - dmaStreamAllocI() must not be called from plain thread context
     (osalDbgCheckClassI) — set the driver's DMA stream to -1 for IRQ-only
     use (see EFR32_LESENSE_DMA_STREAM in the test mcuconf.h).
+  - LF-domain (low-power) peripherals — LETIMER, BURTC, SYSRTC, WDOG,
+    PCNT/QEI, LESENSE — must be waited on via their SYNCBUSY register after
+    register/CMD/EN changes (writing CMD while SYNCBUSY is set bus-faults);
+    the LLDs do this (LESENSE start/scan/stop included). HF-domain
+    peripherals instead use EN_DISABLING + STATUS SYNCBUSY. CMU itself has
+    no SYNCBUSY on xG23. Testhal tests rely on the LLD waits and do not poll
+    SYNCBUSY directly.
   - Stack sizes: tests use 0x1000 process/exceptions stacks (snprintf %f
     needs more than the 0x400 default).
