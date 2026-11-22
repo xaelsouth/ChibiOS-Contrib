@@ -40,6 +40,14 @@
 
 #define LINK_POLL_MS            1000U
 
+/* DHCP/llmnr hostname advertised for the RNDIS netif: defaults to the
+   board name from board.h, override with -DUSB_NET_LWIP_HOSTNAME="..."
+   (keep it a strict hostname, i.e. [A-Za-z0-9-], if your DHCP server
+   validates it). */
+#ifndef USB_NET_LWIP_HOSTNAME
+#define USB_NET_LWIP_HOSTNAME   BOARD_NAME
+#endif
+
 /*===========================================================================*/
 /* Module local functions.                                                   */
 /*===========================================================================*/
@@ -104,7 +112,7 @@ static void tcpip_ready_cb(void *arg) {
   netif_set_default(&np->netif);
   netif_set_up(&np->netif);
   netif_set_link_up(&np->netif);
-  netif_set_hostname(&np->netif, "imx23");
+  netif_set_hostname(&np->netif, USB_NET_LWIP_HOSTNAME);
 }
 
 /* Link state poller thread: reflects the RNDIS initialized/configured state
