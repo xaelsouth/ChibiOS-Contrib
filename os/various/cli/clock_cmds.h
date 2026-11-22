@@ -96,6 +96,21 @@ extern "C" {
 #define CLI_CLOCK_XSHELL_ENTRY
 #endif
 
+/* Ready-made NULL-terminated tables, for merging into an application's
+   existing command table with cli_shell_merge()/cli_xshell_merge()
+   without touching the application's own table, e.g.:
+   @code
+   static xshell_command_t merged[16];
+   mgr_cfg.commands = cli_xshell_merge(app_commands,
+                                       cli_xshell_clock_commands, merged);
+   @endcode */
+#if CLI_HAS_SHELL
+  extern const ShellCommand cli_shell_clock_commands[];
+#endif
+#if CLI_HAS_XSHELL
+  extern const xshell_command_t cli_xshell_clock_commands[];
+#endif
+
 #endif /* defined(CLK_ARRAY_SIZE) */
 
 #endif /* CLOCK_CMDS_H */

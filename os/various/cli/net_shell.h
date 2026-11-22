@@ -91,6 +91,15 @@ extern "C" {
   CLI_XSHELL_ENTRY(net_shell_cmd_ntp,      "ntp")                           \
   CLI_XSHELL_ENTRY(net_shell_cmd_slip,     "slip")
 
+/* Ready-made NULL-terminated tables, for merging into an application's
+   existing command table with cli_shell_merge()/cli_xshell_merge(). */
+#if CLI_HAS_SHELL
+  extern const ShellCommand cli_shell_net_commands[];
+#endif
+#if CLI_HAS_XSHELL
+  extern const xshell_command_t cli_xshell_net_commands[];
+#endif
+
 #endif /* NET_SHELL_H */
 
 /** @} */

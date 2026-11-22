@@ -147,6 +147,26 @@ CLI_XSHELL_ADAPTER(cli_cmd_clock)
 #endif
 #endif /* CLI_HAS_XSHELL */
 
+/*===========================================================================*/
+/* Ready-made command tables (for cli_shell_merge()/cli_xshell_merge()).     */
+/*===========================================================================*/
+
+#if CLI_HAS_SHELL
+const ShellCommand cli_shell_clock_commands[] = {
+  CLI_CLOCKS_SHELL_ENTRY
+  CLI_CLOCK_SHELL_ENTRY
+  {NULL, NULL}
+};
+#endif
+
+#if CLI_HAS_XSHELL
+const xshell_command_t cli_xshell_clock_commands[] = {
+  CLI_CLOCKS_XSHELL_ENTRY
+  CLI_CLOCK_XSHELL_ENTRY
+  {NULL, NULL}
+};
+#endif
+
 #endif /* defined(CLK_ARRAY_SIZE) */
 
 /** @} */

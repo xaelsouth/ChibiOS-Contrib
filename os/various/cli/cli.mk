@@ -22,7 +22,8 @@
 #                  via devices_lib/net_services/net_services.mk when lwIP
 #                  is used, it is not part of CLISRC.
 
-CLISRC = $(CHIBIOS_CONTRIB)/os/various/cli/clock_cmds.c
+CLISRC = $(CHIBIOS_CONTRIB)/os/various/cli/cli.c \
+         $(CHIBIOS_CONTRIB)/os/various/cli/clock_cmds.c
 CLIINC = $(CHIBIOS_CONTRIB)/os/various/cli
 
 # Shared variables

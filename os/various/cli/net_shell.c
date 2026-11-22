@@ -736,4 +736,22 @@ CLI_XSHELL_ADAPTER(net_shell_cmd_ntp)
 CLI_XSHELL_ADAPTER(net_shell_cmd_slip)
 #endif
 
+/*===========================================================================*/
+/* Ready-made command tables (for cli_shell_merge()/cli_xshell_merge()).     */
+/*===========================================================================*/
+
+#if CLI_HAS_SHELL
+const ShellCommand cli_shell_net_commands[] = {
+  CLI_NET_SHELL_CMDS
+  {NULL, NULL}
+};
+#endif
+
+#if CLI_HAS_XSHELL
+const xshell_command_t cli_xshell_net_commands[] = {
+  CLI_NET_XSHELL_CMDS
+  {NULL, NULL}
+};
+#endif
+
 /** @} */

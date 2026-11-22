@@ -107,9 +107,44 @@
  */
 #define CLI_SHELL_ENTRY(corefn, name)   { name, corefn },
 
+/*===========================================================================*/
+/* Merging command tables.                                                   */
+/*===========================================================================*/
+
+/**
+ * @details Both shells resolve a command by searching a NULL-terminated
+ *          table (ShellConfig.sc_commands / xshell_manager_config.commands).
+ *          To add the commands of a cli module to an application's existing
+ *          table without editing it, merge the two tables at run-time:
+ *          @code
+ *          static ShellCommand merged[24];
+ *          scfg.sc_commands =
+ *            cli_shell_merge(app_commands, cli_shell_clock_commands, merged);
+ *          @endcode
+ *          The output buffer must hold cli_shell_count(a) +
+ *          cli_shell_count(b) + 1 entries; merge aborts (osalDbgCheck) on
+ *          overflow.
+ */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#if CLI_HAS_SHELL
+#include "shell.h"
+  size_t cli_shell_count(const ShellCommand *t);
+  const ShellCommand *cli_shell_merge(const ShellCommand *a,
+                                      const ShellCommand *b,
+                                      ShellCommand *out);
+#endif
+
+#if CLI_HAS_XSHELL
+  size_t cli_xshell_count(const xshell_command_t *t);
+  const xshell_command_t *cli_xshell_merge(const xshell_command_t *a,
+                                           const xshell_command_t *b,
+                                           xshell_command_t *out);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
