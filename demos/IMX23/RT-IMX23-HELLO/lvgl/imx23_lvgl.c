@@ -26,8 +26,8 @@
 
 #include <string.h>
 
-#include "imx23_lcdif.h"
-#include "imx23_pxp.h"
+#include "mxs_lcdif.h"
+#include "mxs_pxp.h"
 #include "imx23_lradc.h"
 #include "imx23_lvgl.h"
 
@@ -59,19 +59,19 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area,
 
   if (lp->use_pxp) {
     /* Hardware path: PXP mem2mem RGB565 -> XRGB8888 (RGB888) at offset. */
-    imx23_pxp_job_t job;
+    mxs_pxp_job_t job;
 
     memset(&job, 0, sizeof(job));
     job.src     = px_map;
     job.src_w   = w;
     job.src_h   = h;
-    job.src_fmt = IMX23_PXP_S0_FMT_RGB565;
+    job.src_fmt = MXS_PXP_S0_FMT_RGB565;
     job.dst     = (uint32_t *)lp->lcd_fb + (uint32_t)y * lp->hor_res +
                   (uint32_t)x;
     job.dst_w   = w;
     job.dst_h   = h;
-    job.dst_fmt = IMX23_PXP_OUT_FMT_RGB888;
-    (void)imx23_pxp_run(&job, TIME_MS2I(500));
+    job.dst_fmt = MXS_PXP_OUT_FMT_RGB888;
+    (void)mxs_pxp_run(&job, TIME_MS2I(500));
   }
   else {
     /* CPU path: RGB565 -> XRGB8888 expansion blit. */
@@ -131,7 +131,7 @@ static THD_FUNCTION(imx23_lvgl_thread, arg) {
 /* Module exported functions.                                                */
 /*===========================================================================*/
 
-void imx23_lvgl_init(imx23_lvgl_t *lp, const imx23_lcdif_timing_t *timing,
+void imx23_lvgl_init(imx23_lvgl_t *lp, const mxs_lcdif_timing_t *timing,
                      void *lcd_fb, void *draw_buf, uint32_t draw_buf_px,
                      bool use_pxp) {
   static bool lv_ready;
@@ -157,9 +157,9 @@ void imx23_lvgl_init(imx23_lvgl_t *lp, const imx23_lcdif_timing_t *timing,
 
   /* Hardware: PXP for the flush blits, LCDIF in dotclock master mode. */
   if (use_pxp) {
-    imx23_pxp_init();
+    mxs_pxp_init();
   }
-  imx23_lcdif_init(timing, lcd_fb);
+  mxs_lcdif_init(timing, lcd_fb);
 }
 
 void imx23_lvgl_start(imx23_lvgl_t *lp) {

@@ -15,8 +15,8 @@
 */
 
 /**
- * @file    IMX23/IMX23xx/imx23_lcdif.c
- * @brief   i.MX23 LCDIF driver (ported from U-Boot mxsfb.c / Linux
+ * @file    devices_lib/display/mxs_lcdif.c
+ * @brief   MXS-family LCDIF (i.MX23/i.MX28) driver (ported from U-Boot mxsfb.c / Linux
  *          drivers/gpu/drm/mxsfb for the i.MX23 register layout).
  *
  * @addtogroup IMX23
@@ -24,8 +24,14 @@
  */
 
 #include "hal.h"
+#if defined(__has_include)
+#if __has_include("imx23.h")
+#define MXS_DISPLAY_HAVE_IMX23_PORT 1
+#include "imx23.h"   /* CLKCTRL pixel clock, PLL0, IRQ numbers, IMX23_REG */
 #include "icoll.h"
-#include "imx23_lcdif.h"
+#endif
+#endif
+#include "mxs_lcdif.h"
 
 /*===========================================================================*/
 /* Module local definitions.                                                 */
@@ -124,7 +130,7 @@ static void lcdif_set_pixclk(uint32_t freq_hz) {
 static bool lcdif_vsync_handler(void) {
 
   /* Acknowledge the vsync edge. */
-  IMX23_LCDIF->CTRL1_CLR = IMX23_LCDIF_CTRL1_VSYNC_EDGE_IRQ;
+  MXS_LCDIF->CTRL1_CLR = MXS_LCDIF_CTRL1_VSYNC_EDGE_IRQ;
 
   if (vsync_cb != NULL) {
     vsync_cb();
@@ -137,8 +143,8 @@ static bool lcdif_vsync_handler(void) {
 /* Module exported functions.                                                */
 /*===========================================================================*/
 
-void imx23_lcdif_init(const imx23_lcdif_timing_t *t, void *fb) {
-  imx23_lcdif_t *lcd = IMX23_LCDIF;
+void mxs_lcdif_init(const mxs_lcdif_timing_t *t, void *fb) {
+  mxs_lcdif_t *lcd = MXS_LCDIF;
   uint32_t vdctrl0;
 
   osalDbgCheck(t != NULL);
@@ -151,88 +157,94 @@ void imx23_lcdif_init(const imx23_lcdif_timing_t *t, void *fb) {
   lcdif_set_pixclk(t->pixclk_hz);
 
   /* Restart the LCDIF block (SFTRST/CLKGATE, then ungate). */
-  lcd->CTRL_SET = IMX23_LCDIF_CTRL_SFTRST | IMX23_LCDIF_CTRL_CLKGATE;
-  lcd->CTRL_CLR = IMX23_LCDIF_CTRL_SFTRST | IMX23_LCDIF_CTRL_CLKGATE;
+  lcd->CTRL_SET = MXS_LCDIF_CTRL_SFTRST | MXS_LCDIF_CTRL_CLKGATE;
+  lcd->CTRL_CLR = MXS_LCDIF_CTRL_SFTRST | MXS_LCDIF_CTRL_CLKGATE;
 
   /* XRGB8888 framebuffer on a 24-bit RGB bus, dotclock master mode. */
-  lcd->CTRL = IMX23_LCDIF_CTRL_DATABUS_WIDTH_24 |
-              IMX23_LCDIF_CTRL_WORD_LENGTH_24 |
-              IMX23_LCDIF_CTRL_DOTCLK_MODE |
-              IMX23_LCDIF_CTRL_BYPASS_COUNT |
-              IMX23_LCDIF_CTRL_LCDIF_MASTER;
+  lcd->CTRL = MXS_LCDIF_CTRL_DATABUS_WIDTH_24 |
+              MXS_LCDIF_CTRL_WORD_LENGTH_24 |
+              MXS_LCDIF_CTRL_DOTCLK_MODE |
+              MXS_LCDIF_CTRL_BYPASS_COUNT |
+              MXS_LCDIF_CTRL_LCDIF_MASTER;
 
-  lcd->CTRL1 = IMX23_LCDIF_CTRL1_BYTE_PACKING(0x7) |
-               IMX23_LCDIF_CTRL1_RECOVER_ON_UNDERFLOW;
+  lcd->CTRL1 = MXS_LCDIF_CTRL1_BYTE_PACKING(0x7) |
+               MXS_LCDIF_CTRL1_RECOVER_ON_UNDERFLOW;
 
   lcd->TRANSFER_COUNT = ((uint32_t)t->height << 16) | (uint32_t)t->width;
 
-  vdctrl0 = IMX23_LCDIF_VDCTRL0_ENABLE_PRESENT |
-            IMX23_LCDIF_VDCTRL0_ENABLE_POL |
-            IMX23_LCDIF_VDCTRL0_VSYNC_PERIOD_UNIT |
-            IMX23_LCDIF_VDCTRL0_VSYNC_PULSE_WIDTH_UNIT |
-            IMX23_LCDIF_VDCTRL0_VSYNC_PULSE_WIDTH(t->vsync_len);
-  if (t->flags & IMX23_LCDIF_FLAG_HSYNC_HIGH) {
-    vdctrl0 |= IMX23_LCDIF_VDCTRL0_HSYNC_POL;
+  vdctrl0 = MXS_LCDIF_VDCTRL0_ENABLE_PRESENT |
+            MXS_LCDIF_VDCTRL0_ENABLE_POL |
+            MXS_LCDIF_VDCTRL0_VSYNC_PERIOD_UNIT |
+            MXS_LCDIF_VDCTRL0_VSYNC_PULSE_WIDTH_UNIT |
+            MXS_LCDIF_VDCTRL0_VSYNC_PULSE_WIDTH(t->vsync_len);
+  if (t->flags & MXS_LCDIF_FLAG_HSYNC_HIGH) {
+    vdctrl0 |= MXS_LCDIF_VDCTRL0_HSYNC_POL;
   }
-  if (t->flags & IMX23_LCDIF_FLAG_VSYNC_HIGH) {
-    vdctrl0 |= IMX23_LCDIF_VDCTRL0_VSYNC_POL;
+  if (t->flags & MXS_LCDIF_FLAG_VSYNC_HIGH) {
+    vdctrl0 |= MXS_LCDIF_VDCTRL0_VSYNC_POL;
   }
-  if (t->flags & IMX23_LCDIF_FLAG_PCLK_RISING) {
-    vdctrl0 |= IMX23_LCDIF_VDCTRL0_DOTCLK_POL;
+  if (t->flags & MXS_LCDIF_FLAG_PCLK_RISING) {
+    vdctrl0 |= MXS_LCDIF_VDCTRL0_DOTCLK_POL;
   }
-  if (t->flags & IMX23_LCDIF_FLAG_DE_HIGH) {
-    vdctrl0 |= IMX23_LCDIF_VDCTRL0_ENABLE_POL;
+  if (t->flags & MXS_LCDIF_FLAG_DE_HIGH) {
+    vdctrl0 |= MXS_LCDIF_VDCTRL0_ENABLE_POL;
   }
   lcd->VDCTRL0 = vdctrl0;
 
   lcd->VDCTRL1 = (uint32_t)(t->vbp + t->vfp + t->vsync_len + t->height);
-  lcd->VDCTRL2 = IMX23_LCDIF_VDCTRL2_HSYNC_PULSE_WIDTH(t->hsync_len) |
-                 IMX23_LCDIF_VDCTRL2_HSYNC_PERIOD(
+  lcd->VDCTRL2 = MXS_LCDIF_VDCTRL2_HSYNC_PULSE_WIDTH(t->hsync_len) |
+                 MXS_LCDIF_VDCTRL2_HSYNC_PERIOD(
                      (uint32_t)(t->hbp + t->hfp + t->hsync_len + t->width));
-  lcd->VDCTRL3 = IMX23_LCDIF_VDCTRL3_HORIZONTAL_WAIT_CNT(
+  lcd->VDCTRL3 = MXS_LCDIF_VDCTRL3_HORIZONTAL_WAIT_CNT(
                      (uint32_t)(t->hbp + t->hsync_len)) |
-                 IMX23_LCDIF_VDCTRL3_VERTICAL_WAIT_CNT(
+                 MXS_LCDIF_VDCTRL3_VERTICAL_WAIT_CNT(
                      (uint32_t)(t->vbp + t->vsync_len));
-  lcd->VDCTRL4 = IMX23_LCDIF_VDCTRL4_DOTCLK_H_VALID_DATA_CNT(t->width);
+  lcd->VDCTRL4 = MXS_LCDIF_VDCTRL4_DOTCLK_H_VALID_DATA_CNT(t->width);
 
   lcd->CUR_BUF = (uint32_t)(uintptr_t)fb;
   lcd->NEXT_BUF = (uint32_t)(uintptr_t)fb;
 
   /* Flush FIFO. */
-  lcd->CTRL1_SET = IMX23_LCDIF_CTRL1_FIFO_CLEAR;
+  lcd->CTRL1_SET = MXS_LCDIF_CTRL1_FIFO_CLEAR;
 
   /* Sync signals ON. */
-  lcd->VDCTRL4_SET = IMX23_LCDIF_VDCTRL4_SYNC_SIGNALS_ON;
+  lcd->VDCTRL4_SET = MXS_LCDIF_VDCTRL4_SYNC_SIGNALS_ON;
 
   /* FIFO clear release, then RUN. */
-  lcd->CTRL1_CLR = IMX23_LCDIF_CTRL1_FIFO_CLEAR;
-  lcd->CTRL_SET = IMX23_LCDIF_CTRL_RUN;
+  lcd->CTRL1_CLR = MXS_LCDIF_CTRL1_FIFO_CLEAR;
+  lcd->CTRL_SET = MXS_LCDIF_CTRL_RUN;
 }
 
-void *imx23_lcdif_get_fb(void) {
+void *mxs_lcdif_get_fb(void) {
 
   return lcd_fb;
 }
 
-void imx23_lcdif_set_fb(void *fb) {
+void mxs_lcdif_set_fb(void *fb) {
 
   lcd_fb = fb;
-  IMX23_LCDIF->CUR_BUF = (uint32_t)(uintptr_t)fb;
-  IMX23_LCDIF->NEXT_BUF = (uint32_t)(uintptr_t)fb;
+  MXS_LCDIF->CUR_BUF = (uint32_t)(uintptr_t)fb;
+  MXS_LCDIF->NEXT_BUF = (uint32_t)(uintptr_t)fb;
 }
 
-void imx23_lcdif_set_vsync_callback(void (*cb)(void)) {
+void mxs_lcdif_set_vsync_callback(void (*cb)(void)) {
 
   osalSysLock();
   vsync_cb = cb;
   if (cb != NULL) {
+#if defined(MXS_DISPLAY_HAVE_IMX23_PORT)
     icoll_register_handler(IMX23_IRQ_LCDIF0, lcdif_vsync_handler);
-    IMX23_LCDIF->CTRL1_SET = IMX23_LCDIF_CTRL1_VSYNC_EDGE_IRQ_EN;
+#endif
+    MXS_LCDIF->CTRL1_SET = MXS_LCDIF_CTRL1_VSYNC_EDGE_IRQ_EN;
+#if defined(MXS_DISPLAY_HAVE_IMX23_PORT)
     icoll_irq_enable(IMX23_IRQ_LCDIF0);
+#endif
   }
   else {
-    IMX23_LCDIF->CTRL1_CLR = IMX23_LCDIF_CTRL1_VSYNC_EDGE_IRQ_EN;
+    MXS_LCDIF->CTRL1_CLR = MXS_LCDIF_CTRL1_VSYNC_EDGE_IRQ_EN;
+#if defined(MXS_DISPLAY_HAVE_IMX23_PORT)
     icoll_irq_disable(IMX23_IRQ_LCDIF0);
+#endif
   }
   osalSysUnlock();
 }

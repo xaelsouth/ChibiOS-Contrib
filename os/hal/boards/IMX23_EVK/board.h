@@ -51,7 +51,7 @@
 #define IMX23_LCD_PIXCLK_HZ     30000000
 /* Seiko 4.3in panel on the EVK: DE high active, HSYNC/VSYNC low, DOTCLK
    samples on the falling edge. */
-#define IMX23_LCD_FLAGS         IMX23_LCDIF_FLAG_DE_HIGH
+#define IMX23_LCD_FLAGS         0x04U  /* MXS_LCDIF_FLAG_DE_HIGH, see devices_lib/display/mxs_lcdif.h */
 
 /* 4-wire resistive touch on the LRADC (imx23-evk.dts: 4 wires). Sense
    pads and raw calibration range for the 800x480 panel - verify on the

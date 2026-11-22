@@ -61,6 +61,10 @@ ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet
 # MXS DCP hardware crypto (devices_lib/crypto) — used by dcp/sbtool cmds.
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/crypto/mxs_dcp.mk
 
+# MXS display pipeline: LCDIF framebuffer + PXP pixel converter
+# (devices_lib/display).
+include $(CHIBIOS_CONTRIB)/os/various/devices_lib/display/mxs_display.mk
+
 # Generic matrix keypad (devices_lib/keypad).
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/keypad/keypad.mk
 

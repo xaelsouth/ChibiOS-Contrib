@@ -43,8 +43,8 @@
 #endif
 
 #if defined(BOARD_IMX23_EVK)
-#include "imx23_lcdif.h"
-#include "imx23_pxp.h"
+#include "mxs_lcdif.h"
+#include "mxs_pxp.h"
 #include "imx23_lradc.h"
 #include "imx23_lvgl.h"
 #include "lvgl/lvgl.h"
@@ -112,7 +112,7 @@ static void lcd_vsync_cb(void) {
   lcd_frames++;
 }
 
-static const imx23_lcdif_timing_t lcd_timing = {
+static const mxs_lcdif_timing_t lcd_timing = {
   .width      = IMX23_LCD_WIDTH,
   .height     = IMX23_LCD_HEIGHT,
   .hsync_len  = IMX23_LCD_HSYNC,
@@ -215,7 +215,7 @@ static void cmd_backlight(BaseSequentialStream *chp, int argc, char *argv[]) {
  * through the PXP (exercises the mem2mem path used for LVGL flushes).
  */
 static void cmd_pxp(BaseSequentialStream *chp, int argc, char *argv[]) {
-  imx23_pxp_job_t job;
+  mxs_pxp_job_t job;
   msg_t msg;
 
   (void)argc; (void)argv;
@@ -224,13 +224,13 @@ static void cmd_pxp(BaseSequentialStream *chp, int argc, char *argv[]) {
   job.src     = &lcd_fb[0];
   job.src_w   = IMX23_LCD_WIDTH;
   job.src_h   = IMX23_LCD_HEIGHT / 2U;
-  job.src_fmt = IMX23_PXP_S0_FMT_RGB888;
+  job.src_fmt = MXS_PXP_S0_FMT_RGB888;
   job.dst     = &lcd_fb[(IMX23_LCD_HEIGHT / 2U) * IMX23_LCD_WIDTH];
   job.dst_w   = IMX23_LCD_WIDTH;
   job.dst_h   = IMX23_LCD_HEIGHT / 2U;
-  job.dst_fmt = IMX23_PXP_OUT_FMT_RGB888;
+  job.dst_fmt = MXS_PXP_OUT_FMT_RGB888;
 
-  msg = imx23_pxp_run(&job, TIME_MS2I(1000));
+  msg = mxs_pxp_run(&job, TIME_MS2I(1000));
   chprintf(chp, "pxp blit: %s\r\n", (msg == MSG_OK) ? "OK" : "FAILED");
   log_line("pxp blit %s", (msg == MSG_OK) ? "OK" : "FAILED");
 }
@@ -1159,7 +1159,7 @@ int main(void) {
   /* LCD: LVGL port over LCDIF + PXP, backlight PWM2 on GPIO_1_28. */
   imx23_lvgl_init(&lvgl1, &lcd_timing, lcd_fb, lvgl_draw_buf,
                   IMX23_LCD_WIDTH * 40U, true);
-  imx23_lcdif_set_vsync_callback(lcd_vsync_cb);
+  mxs_lcdif_set_vsync_callback(lcd_vsync_cb);
   imx23_iomux_set_pad(1U, 28U, 0U, 0x4U);
   pwmStart(&PWMD1, &pwm_backlight_cfg);
   pwmEnableChannel(&PWMD1, BOARD_BACKLIGHT_PWM_CHANNEL,

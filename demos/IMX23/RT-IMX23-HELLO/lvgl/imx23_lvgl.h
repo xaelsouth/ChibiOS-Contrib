@@ -37,7 +37,7 @@
 #define IMX23_LVGL_H
 
 #include "hal.h"
-#include "imx23_lcdif.h"
+#include "mxs_lcdif.h"
 #include "imx23_lradc.h"
 #include "lvgl/lvgl.h"
 
@@ -80,7 +80,7 @@ typedef struct {
 #ifdef __cplusplus
 extern "C" {
 #endif
-  void imx23_lvgl_init(imx23_lvgl_t *lp, const imx23_lcdif_timing_t *timing,
+  void imx23_lvgl_init(imx23_lvgl_t *lp, const mxs_lcdif_timing_t *timing,
                        void *lcd_fb, void *draw_buf, uint32_t draw_buf_px,
                        bool use_pxp);
   void imx23_lvgl_start(imx23_lvgl_t *lp);
