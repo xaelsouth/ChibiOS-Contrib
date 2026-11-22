@@ -25,7 +25,7 @@ LVGLSRC_DIRS = $(LVGLDIR)/src/core \
                $(LVGLDIR)/src/widgets \
                $(LVGLDIR)/src/others \
                $(LVGLDIR)/src/logging
-LVGLCSRC = $(wildcard $(LVGLDIR)/src/*.c) \
+LVGLCSRC := $(wildcard $(LVGLDIR)/src/*.c) \
            $(foreach d,$(LVGLSRC_DIRS),$(shell find $(d) -name '*.c'))
 
 LVGLBINDSRC = $(CHIBIOS_CONTRIB)/os/various/lvgl_bindings/lv_stdlib_tlsf.c

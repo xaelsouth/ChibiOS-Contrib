@@ -1,0 +1,37 @@
+options {
+	driveTag = 0x00;
+	flags = 0x01;
+}
+
+sources {
+	power_prep="bootlets/IMX23_EVK/power_prep";
+	boot_prep="bootlets/IMX23_EVK/boot_prep";
+	chibios="%CHIBIOS_ELF%";
+}
+
+section (0) {
+
+	//----------------------------------------------------------
+	// Power Supply initialization
+	//----------------------------------------------------------
+
+	load power_prep;
+	call power_prep;
+
+	//----------------------------------------------------------
+	// SDRAM initialization
+	//----------------------------------------------------------
+
+	load boot_prep;
+	call boot_prep;
+
+	//----------------------------------------------------------
+	//  Load and jump to ChibiOS
+	//----------------------------------------------------------
+
+	// ChibiOS is linked at IMX23_RAM_ORIGIN (0x40000000); the startup section
+	// there is a vector table whose reset slot forwards to the reset code,
+	// so jumping to 0x40000000 enters the image correctly.
+	load chibios;
+	jump 0x40000000;
+}

@@ -236,8 +236,18 @@ $(BUILDDIR)/IMX23.ld: $(STARTUPLD)/IMX23.ld $(BOARDINC)/board.h
 upload: $(BUILDDIR)/$(PROJECT).bin
 	@echo "Load $(BUILDDIR)/$(PROJECT).bin at 0x40000000 and jump (bootstream)"
 
-elftosb: upload
-	tools/elftosb --debug --zero-key -c bootlets/IMX23_EVK/bootlets.bd -o build/IMX23_EVK/chibios.sb
-	@echo "sudo tools/sb_loader -d -p hid build/IMX23_EVK/chibios.sb"
+# Create an .sb bootstream (i.MX23 ROM USB boot) from the ELF and print the
+# sb_loader command to push it over USB HID recovery mode.
+# bootlets/$(BOARD)/bootlets.bd is a template: %CHIBIOS_ELF% is replaced at
+# build time with the absolute path of the built ELF (elftosb resolves the
+# other source paths relative to the make working directory).
+# env -u LD_LIBRARY_PATH: elftosb is C++ and must not pick up a foreign
+# libstdc++ from LD_LIBRARY_PATH.
+elftosb: $(BUILDDIR)/$(PROJECT).elf
+	sed -e 's|%CHIBIOS_ELF%|$(CURDIR)/$(BUILDDIR)/$(PROJECT).elf|g' \
+	    bootlets/$(BOARD)/bootlets.bd > $(BUILDDIR)/bootlets.bd
+	env -u LD_LIBRARY_PATH tools/elftosb --debug --zero-key \
+	    -c $(BUILDDIR)/bootlets.bd -o $(BUILDDIR)/$(PROJECT).sb
+	@echo "sudo tools/sb_loader -d -p hid $(BUILDDIR)/$(PROJECT).sb"
 
 .PHONY: upload elftosb
