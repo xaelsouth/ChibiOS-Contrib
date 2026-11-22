@@ -17,6 +17,7 @@
 #include "ch.h"
 #include "hal.h"
 #include "chprintf.h"
+#include "efr32_clocks.h"
 
 /* Console via SEGGER RTT (up channel 0) — works over J-Link SWD.
    View with: JLinkRTTLoggerExe -Device EFR32FG23B010F512IM48 -If SWD -Speed 4000 -RTTChannel 0 out.log */
@@ -38,7 +39,7 @@ typedef struct {
 } rtt_cb_t;
 
 static rtt_cb_t rtt_cb __attribute__((aligned(32)));
-static uint8_t  rtt_buf[1024];
+static uint8_t  rtt_buf[4096];
 
 static void console_init(void) {
   memset(&rtt_cb, 0, sizeof(rtt_cb));
@@ -62,6 +63,28 @@ static void rtt_write(const char *s, size_t n) {
 
 #define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
 
+/* RTT-backed BaseSequentialStream so chprintf()-based helpers
+   (e.g. efr32_clock_points_print/efr32_clock_tree_print) can write
+   to the RTT console too. */
+static size_t rtt_stream_write(void *ip, const uint8_t *bp, size_t n) {
+  (void)ip;
+  rtt_write((const char *)bp, n);
+  return n;
+}
+static msg_t rtt_stream_put(void *ip, uint8_t b) {
+  (void)ip;
+  rtt_write((const char *)&b, 1);
+  return MSG_OK;
+}
+static const struct BaseSequentialStreamVMT rtt_stream_vmt = {
+  .instance_offset = 0,
+  .write = rtt_stream_write,
+  .read  = NULL,
+  .put   = rtt_stream_put,
+  .get   = NULL
+};
+static BaseSequentialStream rtt_stream = { .vmt = &rtt_stream_vmt };
+
 int main(void) {
   halInit();
   chSysInit();
@@ -70,15 +93,12 @@ int main(void) {
   console_init();
   PRINTF("\r\nTEMPLATE: EFR32FG23 DK2600A hello\r\n");
 
-  /* Dump the clock points (halClockGetPointX / hal_lld_get_clock_point). */
-  {
-    static const char *names[CLK_ARRAY_SIZE] = CLK_POINT_NAMES;
-    unsigned i;
-    PRINTF("clock points:\r\n");
-    for (i = 0U; i < (unsigned)CLK_ARRAY_SIZE; i++) {
-      PRINTF("  %-14s %10u Hz\r\n", names[i], (unsigned)halClockGetPointX(i));
-    }
-  }
+  /* Dump the clock points via the port helper (same as "clocks" shell cmd). */
+  PRINTF("clock points (efr32_clock_points_print):\r\n");
+  efr32_clock_points_print(&rtt_stream);
+
+  /* Dump the clock tree (same as "clocks w" shell cmd). */
+  efr32_clock_tree_print(&rtt_stream);
 
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
   /* Exercise run-time clock switching (both configs are identical here,

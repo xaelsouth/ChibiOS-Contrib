@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/net_services/net_shell.c
+ * @file    cli/net_shell.c
  * @brief   lwIP shell commands: ifconfig, dhcpc, ping, arp, ntp, slip.
  *
  * @addtogroup NET_SERVICES

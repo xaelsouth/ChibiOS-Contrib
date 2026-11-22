@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/net_services/net_shell.h
+ * @file    cli/net_shell.h
  * @brief   lwIP shell commands (ifconfig/dhcpc/ping/arp/ntp/slip).
  *
  * @details Network diagnostic and configuration commands operating on the
