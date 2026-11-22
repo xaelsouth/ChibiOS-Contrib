@@ -29,7 +29,7 @@
 #define HALCONF_H
 
 #define _CHIBIOS_HAL_CONF_
-#define _CHIBIOS_HAL_CONF_VER_8_4_
+#define _CHIBIOS_HAL_CONF_VER_9_1_
 
 #include "mcuconf.h"
 
@@ -45,6 +45,14 @@
  */
 #if !defined(HAL_USE_ADC) || defined(__DOXYGEN__)
 #define HAL_USE_ADC                         FALSE
+#endif
+
+/**
+ * @brief   Enables the BURAM subsystem (backup RAM, used by the BURTC
+ *          RTC driver to keep the overflow counter across resets).
+ */
+#if !defined(HAL_USE_BURAM) || defined(__DOXYGEN__)
+#define HAL_USE_BURAM                        TRUE
 #endif
 
 /**
@@ -65,7 +73,7 @@
  * @brief   Enables the DAC subsystem.
  */
 #if !defined(HAL_USE_DAC) || defined(__DOXYGEN__)
-#define HAL_USE_DAC                         TRUE
+#define HAL_USE_DAC                         FALSE
 #endif
 
 /**
@@ -73,6 +81,13 @@
  */
 #if !defined(HAL_USE_EFL) || defined(__DOXYGEN__)
 #define HAL_USE_EFL                         FALSE
+#endif
+
+/**
+ * @brief   Enables the LCD segment controller subsystem (community).
+ */
+#if !defined(HAL_USE_LCD) || defined(__DOXYGEN__)
+#define HAL_USE_LCD                         FALSE
 #endif
 
 /**
@@ -86,7 +101,7 @@
  * @brief   Enables the I2C subsystem.
  */
 #if !defined(HAL_USE_I2C) || defined(__DOXYGEN__)
-#define HAL_USE_I2C                         FALSE
+#define HAL_USE_I2C                         TRUE
 #endif
 
 /**
@@ -163,7 +178,7 @@
  * @brief   Enables the SPI subsystem.
  */
 #if !defined(HAL_USE_SPI) || defined(__DOXYGEN__)
-#define HAL_USE_SPI                         FALSE
+#define HAL_USE_SPI                         TRUE
 #endif
 
 /**
@@ -547,6 +562,8 @@
 #if !defined(WSPI_USE_MUTUAL_EXCLUSION) || defined(__DOXYGEN__)
 #define WSPI_USE_MUTUAL_EXCLUSION           TRUE
 #endif
+
+#include "halconf_community.h"
 
 #endif /* HALCONF_H */
 
