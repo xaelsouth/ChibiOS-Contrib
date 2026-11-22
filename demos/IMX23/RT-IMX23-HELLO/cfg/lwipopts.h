@@ -151,12 +151,12 @@
 /*--------------------------------------------------------------------------*/
 /* Apps.                                                                    */
 /*--------------------------------------------------------------------------*/
-/* altcp + TLS (our own HTTPS server, net_services/httpsd) via mbedtls. */
+/* altcp + TLS (our own HTTPS server, net/httpsd) via mbedtls. */
 #define LWIP_ALTCP                      1
 #define LWIP_ALTCP_TLS                  1
 #define LWIP_ALTCP_TLS_MBEDTLS          1
 
-/* SNTP client (apps/sntp, "ntp" shell command in net_services/net_shell). */
+/* SNTP client (apps/sntp, "ntp" shell command in cli/net_shell). */
 #define SNTP_SERVER_DNS                 1
 #define SNTP_MAX_SERVERS                2
 /* Called from the tcpip thread on each received NTP time (Unix seconds).
@@ -165,7 +165,7 @@ void lwip_sntp_time_hook(unsigned long sec);
 #define SNTP_SET_SYSTEM_TIME(sec)       lwip_sntp_time_hook(sec)
 
 /*--------------------------------------------------------------------------*/
-/* SLIP netif (netif/slipif.c; sio_* shim in net_services/sio_sio.c).       */
+/* SLIP netif (netif/slipif.c; sio_* shim in net/sio_sio.c).       */
 /*--------------------------------------------------------------------------*/
 #define SLIP_USE_RX_THREAD              1       /* !NO_SYS default           */
 

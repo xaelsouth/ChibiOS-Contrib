@@ -19,7 +19,7 @@
 #                  with CLK_ARRAY_SIZE/CLK_POINT_NAMES; compiles to nothing
 #                  otherwise). Requires xshell.
 #   net_shell.c  - lwIP shell commands (ifconfig, ping, ...); only add it
-#                  via devices_lib/net_services/net_services.mk when lwIP
+#                  via the demo-local net/ services when lwIP
 #                  is used, it is not part of CLISRC.
 
 CLISRC = $(CHIBIOS_CONTRIB)/os/various/cli/cli.c \

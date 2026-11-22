@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/net_services/telnetd.h
+ * @file    demos/IMX23/RT-IMX23-HELLO/net/telnetd.h
  * @brief   Minimal telnet server feeding an xshell session.
  *
  * @details Listens on TCP port 23 (lwIP sockets). Each accepted connection

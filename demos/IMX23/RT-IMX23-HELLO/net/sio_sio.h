@@ -15,22 +15,23 @@
 */
 
 /**
- * @file    devices_lib/net_services/tftpd_lfs.h
- * @brief   lwIP TFTP server backed by a LittleFS volume.
+ * @file    demos/IMX23/RT-IMX23-HELLO/net/sio_sio.h
+ * @brief   lwIP sio_* serial shim over ChibiOS SIO drivers.
  *
- * @details Maps the TFTP file operations (open/read/write/close) onto a
- *          mounted littlefs instance, so a field host can push/pull files
- *          with a standard tftp client (read and write).
+ * @details lwIP's slipif (netif/slipif.c) expects the port to provide the
+ *          sio_open/sio_read/sio_tryread/sio_send/sio_write/sio_read_abort
+ *          functions declared in lwip/sio.h. This module implements them on
+ *          top of ChibiOS SIODriver objects registered with
+ *          sio_sio_register().
  *
  * @addtogroup NET_SERVICES
  * @{
  */
 
-#ifndef TFTPD_LFS_H
-#define TFTPD_LFS_H
+#ifndef SIO_SIO_H
+#define SIO_SIO_H
 
 #include "hal.h"
-#include "lfs.h"
 
 /*===========================================================================*/
 /* External declarations.                                                    */
@@ -39,13 +40,12 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-  /* Start the TFTP server (UDP port 69) on the given mounted littlefs
-     volume. Safe to call from thread context after lwIP is up. */
-  void tftpd_lfs_start(lfs_t *lfs);
+  void      sio_sio_register(uint8_t devnum, SIODriver *siop);
+  SIODriver *sio_sio_lookup(uint8_t devnum);
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TFTPD_LFS_H */
+#endif /* SIO_SIO_H */
 
 /** @} */

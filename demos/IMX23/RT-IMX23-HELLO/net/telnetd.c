@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/net_services/telnetd.c
+ * @file    demos/IMX23/RT-IMX23-HELLO/net/telnetd.c
  * @brief   Minimal telnet server feeding an xshell session.
  *
  * @addtogroup NET_SERVICES

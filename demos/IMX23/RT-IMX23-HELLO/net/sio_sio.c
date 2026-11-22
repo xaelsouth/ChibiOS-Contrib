@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/net_services/sio_sio.c
+ * @file    demos/IMX23/RT-IMX23-HELLO/net/sio_sio.c
  * @brief   lwIP sio_* serial shim over ChibiOS SIO drivers.
  *
  * @addtogroup NET_SERVICES

@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/net_services/tftpd_lfs.c
+ * @file    demos/IMX23/RT-IMX23-HELLO/net/tftpd_lfs.c
  * @brief   lwIP TFTP server backed by a LittleFS volume.
  *
  * @addtogroup NET_SERVICES
