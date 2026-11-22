@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/nand/imx23_gpmi_nand.c
+ * @file    hal/ports/IMX23/IMX23xx/imx23_gpmi_nand.c
  * @brief   i.MX23 GPMI + BCH NAND flash driver (ported from U-Boot
  *          drivers/mtd/nand/raw/mxs_nand.c and Linux
  *          drivers/mtd/nand/raw/gpmi-nand).
@@ -80,30 +80,7 @@ IMX23NANDDriver IMX23NAND1;
 /* Module local variables.                                                   */
 /*===========================================================================*/
 
-/* Known Samsung chips: maker 0xEC, keyed by the 2nd JEDEC ID byte. */
-typedef struct {
-  uint8_t  id2;                 /* chip id byte                           */
-  const char *name;
-  uint32_t page_size;
-  uint32_t oob_size;
-  uint32_t pages_per_block;
-  uint32_t blocks;              /* physical erase blocks                  */
-  bool     mlc;                 /* MLC: BBM in the LAST page of a block   */
-} nand_chip_entry_t;
-
-static const nand_chip_entry_t nand_chip_table[] = {
-  { 0xF1U, "K9F1G08 1Gb SLC",   2048U,  64U,  64U, 1024U, false },
-  { 0xDAU, "K9F2G08 2Gb SLC",   2048U,  64U,  64U, 2048U, false },
-  { 0xDCU, "K9F4G08 4Gb SLC",   4096U, 128U,  64U, 2048U, false },
-  { 0xD3U, "K9GBG08 8Gb MLC",   4096U, 224U, 128U, 4096U, true  },
-  { 0xD7U, "K9LBG08 32Gb MLC",  4096U, 218U, 128U, 8192U, true  }, /* EVK */
-};
-
-/* Samsung 3rd ID byte -> density in Gbit (for the generic fallback). */
-static const struct { uint8_t id2; uint32_t gbit; } nand_density_table[] = {
-  { 0xF1U, 1U }, { 0xDAU, 2U }, { 0xDCU, 4U }, { 0xD3U, 8U },
-  { 0xD5U, 16U }, { 0xD7U, 32U },
-};
+/* The vendor/JEDEC chip database lives in devices_lib/nand/nand_chips.c. */
 
 /*===========================================================================*/
 /* Module local functions.                                                   */
@@ -413,16 +390,16 @@ static void bch_set_layout(IMX23NANDDriver *np) {
   imx23_nand_geo_t *g = &np->geo;
   uint32_t ecc0n = g->ecc_strength >> 1;
 
-  g->layout0 = IMX23_BCH_LAYOUT0_NBLOCKS(g->ecc_chunks - 1U) |
-               IMX23_BCH_LAYOUT0_META_SIZE(IMX23_NAND_METADATA_SIZE) |
-               IMX23_BCH_LAYOUT0_ECC0(ecc0n) |
-               IMX23_BCH_LAYOUT0_CHUNK0(512U);            /* GF13, MX23      */
-  g->layout1 = IMX23_BCH_LAYOUT1_PAGE_SIZE(g->page_size + g->oob_size) |
-               IMX23_BCH_LAYOUT1_ECCN(ecc0n) |
-               IMX23_BCH_LAYOUT1_CHUNKN(512U);
+  np->layout0 = IMX23_BCH_LAYOUT0_NBLOCKS(g->ecc_chunks - 1U) |
+                IMX23_BCH_LAYOUT0_META_SIZE(IMX23_NAND_METADATA_SIZE) |
+                IMX23_BCH_LAYOUT0_ECC0(ecc0n) |
+                IMX23_BCH_LAYOUT0_CHUNK0(512U);         /* GF13, MX23      */
+  np->layout1 = IMX23_BCH_LAYOUT1_PAGE_SIZE(g->page_size + g->oob_size) |
+                IMX23_BCH_LAYOUT1_ECCN(ecc0n) |
+                IMX23_BCH_LAYOUT1_CHUNKN(512U);
 
-  IMX23_REG(IMX23_BCH_FLASH0LAYOUT0) = g->layout0;
-  IMX23_REG(IMX23_BCH_FLASH0LAYOUT1) = g->layout1;
+  IMX23_REG(IMX23_BCH_FLASH0LAYOUT0) = np->layout0;
+  IMX23_REG(IMX23_BCH_FLASH0LAYOUT1) = np->layout1;
 }
 
 /* READID: returns the number of ID bytes read (up to 8). */
@@ -447,88 +424,14 @@ static int nand_read_id(IMX23NANDDriver *np, uint8_t *id) {
   return rc;
 }
 
-static void geo_set_name(imx23_nand_geo_t *g, const char *s) {
-  size_t n = strlen(s);
-
-  if (n >= sizeof(g->name)) {
-    n = sizeof(g->name) - 1U;
-  }
-  memcpy(g->name, s, n);
-  g->name[n] = '\0';
-}
-
-/* Decode geometry from the JEDEC ID into np->geo. */
+/* Decode geometry from the JEDEC ID into np->geo (generic chip database). */
 static int nand_decode_id(IMX23NANDDriver *np, const uint8_t *id) {
-  imx23_nand_geo_t *g = &np->geo;
-  unsigned i;
-  uint32_t gbit = 0U;
-  bool mlc = false;
+  int rc = nand_chip_decode(id, &np->geo);
 
-  memcpy(g->id, id, 8U);
-  g->id_len = 5U;
-
-  /* Table lookup on the Samsung chip ID (2nd byte). */
-  for (i = 0U; i < sizeof(nand_chip_table) / sizeof(nand_chip_table[0]); i++) {
-    if (nand_chip_table[i].id2 == id[1]) {
-      geo_set_name(g, nand_chip_table[i].name);
-      g->page_size       = nand_chip_table[i].page_size;
-      g->oob_size        = nand_chip_table[i].oob_size;
-      g->pages_per_block = nand_chip_table[i].pages_per_block;
-      g->blocks          = nand_chip_table[i].blocks;
-      mlc                = nand_chip_table[i].mlc;
-      goto have_geo;
-    }
-  }
-
-  /* Generic JEDEC ext-id fallback (page/oob/block from byte 3, density
-     from byte 2 lookup). */
-  if (id[0] != 0xECU) {
+  if (rc != NAND_CHIP_OK) {
     return IMX23_NAND_ERR_UNKNOWN_CHIP;
   }
-  g->page_size = 1024U << (id[3] & 0x03U);
-  g->oob_size  = (8U << ((id[3] >> 2) & 0x01U)) * (g->page_size >> 9);
-  g->block_size = (64U * 1024U) << ((id[3] >> 4) & 0x03U);
-  g->pages_per_block = g->block_size / g->page_size;
-  for (i = 0U; i < sizeof(nand_density_table) / sizeof(nand_density_table[0]);
-       i++) {
-    if (nand_density_table[i].id2 == id[2]) {
-      gbit = nand_density_table[i].gbit;
-      break;
-    }
-  }
-  if (gbit == 0U || g->page_size > IMX23_NAND_MAX_PAGE_SIZE ||
-      g->oob_size > IMX23_NAND_MAX_OOB_SIZE ||
-      g->pages_per_block == 0U) {
-    return IMX23_NAND_ERR_UNKNOWN_CHIP;
-  }
-  g->blocks = (gbit * 1024U * 1024U * 1024U / 8U) / g->block_size;
-  mlc = ((id[2] & 0x0CU) >> 2) > 0U;
-  {
-    static const char hex[] = "0123456789ABCDEF";
-    char nm[24];
-    nm[0] = 'J'; nm[1] = 'E'; nm[2] = 'D'; nm[3] = 'E'; nm[4] = 'C'; nm[5] = ' ';
-    nm[6] = hex[(id[0] >> 4) & 0xFU]; nm[7] = hex[id[0] & 0xFU];
-    nm[8] = hex[(id[1] >> 4) & 0xFU]; nm[9] = hex[id[1] & 0xFU];
-    nm[10] = hex[(id[2] >> 4) & 0xFU]; nm[11] = hex[id[2] & 0xFU];
-    nm[12] = '\0';
-    geo_set_name(g, nm);
-  }
-
-have_geo:
-  g->pages       = g->blocks * g->pages_per_block;
-  g->block_size  = g->pages_per_block * g->page_size;
-  g->row_bytes   = (g->pages > 0xFFFFU) ? 3U : 2U;
-  g->ecc_chunks  = (uint8_t)(g->page_size / 512U);
-  /* Legacy BCH layout: use all spare bytes except the 10 metadata bytes
-     for ECC, GF(13), rounded down to an even strength, max 40 on MX23. */
-  g->ecc_strength = (uint8_t)(((g->oob_size - IMX23_NAND_METADATA_SIZE) * 8U) /
-                              (13U * g->ecc_chunks));
-  g->ecc_strength &= (uint8_t)~1U;
-  if (g->ecc_strength > 40U) {
-    g->ecc_strength = 40U;
-  }
-  g->good_blocks = 0U;
-  np->mlc        = mlc;
+  np->mlc = np->geo.mlc;
   return IMX23_NAND_OK;
 }
 

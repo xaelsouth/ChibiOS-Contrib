@@ -61,16 +61,15 @@ ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/ethernet
 # Generic matrix keypad (devices_lib/keypad).
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/keypad/keypad.mk
 
-# GPMI+BCH NAND driver (devices_lib/nand) + bitmap + LittleFS.
-ALLCSRC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/imx23_gpmi_nand.c \
-           $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/imx23_romboot.c \
-           $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/nand_lfs.c \
-           $(CHIBIOS_CONTRIB)/os/various/bitmap.c \
-           $(CHIBIOS)/ext/littlefs/lfs.c \
+# Generic NAND support (chip DB + LittleFS binding, devices_lib/nand).
+# The i.MX23 GPMI+BCH controller driver and the ROM boot writer are part of
+# the port (os/hal/ports/IMX23/IMX23xx, see platform.mk).
+include $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand/nand.mk
+
+# LittleFS itself.
+ALLCSRC += $(CHIBIOS)/ext/littlefs/lfs.c \
            $(CHIBIOS)/ext/littlefs/lfs_util.c
-ALLINC += $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand \
-          $(CHIBIOS_CONTRIB)/os/various \
-          $(CHIBIOS)/ext/littlefs
+ALLINC += $(CHIBIOS)/ext/littlefs
 
 # TLSF constant-time allocator (used by littlefs via USE_TLSF_HEAP).
 # Newlib syscall stubs (tlsf error paths call printf -> newlib stdio).

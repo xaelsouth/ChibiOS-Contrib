@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/nand/imx23_romboot.c
+ * @file    hal/ports/IMX23/IMX23xx/imx23_romboot.c
  * @brief   i.MX23 BootROM NAND boot structures writer (kobs-ng v0 port).
  *
  * @details Ported from imx-kobs (mtd.c v0_rom_mtd_init/v0_rom_mtd_commit_

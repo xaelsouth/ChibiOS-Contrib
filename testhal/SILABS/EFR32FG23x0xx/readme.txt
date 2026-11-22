@@ -18,7 +18,9 @@ System tick: SYSTICKv3 (LETIMER0 @ 32768 Hz, EM23GRPACLK from LFXO).
 RTC calendar: BURTC (RTCD1). SYSRTC0 free counter + compare: SYSRTCv1.
 
 Tests: TEMPLATE GPIO SIO RTC SYSRTC GPT-TIMER PWM-TIMER I2C SPI DMA
-       EFL CRYPTO-AES WDG RAIL-TX
+       EFL CRYPTO-AES WDG RAIL-TX SYSTICKv1
+       (SYSTICKv1 builds with EFR32_USE_SYSTICKV1=yes = core SysTick;
+        default: FREERUNNING, "make ST_PERIODIC=yes": PERIODIC)
 
 Build:  cd <test> && make -j4
 Flash:  make flash        (writes build/flash.jlink, runs JLinkExe)
@@ -43,6 +45,9 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
               RAIL_ConfigChannels asserts RAIL_ASSERT_INVALID_XTAL_FREQUENCY
               (66) - needs a Radio Configurator autogen channel config with
               matching xtalFrequencyHz. Radio AES (CRYPTO-AES) works.
+  SYSTICKv1   PASS  (core SysTick @ HCLK, 10000 Hz: sleep 10/100/1000 ms
+              measured as 100/1000/10000 ticks exactly; both FREERUNNING
+              and PERIODIC ("make ST_PERIODIC=yes") modes ALL PASS)
 
 Notes / driver quirks discovered on FG23 (all handled in the LLDs):
   - Peripheral bus clocks must be enabled (CMU CLKEN0) before register

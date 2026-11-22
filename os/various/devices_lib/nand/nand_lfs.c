@@ -16,13 +16,13 @@
 
 /**
  * @file    devices_lib/nand/nand_lfs.c
- * @brief   LittleFS-over-GPMI-NAND binding code.
+ * @brief   LittleFS over a generic MTD-style NAND logical block device.
  *
  * @details The lfs_config callbacks translate littlefs block/offset accesses
- *          into the MTD-style logical block device of the NAND driver:
- *          read  -> imx23_nand_lread()  (ECC-corrected page reads)
- *          prog  -> imx23_nand_lwrite_page() per page (BCH encode)
- *          erase -> imx23_nand_lerase()  (NAND erase block, bad-block aware)
+ *          into the nand_lfs_bd_t operations of the backing NAND driver:
+ *          read  -> bd->lread()       (ECC-corrected reads)
+ *          prog  -> bd->lwrite_page() per page
+ *          erase -> bd->lerase()      (NAND erase block, bad-block aware)
  *
  *          read_size = prog_size = NAND page size, block_size = NAND erase
  *          block size, so every littlefs prog is exactly one full NAND page.
@@ -101,8 +101,8 @@ static int lfs_nand_read(const struct lfs_config *c, lfs_block_t block,
                          lfs_off_t off, void *buffer, lfs_size_t size) {
   nand_lfs_t *nl = (nand_lfs_t *)c->context;
 
-  if (imx23_nand_lread(nl->np, nl->base_lblock + block, off, buffer, size) !=
-      IMX23_NAND_OK) {
+  if (nl->bd->lread(nl->bd->ctx, nl->base_lblock + block, off, buffer, size)
+      != 0) {
     return LFS_ERR_IO;
   }
   return 0;
@@ -111,7 +111,7 @@ static int lfs_nand_read(const struct lfs_config *c, lfs_block_t block,
 static int lfs_nand_prog(const struct lfs_config *c, lfs_block_t block,
                          lfs_off_t off, const void *buffer, lfs_size_t size) {
   nand_lfs_t *nl = (nand_lfs_t *)c->context;
-  const imx23_nand_geo_t *g = imx23_nand_geo(nl->np);
+  uint32_t page_size = nl->bd->page_size;
   uint32_t lblock = nl->base_lblock + block;
   lfs_off_t o = off;
   lfs_size_t s = size;
@@ -119,14 +119,13 @@ static int lfs_nand_prog(const struct lfs_config *c, lfs_block_t block,
 
   /* prog_size == page size, so prog calls are whole pages. */
   while (s > 0U) {
-    uint32_t page = (uint32_t)(o / g->page_size);
-    uint32_t len  = g->page_size;
+    uint32_t page = (uint32_t)(o / page_size);
+    uint32_t len  = page_size;
 
     if (len > s) {
       len = s;
     }
-    if (imx23_nand_lwrite_page(nl->np, lblock, page, p, len) !=
-        IMX23_NAND_OK) {
+    if (nl->bd->lwrite_page(nl->bd->ctx, lblock, page, p, len) != 0) {
       return LFS_ERR_IO;
     }
     p += len;
@@ -139,7 +138,7 @@ static int lfs_nand_prog(const struct lfs_config *c, lfs_block_t block,
 static int lfs_nand_erase(const struct lfs_config *c, lfs_block_t block) {
   nand_lfs_t *nl = (nand_lfs_t *)c->context;
 
-  if (imx23_nand_lerase(nl->np, nl->base_lblock + block) != IMX23_NAND_OK) {
+  if (nl->bd->lerase(nl->bd->ctx, nl->base_lblock + block) != 0) {
     return LFS_ERR_IO;
   }
   return 0;
@@ -156,35 +155,36 @@ static int lfs_nand_sync(const struct lfs_config *c) {
 /*===========================================================================*/
 
 /**
- * @brief   Mounts a LittleFS volume on the NAND logical block device.
+ * @brief   Mounts a LittleFS volume on a NAND logical block device.
  *
  * @param[in] nl              binding object
- * @param[in] np              initialized NAND driver
+ * @param[in] bd              backing MTD-style NAND block device ops
  * @param[in] base_lblock     first logical block reserved for the volume
  * @param[in] format_on_fail  if true, format the volume when mount fails
  *
  * @return  0 on success, littlefs error code otherwise.
  */
-int nand_lfs_mount(nand_lfs_t *nl, IMX23NANDDriver *np,
+int nand_lfs_mount(nand_lfs_t *nl, const nand_lfs_bd_t *bd,
                    uint32_t base_lblock, bool format_on_fail) {
-  const imx23_nand_geo_t *g = imx23_nand_geo(np);
-  uint32_t lblocks = imx23_nand_lblocks(np);
+  uint32_t lblocks;
   int rc;
 
-  osalDbgCheck(nl != NULL && np != NULL);
-  osalDbgCheck(np->ready);
+  osalDbgCheck(nl != NULL && bd != NULL);
+  osalDbgCheck(bd->page_size > 0U && bd->page_size <= NAND_CHIP_MAX_PAGE_SIZE);
+  osalDbgCheck(bd->block_size > 0U && bd->block_size % bd->page_size == 0U);
+  lblocks = bd->lblocks(bd->ctx);
   osalDbgCheck(base_lblock < lblocks);
 
   memset(nl, 0, sizeof(*nl));
-  nl->np = np;
+  nl->bd = bd;
   nl->base_lblock = base_lblock;
 
   nl->cfg.context         = nl;
-  nl->cfg.read_size       = g->page_size;
-  nl->cfg.prog_size       = g->page_size;
-  nl->cfg.block_size      = g->block_size;
+  nl->cfg.read_size       = bd->page_size;
+  nl->cfg.prog_size       = bd->page_size;
+  nl->cfg.block_size      = bd->block_size;
   nl->cfg.block_count     = lblocks - base_lblock;
-  nl->cfg.cache_size      = g->page_size;
+  nl->cfg.cache_size      = bd->page_size;
   nl->cfg.lookahead_size  = sizeof(nl->lookahead);
   nl->cfg.read_buffer     = nl->read_buf;
   nl->cfg.prog_buffer     = nl->prog_buf;

@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/nand/imx23_gpmi_nand.h
+ * @file    hal/ports/IMX23/IMX23xx/imx23_gpmi_nand.h
  * @brief   i.MX23 GPMI + BCH NAND flash driver header.
  *
  * @details Ported from U-Boot drivers/mtd/nand/raw/mxs_nand.c and Linux
@@ -52,6 +52,7 @@
 #include "imx23.h"
 #include "imx23_dma.h"
 #include "bitmap.h"
+#include "nand_chips.h"
 
 /*===========================================================================*/
 /* Module constants.                                                         */
@@ -100,24 +101,11 @@
 
 /**
  * @brief   NAND chip geometry (decoded from the JEDEC ID at probe time).
+ * @note    The generic vendor database lives in devices_lib/nand
+ *          (nand_chips.h); this is just an alias so the driver code can
+ *          keep using the imx23_nand_geo_t name.
  */
-typedef struct {
-  char     name[24];          /**< marketing name, if known             */
-  uint8_t  id[8];             /**< raw JEDEC READID bytes               */
-  uint8_t  id_len;            /**< number of valid id[] bytes           */
-  uint32_t page_size;         /**< main area bytes per page             */
-  uint32_t oob_size;          /**< spare bytes per page                 */
-  uint32_t pages_per_block;   /**< pages per erase block                */
-  uint32_t block_size;        /**< erase block size in bytes            */
-  uint32_t blocks;            /**< total physical erase blocks          */
-  uint32_t pages;             /**< total pages                          */
-  uint8_t  ecc_strength;      /**< BCH bits per 512-byte chunk          */
-  uint8_t  ecc_chunks;        /**< 512-byte chunks per page             */
-  uint8_t  row_bytes;         /**< row address bytes (2 or 3)           */
-  uint32_t layout0;           /**< BCH FLASH0LAYOUT0 value              */
-  uint32_t layout1;           /**< BCH FLASH0LAYOUT1 value              */
-  uint32_t good_blocks;       /**< erase blocks not marked bad in BBT   */
-} imx23_nand_geo_t;
+typedef nand_chip_geo_t imx23_nand_geo_t;
 
 /**
  * @brief   IMX23 GPMI NAND driver object.
@@ -134,6 +122,8 @@ typedef struct {
   bitmap_word_t     bbt_array[IMX23_NAND_BBT_WORDS];
   uint16_t          l2p[IMX23_NAND_MAX_BLOCKS]; /**< logical->physical map */
   bool              mlc;                        /**< MLC: BBM in last page  */
+  uint32_t          layout0;                    /**< BCH FLASH0LAYOUT0      */
+  uint32_t          layout1;                    /**< BCH FLASH0LAYOUT1      */
   /* DMA resources (word aligned, in SDRAM via the global object). */
   imx23_dma_ccw_t   ccw[8]  __attribute__((aligned(32)));
   uint8_t           cmd_buf[8] __attribute__((aligned(32)));

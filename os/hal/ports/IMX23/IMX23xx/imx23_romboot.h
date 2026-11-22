@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    devices_lib/nand/imx23_romboot.h
+ * @file    hal/ports/IMX23/IMX23xx/imx23_romboot.h
  * @brief   i.MX23 BootROM NAND boot structures writer (kobs-ng v0 port).
  *
  * @details Reimplements "kobs-ng init" on-device so the i.MX23 BootROM can

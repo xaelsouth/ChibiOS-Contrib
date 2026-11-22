@@ -16,13 +16,23 @@
 
 /**
  * @file    devices_lib/nand/nand_lfs.h
- * @brief   LittleFS-over-GPMI-NAND binding header.
+ * @brief   LittleFS over a generic MTD-style NAND logical block device.
  *
- * @details Mounts a LittleFS volume on the MTD-style logical block device of
- *          an IMX23NANDDriver (bad blocks skipped, hardware BCH ECC, block
- *          erase = NAND erase block). Build littlefs with
- *          -DLFS_THREADSAFE=0 and add ext/littlefs (lfs.c, lfs_util.c) plus
- *          this directory to the build.
+ * @details Mounts a LittleFS volume on any NAND driver that exposes an
+ *          MTD-style logical block interface (bad blocks skipped, ECC handled
+ *          by the controller) through the @p nand_lfs_bd_t operations table:
+ *          - lread:       ECC-corrected read of @p len bytes at offset @p off
+ *                         inside logical block @p lblock
+ *          - lwrite_page: program page @p page of logical block @p lblock
+ *          - lerase:      erase logical block @p lblock
+ *          - lblocks:     total number of logical blocks
+ *          All return 0 on success.
+ *
+ *          read_size = prog_size = NAND page size, block_size = NAND erase
+ *          block size, so every littlefs prog is exactly one full NAND page.
+ *
+ *          Build littlefs with -DLFS_THREADSAFE=0 and add ext/littlefs
+ *          (lfs.c, lfs_util.c) plus this directory to the build.
  *
  * @addtogroup NAND
  * @{
@@ -32,29 +42,42 @@
 #define NAND_LFS_H
 
 #include "hal.h"
-#include "imx23_gpmi_nand.h"
+#include "nand_chips.h"
 #include "lfs.h"
-
-/*===========================================================================*/
-/* Module constants.                                                         */
-/*===========================================================================*/
 
 /*===========================================================================*/
 /* Module data structures and types.                                         */
 /*===========================================================================*/
 
 /**
+ * @brief   MTD-style NAND logical block device operations for LittleFS.
+ * @note    All callbacks receive @p ctx (the first field) as their first
+ *          argument and return 0 on success, negative on error.
+ */
+typedef struct {
+  void     *ctx;          /**< backing device context (e.g. driver object)  */
+  uint32_t  page_size;    /**< NAND page (main area) size in bytes          */
+  uint32_t  block_size;   /**< NAND erase block size in bytes               */
+  uint32_t (*lblocks)(void *ctx);
+  int      (*lread)(void *ctx, uint32_t lblock, uint32_t off,
+                    uint8_t *buf, uint32_t len);
+  int      (*lwrite_page)(void *ctx, uint32_t lblock, uint32_t page,
+                          const uint8_t *data, uint32_t len);
+  int      (*lerase)(void *ctx, uint32_t lblock);
+} nand_lfs_bd_t;
+
+/**
  * @brief   LittleFS-over-NAND binding object.
  */
 typedef struct {
-  IMX23NANDDriver   *np;            /**< backing NAND driver               */
-  uint32_t          base_lblock;   /**< first logical block of the volume */
-  lfs_t             lfs;           /**< littlefs state                    */
-  struct lfs_config cfg;           /**< littlefs config                   */
+  const nand_lfs_bd_t *bd;          /**< backing block device ops      */
+  uint32_t          base_lblock;   /**< first logical block of volume */
+  lfs_t             lfs;           /**< littlefs state                */
+  struct lfs_config cfg;           /**< littlefs config               */
   bool              mounted;
   /* lfs buffers (must be >= read/prog size). */
-  uint8_t           read_buf[IMX23_NAND_MAX_PAGE_SIZE] __attribute__((aligned(32)));
-  uint8_t           prog_buf[IMX23_NAND_MAX_PAGE_SIZE] __attribute__((aligned(32)));
+  uint8_t           read_buf[NAND_CHIP_MAX_PAGE_SIZE] __attribute__((aligned(32)));
+  uint8_t           prog_buf[NAND_CHIP_MAX_PAGE_SIZE] __attribute__((aligned(32)));
   uint8_t           lookahead[1024U];
 } nand_lfs_t;
 
@@ -65,9 +88,9 @@ typedef struct {
 #ifdef __cplusplus
 extern "C" {
 #endif
-  int  nand_lfs_mount(nand_lfs_t *nl, IMX23NANDDriver *np,
-                      uint32_t base_lblock, bool format_on_fail);
-  int  nand_lfs_unmount(nand_lfs_t *nl);
+  int   nand_lfs_mount(nand_lfs_t *nl, const nand_lfs_bd_t *bd,
+                       uint32_t base_lblock, bool format_on_fail);
+  int   nand_lfs_unmount(nand_lfs_t *nl);
   lfs_t *nand_lfs_handle(nand_lfs_t *nl);
 #ifdef __cplusplus
 }

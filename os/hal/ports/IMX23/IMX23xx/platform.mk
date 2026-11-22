@@ -31,14 +31,19 @@ PLATFORMSRC_CONTRIB := \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_sio_lld.c \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_pal_lld.c \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_pwm_lld.c \
-  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_usb_lld.c
+  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/hal_usb_lld.c \
+  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/imx23_gpmi_nand.c \
+  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/imx23_romboot.c \
+  $(CHIBIOS_CONTRIB)/os/various/bitmap.c
 
 PLATFORMASM_CONTRIB := \
   $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx/icoll_tramp.S
 
 # Required include directories.
 PLATFORMINC_CONTRIB := \
-  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx
+  $(CHIBIOS_CONTRIB)/os/hal/ports/IMX23/IMX23xx \
+  $(CHIBIOS_CONTRIB)/os/various/devices_lib/nand \
+  $(CHIBIOS_CONTRIB)/os/various
 
 # Shared variables
 ALLCSRC   += $(PLATFORMSRC_CONTRIB)
