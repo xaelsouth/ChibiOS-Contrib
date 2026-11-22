@@ -36,9 +36,10 @@
 /* Display / color.                                                          */
 /*--------------------------------------------------------------------------*/
 /* Default color format: RGB565 (16 bpp) — compact, and the usual choice for
-   small embedded displays; ports with a hardware pixel converter (e.g. the
-   i.MX23 PXP RGB565->XRGB8888 pipeline) override/flush accordingly, see the
-   port's LVGL glue. Override per project with -DLV_COLOR_FORMAT_DEFAULT=... */
+   small embedded displays. Ports whose display controller needs another
+   format (or a hardware pixel-conversion step) override this per project
+   with -DLV_COLOR_FORMAT_DEFAULT=... and handle the flush in their LVGL
+   port glue. */
 #define LV_COLOR_FORMAT_DEFAULT     LV_COLOR_FORMAT_RGB565
 
 /*--------------------------------------------------------------------------*/
