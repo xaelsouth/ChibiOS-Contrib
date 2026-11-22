@@ -24,7 +24,7 @@
 
 #include "board.h"
 #include "imx23_clock.h"
-#include "imx23_audioout.h"
+#include "mxs_audioout.h"
 #include "tlsf_bindings.h"
 
 #if defined(BOARD_ENC28J60)
@@ -322,7 +322,7 @@ static const int8_t sine_tab[256] = {
    second half of the table range. */
 
 static void cmd_tone(BaseSequentialStream *chp, int argc, char *argv[]) {
-  static const imx23_audio_config_t audio_cfg = {
+  static const mxs_audio_config_t audio_cfg = {
     .rate = TONE_RATE_HZ, .bits = 16U, .volume = 60U,
   };
   unsigned hz = (argc > 0) ? (unsigned)atoi(argv[0]) : 440U;
@@ -333,7 +333,7 @@ static void cmd_tone(BaseSequentialStream *chp, int argc, char *argv[]) {
 
   if (hz == 0U) hz = 440U;
 
-  imx23_audio_init(&audio_cfg);
+  mxs_audio_init(&audio_cfg);
 
   while (done < total && msg == MSG_OK) {
     unsigned n = total - done;
@@ -348,11 +348,11 @@ static void cmd_tone(BaseSequentialStream *chp, int argc, char *argv[]) {
       tone_buf[2U * i]      = smp;
       tone_buf[2U * i + 1U] = smp;
     }
-    msg = imx23_audio_play(tone_buf, n * 4U, TIME_MS2I(2000));
+    msg = mxs_audio_play(tone_buf, n * 4U, TIME_MS2I(2000));
     done += n;
   }
 
-  imx23_audio_stop();
+  mxs_audio_stop();
   chprintf(chp, "tone %u Hz %u ms: %s\r\n", hz, ms,
            (msg == MSG_OK) ? "done" : "FAILED");
   log_line("tone %u Hz %u ms %s", hz, ms, (msg == MSG_OK) ? "done" : "FAILED");

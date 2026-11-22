@@ -65,6 +65,9 @@ include $(CHIBIOS_CONTRIB)/os/various/devices_lib/crypto/mxs_dcp.mk
 # (devices_lib/display).
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/display/mxs_display.mk
 
+# MXS audioout DAC playback (devices_lib/audio).
+include $(CHIBIOS_CONTRIB)/os/various/devices_lib/audio/mxs_audio.mk
+
 # Generic matrix keypad (devices_lib/keypad).
 include $(CHIBIOS_CONTRIB)/os/various/devices_lib/keypad/keypad.mk
 
