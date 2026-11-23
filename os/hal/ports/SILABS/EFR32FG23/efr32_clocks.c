@@ -121,8 +121,16 @@ bool efr32_em2_allowed(void) {
 }
 
 /*===========================================================================*/
-/* cli hooks (os/various/cli/clock_cmds.c): users column + em2 command.      */
+/* cli hooks (os/various/cli/clock_cmds.c): users column + lowpower command. */
 /*===========================================================================*/
+
+const char *cli_pm_lowpower_name(void);
+const char *cli_pm_lowpower_name(void) {
+
+  /* On Series 2 the low-power mode entered by the "lowpower" command
+     is EM2. */
+  return "EM2";
+}
 
 unsigned cli_clock_users(halclkpt_t pt);
 unsigned cli_clock_users(halclkpt_t pt) {
@@ -130,20 +138,20 @@ unsigned cli_clock_users(halclkpt_t pt) {
   return efr32_clock_consumers(pt);
 }
 
-bool cli_pm_point_blocks_em2(halclkpt_t pt);
-bool cli_pm_point_blocks_em2(halclkpt_t pt) {
+bool cli_pm_point_blocks_lowpower(halclkpt_t pt);
+bool cli_pm_point_blocks_lowpower(halclkpt_t pt) {
 
   return clk_pt_blocks_em2(pt);
 }
 
-bool cli_pm_em2_allowed(void);
-bool cli_pm_em2_allowed(void) {
+bool cli_pm_lowpower_allowed(void);
+bool cli_pm_lowpower_allowed(void) {
 
   return efr32_em2_allowed();
 }
 
-void cli_pm_em2_enter_once(void);
-void cli_pm_em2_enter_once(void) {
+void cli_pm_lowpower_enter_once(void);
+void cli_pm_lowpower_enter_once(void) {
 
   /* On Series 2, WFI with SLEEPDEEP set enters EM2; any enabled interrupt
      (e.g. the LETIMER0 tick, which keeps running in EM2) wakes the CPU. */

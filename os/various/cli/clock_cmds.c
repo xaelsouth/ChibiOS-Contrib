@@ -150,42 +150,55 @@ void cli_cmd_clock(BaseSequentialStream *chp, int argc, char *argv[]) {
 #endif /* defined(HAL_LLD_USE_CLOCK_MANAGEMENT) */
 
 /*===========================================================================*/
-/* Power management: "em2" command.                                          */
+/* Power management: "lowpower" command.                                     */
 /*===========================================================================*/
 
 /**
- * @brief   Weak hook: does this clock point block EM2?
- * @details Ports override (default: every point blocks EM2).
+ * @brief   Weak hook: name of the low-power mode the port enters.
+ * @details Ports override (default: "low-power"; e.g. SILABS EFR32 ports
+ *          return "EM2").
  */
-CC_WEAK bool cli_pm_point_blocks_em2(halclkpt_t pt) {
+CC_WEAK const char *cli_pm_lowpower_name(void) {
+
+  return "low-power";
+}
+
+/**
+ * @brief   Weak hook: does this clock point block low-power entry?
+ * @details Ports override (default: every point blocks it).
+ */
+CC_WEAK bool cli_pm_point_blocks_lowpower(halclkpt_t pt) {
 
   (void)pt;
   return true;
 }
 
 /**
- * @brief   Weak hook: is EM2 entry currently allowed?
+ * @brief   Weak hook: is low-power entry currently allowed?
  * @details Ports with a consumer registry override this (default: no).
  */
-CC_WEAK bool cli_pm_em2_allowed(void) {
+CC_WEAK bool cli_pm_lowpower_allowed(void) {
 
   return false;
 }
 
 /**
- * @brief   Weak hook: enter EM2 once, wake on the next interrupt.
+ * @brief   Weak hook: enter the low-power mode once, wake on the next
+ *          interrupt.
  * @details Ports override (default: no-op).
  */
-CC_WEAK void cli_pm_em2_enter_once(void) {
+CC_WEAK void cli_pm_lowpower_enter_once(void) {
 
 }
 
 /**
- * @brief   "em2 [seconds]" command: show the EM2 decision, then sleep in
- *          EM2 for the given time (default 5 s), waking on each interrupt.
+ * @brief   "lowpower [seconds]" command: show the low-power mode decision,
+ *          then sleep in the port's low-power mode for the given time
+ *          (default 5 s), waking on each interrupt.
  */
-void cli_cmd_em2(BaseSequentialStream *chp, int argc, char *argv[]) {
+void cli_cmd_lowpower(BaseSequentialStream *chp, int argc, char *argv[]) {
   static const char *names[CLK_ARRAY_SIZE] = CLK_POINT_NAMES;
+  const char *mode = cli_pm_lowpower_name();
   uint32_t seconds = 5U;
   systime_t deadline;
   unsigned wakes = 0U;
@@ -194,31 +207,32 @@ void cli_cmd_em2(BaseSequentialStream *chp, int argc, char *argv[]) {
   if (argc == 2) {
     seconds = (uint32_t)strtoul(argv[1], NULL, 0);
     if (seconds == 0U) {
-      chprintf(chp, "Usage: em2 [seconds]\r\n");
+      chprintf(chp, "Usage: lowpower [seconds]\r\n");
       return;
     }
   }
   else if (argc != 1) {
-    chprintf(chp, "Usage: em2 [seconds]\r\n");
+    chprintf(chp, "Usage: lowpower [seconds]\r\n");
     return;
   }
 
-  if (!cli_pm_em2_allowed()) {
-    chprintf(chp, "EM2 blocked — consumers on EM0-only clock points:\r\n");
+  if (!cli_pm_lowpower_allowed()) {
+    chprintf(chp, "%s blocked — consumers on clock points that block it:\r\n",
+             mode);
     for (i = 0U; i < (unsigned)CLK_ARRAY_SIZE; i++) {
       unsigned u = cli_clock_users((halclkpt_t)i);
-      if ((u > 0U) && cli_pm_point_blocks_em2((halclkpt_t)i)) {
+      if ((u > 0U) && cli_pm_point_blocks_lowpower((halclkpt_t)i)) {
         chprintf(chp, "  %-14s users=%u\r\n", names[i], u);
       }
     }
     return;
   }
 
-  chprintf(chp, "EM2 allowed — sleeping in EM2 for %u s (wake on each IRQ)...\r\n",
-           (unsigned)seconds);
+  chprintf(chp, "%s allowed — sleeping in %s for %u s (wake on each IRQ)...\r\n",
+           mode, mode, (unsigned)seconds);
   deadline = osalOsGetSystemTimeX() + (systime_t)seconds * OSAL_ST_FREQUENCY;
   while (osalOsGetSystemTimeX() < deadline) {
-    cli_pm_em2_enter_once();
+    cli_pm_lowpower_enter_once();
     wakes++;
   }
   chprintf(chp, "woke %u times, done\r\n", wakes);
@@ -230,7 +244,7 @@ void cli_cmd_em2(BaseSequentialStream *chp, int argc, char *argv[]) {
 
 #if CLI_HAS_XSHELL
 CLI_XSHELL_ADAPTER(cli_cmd_clocks)
-CLI_XSHELL_ADAPTER(cli_cmd_em2)
+CLI_XSHELL_ADAPTER(cli_cmd_lowpower)
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
 CLI_XSHELL_ADAPTER(cli_cmd_clock)
 #endif
@@ -243,7 +257,7 @@ CLI_XSHELL_ADAPTER(cli_cmd_clock)
 #if CLI_HAS_SHELL
 const ShellCommand cli_shell_clock_commands[] = {
   CLI_CLOCKS_SHELL_ENTRY
-  CLI_EM2_SHELL_ENTRY
+  CLI_LOWPOWER_SHELL_ENTRY
   CLI_CLOCK_SHELL_ENTRY
   {NULL, NULL}
 };
@@ -252,7 +266,7 @@ const ShellCommand cli_shell_clock_commands[] = {
 #if CLI_HAS_XSHELL
 const xshell_command_t cli_xshell_clock_commands[] = {
   CLI_CLOCKS_XSHELL_ENTRY
-  CLI_EM2_XSHELL_ENTRY
+  CLI_LOWPOWER_XSHELL_ENTRY
   CLI_CLOCK_XSHELL_ENTRY
   {NULL, NULL}
 };
