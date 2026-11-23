@@ -194,5 +194,9 @@
 #define EFR32_WDG_WDOG0_IRQ_PRIORITY        2
 #define EFR32_WDG_WDOG1_IRQ_PRIORITY        2
 
+/* TEMPv1 instances: die sensor exposed as two objects. */
+#define EFR32_TEMP_USE_TEMP1                TRUE
+#define EFR32_TEMP_USE_TEMP2                TRUE
+
 
 #endif /* MCUCONF_H */

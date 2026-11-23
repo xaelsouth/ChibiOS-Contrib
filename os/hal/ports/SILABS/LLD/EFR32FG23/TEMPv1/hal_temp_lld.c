@@ -32,7 +32,12 @@
 /* Driver exported variables.                                                */
 /*===========================================================================*/
 
+#if (EFR32_TEMP_USE_TEMP1 == TRUE) || defined(__DOXYGEN__)
 TEMPERATUREDriver TEMPD1;
+#endif
+#if (EFR32_TEMP_USE_TEMP2 == TRUE) || defined(__DOXYGEN__)
+TEMPERATUREDriver TEMPD2;
+#endif
 
 /*===========================================================================*/
 /* Driver exported functions.                                                */

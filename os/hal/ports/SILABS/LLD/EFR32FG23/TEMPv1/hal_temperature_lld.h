@@ -42,6 +42,18 @@
 #define EFR32_TEMP_USE_TEMP     FALSE
 #endif
 
+/* Per-instance enables. The xG23 has one physical die sensor (EMU->TEMP),
+   but multiple TEMPERATUREDriver objects are supported — each object has
+   its own state and correction curve (e.g. different calibrations of the
+   same sensor for different consumers). TEMP1 defaults to the master
+   switch EFR32_TEMP_USE_TEMP. */
+#if !defined(EFR32_TEMP_USE_TEMP1) || defined(__DOXYGEN__)
+#define EFR32_TEMP_USE_TEMP1    EFR32_TEMP_USE_TEMP
+#endif
+#if !defined(EFR32_TEMP_USE_TEMP2) || defined(__DOXYGEN__)
+#define EFR32_TEMP_USE_TEMP2    FALSE
+#endif
+
 /* tempstate_t and the forward declaration of TEMPERATUREDriver come from
    the upper hal_temperature.h. TEMPERATURE_CORR_MAX_COEFFS likewise. */
 
@@ -65,8 +77,11 @@ struct TEMPERATUREDriver {
   size_t                   corr_num;
 };
 
-#if (EFR32_TEMP_USE_TEMP == TRUE) || defined(__DOXYGEN__)
+#if (EFR32_TEMP_USE_TEMP1 == TRUE) || defined(__DOXYGEN__)
 extern TEMPERATUREDriver TEMPD1;
+#endif
+#if (EFR32_TEMP_USE_TEMP2 == TRUE) || defined(__DOXYGEN__)
+extern TEMPERATUREDriver TEMPD2;
 #endif
 
 #ifdef __cplusplus

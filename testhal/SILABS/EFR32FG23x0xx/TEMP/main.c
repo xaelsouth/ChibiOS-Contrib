@@ -24,17 +24,30 @@ int main(void) {
 
   tempInit();
   tempObjectInit(&TEMPD1);
+  tempObjectInit(&TEMPD2);
 
-  static const TEMPERATUREConfig temp_cfg = {
-    .corr     = NULL,   /* no correction at start */
-    .corr_num = 0U,
-  };
-  tempStart(&TEMPD1, &temp_cfg);
+  /* Two objects over the same die sensor: TEMPD1 uncorrected, TEMPD2 with
+     a -2 C offset correction given at start. */
+  static const float corr2[3] = { -2.0f, 1.0f, 0.0f };
+  static const TEMPERATUREConfig temp_cfg1 = { .corr = NULL,   .corr_num = 0U };
+  static const TEMPERATUREConfig temp_cfg2 = { .corr = corr2,  .corr_num = 3U };
+  tempStart(&TEMPD1, &temp_cfg1);
+  tempStart(&TEMPD2, &temp_cfg2);
   bool first_done = ((EMU->STATUS & EMU_STATUS_FIRSTTEMPDONE) != 0U);
-  PRINTF("state=%d (READY=%d) FIRSTTEMPDONE=%d %s\r\n", (int)TEMPD1.state,
-         (int)TEMP_READY, (int)first_done,
-         (TEMPD1.state == TEMP_READY && first_done) ? "PASS" : "FAIL");
-  ok = ok && (TEMPD1.state == TEMP_READY) && first_done;
+  PRINTF("TEMPD1 state=%d TEMPD2 state=%d (READY=%d) FIRSTTEMPDONE=%d %s\r\n",
+         (int)TEMPD1.state, (int)TEMPD2.state, (int)TEMP_READY, (int)first_done,
+         (TEMPD1.state == TEMP_READY && TEMPD2.state == TEMP_READY && first_done)
+           ? "PASS" : "FAIL");
+  ok = ok && (TEMPD1.state == TEMP_READY) && (TEMPD2.state == TEMP_READY)
+       && first_done;
+
+  /* Objects are independent: TEMPD2 must read ~2 C below TEMPD1. */
+  float d1 = tempReadCelsius(&TEMPD1);
+  float d2 = tempReadCelsius(&TEMPD2);
+  bool indep_ok = (d2 >= d1 - 2.6f) && (d2 <= d1 - 1.4f);
+  PRINTF("two objects: TEMPD1 %.2f C, TEMPD2 %.2f C (expect ~%.2f) %s\r\n",
+         (double)d1, (double)d2, (double)(d1 - 2.0f), indep_ok ? "PASS" : "FAIL");
+  ok = ok && indep_ok;
 
   float min_c = 1000.0f, max_c = -1000.0f;
   for (int i = 0; i < 3; i++) {
@@ -91,9 +104,12 @@ int main(void) {
   ok = ok && clear_ok;
 
   tempStop(&TEMPD1);
-  PRINTF("after stop state=%d (STOP=%d) %s\r\n", (int)TEMPD1.state,
-         (int)TEMP_STOP, (TEMPD1.state == TEMP_STOP) ? "PASS" : "FAIL");
-  ok = ok && (TEMPD1.state == TEMP_STOP);
+  tempStop(&TEMPD2);
+  bool stop_ok = (TEMPD1.state == TEMP_STOP) && (TEMPD2.state == TEMP_STOP);
+  PRINTF("after stop TEMPD1 state=%d TEMPD2 state=%d (STOP=%d) %s\r\n",
+         (int)TEMPD1.state, (int)TEMPD2.state, (int)TEMP_STOP,
+         stop_ok ? "PASS" : "FAIL");
+  ok = ok && stop_ok;
 
   PRINTF("result: %s\r\n", ok ? "PASS" : "FAIL");
 
