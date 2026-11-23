@@ -650,10 +650,14 @@ void efr32_set_sleep_mode(bool em3) {
 
 /**
  * @brief   Enter EM2 (deep sleep). Returns after wake-up interrupt.
+ * @details On EFR32 Series 2, EM2 is entered by WFI with SLEEPDEEP set;
+ *          SLEEPDEEP=0 would only reach EM1. Any enabled interrupt (e.g.
+ *          the LETIMER0 tick, which keeps running in EM2) wakes the CPU.
  */
 void efr32_enter_em2(void) {
-  efr32_set_sleep_mode(false);
+  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
   __WFI();
+  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
 }
 
 /**

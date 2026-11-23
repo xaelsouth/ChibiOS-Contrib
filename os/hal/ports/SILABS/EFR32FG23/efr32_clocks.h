@@ -49,6 +49,7 @@ extern "C" {
   void     efr32_clock_consumer_acquire(halclkpt_t pt);
   void     efr32_clock_consumer_release(halclkpt_t pt);
   unsigned efr32_clock_consumers(halclkpt_t pt);
+  bool     efr32_clock_pt_blocks_em2(halclkpt_t pt);
   bool     efr32_em2_allowed(void);
 
 #ifdef __cplusplus

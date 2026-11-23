@@ -703,9 +703,11 @@ extern "C" {
 
   /**
    * @brief   Enter EM2 (deep sleep). Returns after wake-up interrupt.
-   * @details On EFR32 Series 2, WFI automatically enters EM2 if EM2 is
-   *          enabled. All HF peripherals are stopped; LF peripherals
-   *          (LESENSE, SYSRTC, BURTC, LETIMER) keep running.
+   * @details On EFR32 Series 2, EM2 is entered by WFI with SLEEPDEEP set
+   *          (SLEEPDEEP=0 would only reach EM1). All HF peripherals are
+   *          stopped; LF peripherals (LESENSE, SYSRTC, BURTC, LETIMER)
+   *          keep running. This is the single EM2 entry point — the
+   *          "lowpower" cli hook (cli_pm_lowpower_enter_once) calls it.
    */
   void efr32_enter_em2(void);
 

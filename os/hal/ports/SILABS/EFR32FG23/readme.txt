@@ -70,3 +70,13 @@ Rules for port/LLD code (SILABS):
     EFR32_HAS_* / capability macros to EFR32FG23/efr32_registry.h so the
     port documents the real hardware (counts per ext/gecko_sdk device
     header *_COUNT macros) and drivers can #if on them.
+  - The cli low-power hooks (cli_clock_users, cli_pm_lowpower_name,
+    cli_pm_point_blocks_lowpower, cli_pm_lowpower_allowed,
+    cli_pm_lowpower_enter_once) are implemented in efr32_clocks.c because
+    they wrap the port-private clock consumer registry; the actual EM2
+    entry lives in hal_lld.c as efr32_enter_em2(). To override them from
+    the application (e.g. enter EM3 instead), define
+    EFR32_CLI_PM_HOOKS_IN_APP in the project's mcuconf.h and provide the
+    cli_* hooks in the application; the registry queries
+    (efr32_clock_consumers, efr32_clock_pt_blocks_em2, efr32_em2_allowed)
+    and efr32_enter_em2() are public for exactly that.

@@ -90,7 +90,7 @@ unsigned efr32_clock_consumers(halclkpt_t pt) {
  * Clock points that stop in EM2/EM3 — a consumer on any of these blocks
  * EM2.  The LF/EM23/EM4 domain points keep running in EM2.
  */
-static bool clk_pt_blocks_em2(halclkpt_t pt) {
+bool efr32_clock_pt_blocks_em2(halclkpt_t pt) {
 
   switch (pt) {
   case EFR32_CLK_HFRCOEM23:
@@ -111,7 +111,7 @@ bool efr32_em2_allowed(void) {
 
   osalSysLock();
   for (i = 0U; i < (unsigned)CLK_ARRAY_SIZE; i++) {
-    if ((efr32_clk_consumers[i] > 0U) && clk_pt_blocks_em2((halclkpt_t)i)) {
+    if ((efr32_clk_consumers[i] > 0U) && efr32_clock_pt_blocks_em2((halclkpt_t)i)) {
       allowed = false;
       break;
     }
@@ -122,7 +122,17 @@ bool efr32_em2_allowed(void) {
 
 /*===========================================================================*/
 /* cli hooks (os/various/cli/clock_cmds.c): users column + lowpower command. */
+/*                                                                           */
+/* These are strong definitions overriding the weak defaults in the       */
+/* generic cli layer.  They live here because they wrap the port-private  */
+/* consumer registry; the registry queries themselves are public          */
+/* (efr32_clock_consumers / efr32_clock_pt_blocks_em2 / efr32_em2_allowed)*/
+/* and the EM2 entry primitive is efr32_enter_em2() from hal_lld.c, so an */
+/* application that wants different behaviour (e.g. enter EM3, custom     */
+/* sequence) can define EFR32_CLI_PM_HOOKS_IN_APP in its mcuconf.h and     */
+/* provide its own cli_* hooks in the application instead.                */
 /*===========================================================================*/
+#if !defined(EFR32_CLI_PM_HOOKS_IN_APP) || defined(__DOXYGEN__)
 
 const char *cli_pm_lowpower_name(void);
 const char *cli_pm_lowpower_name(void) {
@@ -141,7 +151,7 @@ unsigned cli_clock_users(halclkpt_t pt) {
 bool cli_pm_point_blocks_lowpower(halclkpt_t pt);
 bool cli_pm_point_blocks_lowpower(halclkpt_t pt) {
 
-  return clk_pt_blocks_em2(pt);
+  return efr32_clock_pt_blocks_em2(pt);
 }
 
 bool cli_pm_lowpower_allowed(void);
@@ -153,12 +163,12 @@ bool cli_pm_lowpower_allowed(void) {
 void cli_pm_lowpower_enter_once(void);
 void cli_pm_lowpower_enter_once(void) {
 
-  /* On Series 2, WFI with SLEEPDEEP set enters EM2; any enabled interrupt
-     (e.g. the LETIMER0 tick, which keeps running in EM2) wakes the CPU. */
-  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-  __WFI();
-  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
+  /* The actual entry sequence (SLEEPDEEP + WFI) is chip-level code and
+     lives in hal_lld.c as efr32_enter_em2(). */
+  efr32_enter_em2();
 }
+
+#endif /* !EFR32_CLI_PM_HOOKS_IN_APP */
 
 /*===========================================================================*/
 /* Clock tree (Linux clk debugfs style).                                     */
