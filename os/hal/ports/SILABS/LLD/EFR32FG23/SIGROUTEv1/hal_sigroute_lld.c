@@ -65,6 +65,9 @@ static volatile uint32_t *sigroute_consumer_reg(sigroute_consumer_t consumer) {
   case SIGROUTE_CON_LESENSE_START:          return &PRS->CONSUMER_LESENSE_START;
   case SIGROUTE_CON_IADC0_SINGLETRIGGER:    return &PRS->CONSUMER_IADC0_SINGLETRIGGER;
   case SIGROUTE_CON_IADC0_SCANTRIGGER:      return &PRS->CONSUMER_IADC0_SCANTRIGGER;
+  case SIGROUTE_CON_PCNT0_S0IN:             return &PRS->CONSUMER_PCNT0_S0IN;
+  case SIGROUTE_CON_LDMAXBAR_DMAREQ0:       return &PRS->CONSUMER_LDMAXBAR_DMAREQ0;
+  case SIGROUTE_CON_LDMAXBAR_DMAREQ1:       return &PRS->CONSUMER_LDMAXBAR_DMAREQ1;
   default:                             return (volatile uint32_t *)0;
   }
 }

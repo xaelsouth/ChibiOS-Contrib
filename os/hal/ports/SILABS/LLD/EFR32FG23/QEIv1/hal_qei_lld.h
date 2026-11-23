@@ -26,24 +26,39 @@
 #define EFR32_QEI_PCNT0_IRQ_PRIORITY    3
 #endif
 
-typedef enum {
-  QEI_UNINIT = 0, QEI_STOP = 1, QEI_READY = 2
-} qeistate_t;
+/* qeistate_t, qeicallback_t and the QEIDriver forward declaration come from
+   the upper hal_qei.h, which includes this header. */
 
-typedef void (*qeicallback_t)(void *arg, uint32_t flags);
+/** Counter type (PCNT CNT is 16-bit on xG23, sign-extended here). */
+typedef int32_t qeicnt_t;
+/** Counter delta type. */
+typedef int32_t qeidelta_t;
+
+/** Counter limits (PCNT CNT is 16-bit on xG23). */
+#define QEI_COUNT_MIN   ((qeicnt_t)-32768)
+#define QEI_COUNT_MAX   ((qeicnt_t)32767)
+
+/** Overflow callback type. */
+typedef void (*qeioverflowcb_t)(QEIDriver *qeip, qeidelta_t delta);
 
 typedef struct {
   uint32_t  cfg;        /**< PCNT_CFG (mode, filter, hysteresis). */
   uint32_t  ctrl;       /**< PCNT_CTRL (edge, count event, direction). */
   uint32_t  top;        /**< PCNT_TOP (counter max). */
+  uint8_t   s0prs;      /**< PRS async channel for S0IN (0..11), 0xFF = GPIO pin. */
+  uint8_t   s1prs;      /**< PRS async channel for S1IN (0..11), 0xFF = GPIO pin. */
+  qeicnt_t  min;        /**< Min count (informational for upper layer). */
+  qeicnt_t  max;        /**< Max count (informational for upper layer). */
+  qeioverflow_t overflow;       /**< Overflow handling mode. */
+  qeioverflowcb_t overflow_cb;  /**< Overflow callback. */
   qeicallback_t callback;
-  void     *callback_arg;
 } QEIConfig;
 
-typedef struct {
+struct QEIDriver {
   qeistate_t        state;
   const QEIConfig  *config;
-} QEIDriver;
+  qeicnt_t          last;   /**< Last sampled count (upper layer delta calc). */
+};
 
 #if EFR32_QEI_USE_PCNT0 && !defined(__DOXYGEN__)
 extern QEIDriver QEID1;
@@ -53,8 +68,10 @@ extern QEIDriver QEID1;
 extern "C" {
 #endif
   void qei_lld_init(void);
-  void qei_lld_start(QEIDriver *qp, const QEIConfig *cfg);
+  void qei_lld_start(QEIDriver *qp);
   void qei_lld_stop(QEIDriver *qp);
+  void qei_lld_enable(QEIDriver *qp);
+  void qei_lld_disable(QEIDriver *qp);
   int32_t qei_lld_get_count(QEIDriver *qp);
   void qei_lld_set_count(QEIDriver *qp, int32_t count);
   void qei_lld_serve_interrupt(QEIDriver *qp);

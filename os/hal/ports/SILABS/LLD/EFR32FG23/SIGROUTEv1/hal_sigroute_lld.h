@@ -71,6 +71,9 @@
 #define SIGROUTE_GEN_GPIO_PIN0       PRS_ASYNC_GPIO_PIN0
 /* Sync generators (sync encoding). */
 #define SIGROUTE_GEN_SYNC_TIMER0_CC0 PRS_SYNC_TIMER0_CC0
+#define SIGROUTE_GEN_PCNT0_UFOF     PRS_ASYNC_PCNT0_UFOF
+#define SIGROUTE_GEN_BURTC_COMP     PRS_ASYNC_BURTC_COMP
+#define SIGROUTE_GEN_BURTC_OF       PRS_ASYNC_BURTC_OVERFLOW
 
 /*===========================================================================*/
 /* Event consumer encodings (CONSUMER_* registers, channel field).         */
@@ -84,6 +87,9 @@
 #define SIGROUTE_CON_LESENSE_START   0x04U
 #define SIGROUTE_CON_IADC0_SINGLETRIGGER 0x05U
 #define SIGROUTE_CON_IADC0_SCANTRIGGER   0x06U
+#define SIGROUTE_CON_PCNT0_S0IN     0x07U   /* PCNT count input (S0IN) */
+#define SIGROUTE_CON_LDMAXBAR_DMAREQ0 0x08U /* LDMA request via PRS (async ch) */
+#define SIGROUTE_CON_LDMAXBAR_DMAREQ1 0x09U
 
 /*===========================================================================*/
 /* Driver data structures and types.                                         */

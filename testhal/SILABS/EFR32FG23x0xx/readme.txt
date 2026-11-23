@@ -80,6 +80,14 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
               prsSetLogic NOT_A FNSEL check; consumer route to
               LETIMER0_START; sw level/pulse; sync ch connect/disconnect;
               clock gated off after stop)
+  PULSECAP    PASS  (PRS async ch4 sw-pulse -> PCNT0 S0IN (CNT++, never
+              reset) + LETIMER0 START (FREE mode, PRS START while running
+              is a no-op => no restart); BURTC COMP (1 s window, EM2) and
+              PCNT overflow -> PRS ch2 (FNSEL A|B) -> LDMAXBAR DMAREQ0 ->
+              LDMA ch0 (REQSEL LDMAXBARPRSREQ0) copies PCNT0->CNT into a
+              circular linked-descriptor ring buffer; DONE irq commits the
+              slot + signals the app. Window sample == CNT (8) PASS,
+              overflow sample 0 with 16-bit delta 65528 PASS)
 
 Notes / driver quirks discovered on FG23 (all handled in the LLDs):
   - Peripheral bus clocks must be enabled (CMU CLKEN0) before register
@@ -122,6 +130,22 @@ Notes / driver quirks discovered on FG23 (all handled in the LLDs):
     must get MODE=CHARGEPUMP and a VLCD (contrast) level - VLCD=0 blanks
     the glass; DISPCTRL BIAS (1/3 for the 4-COM glass) also required.
     SEGDn bit b = segment line b, SEGDn index = COM line.
+  - LDMA on xG23: CHEN reads back 0 (real enable status is CHSTATUS);
+    CH LINK only takes effect via LINKLOAD (point LINK at the first
+    descriptor, then LINKLOAD with a channel MASK); the channel
+    auto-disables after each descriptor DONE - re-enable with CHEN_SET
+    to keep a circular linked list running; BLOCKSIZE field is 2^n
+    transfers per request (BLOCKSIZE(0) = 1 word).
+  - PRS async producers: GPIO and BURTC events pulse fine; LETIMER
+    CH0/CH1 compare events and PCNT0 UFOF (when PCNT is clocked by the
+    S0 PRS signal) do NOT pulse async PRS on xG23 - use BURTC COMP as
+    the EM2 window timer and translate PCNT overflow via its IRQ.
+  - PCNT in external-clock mode (CLKSEL=PCNTS0) syncs its LF register
+    domain on S0 edges: pump SYNCBUSY with PRS SWPULSE on the S0 channel
+    and issue CMD STARTCNT (done in qei_lld_start), else CNT never moves
+    and PCNT writes stall the bus.
+  - LETIMER PRS start/stop/clear are gated by LETIMER0->PRSMODE
+    (default NONE = disabled).
   - KEYSCAN: COLOUT pads = WIREDAND+DOUT1, ROWSENSE pads = INPUTPULL+DOUT1;
     unused rows must be routed to a used row pin (KEYSCAN_E301 errata),
     otherwise they float and produce phantom key presses.

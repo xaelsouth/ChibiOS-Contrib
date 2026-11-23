@@ -423,7 +423,14 @@ typedef struct {
  * @param[in] desc      pointer to the first efr32_dma_desc_t in the chain
  */
 #define dmaStartLinkedList(dmastp, desc) {                                 \
-  LDMA->LINKLOAD = (uint32_t)(desc);                                        \
+  /* On xG23 the CH LINK register only takes effect via LINKLOAD: point    \
+     LINK at the first descriptor and kick the load with a channel MASK.  \
+     The engine then runs desc[0] and auto-loads each next descriptor via \
+     its LINK field, staying enabled across the circular chain.           \
+     Descriptors must be 16-byte aligned (LINKADDR ignores bits 3:0).     */\
+  (dmastp)->stream->LINK = EFR32_DMA_CH_LINK_LINKADDR(&(desc)[0]) |         \
+                           EFR32_DMA_CH_LINK_LINKMODE_ABSOLUTE;            \
+  LDMA->LINKLOAD = (1U << (dmastp)->selfindex);                             \
   dmaStreamEnable(dmastp);                                                  \
 }
 
