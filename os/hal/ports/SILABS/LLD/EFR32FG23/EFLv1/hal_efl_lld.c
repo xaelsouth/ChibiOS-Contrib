@@ -96,6 +96,28 @@ static bool msc_is_busy(void) {
   return (MSC->STATUS & MSC_STATUS_BUSY) != 0U;
 }
 
+/*
+ * Flash erase and write require the EM0/EM1 voltage scale at level
+ * VSCALE2 (see em_msc.c: "Flash erase and write requires VSCALE2").
+ * These helpers read back the current level from EMU->STATUS, switch to
+ * VSCALE2, and restore the saved level afterwards.
+ */
+static uint32_t msc_vscale_enter(void) {
+  uint32_t saved = (EMU->STATUS & _EMU_STATUS_VSCALE_MASK) >> _EMU_STATUS_VSCALE_SHIFT;
+  EMU->CMD = (EMU->CMD & ~(_EMU_CMD_EM01VSCALE1_MASK | _EMU_CMD_EM01VSCALE2_MASK)) |
+             (EMU_STATUS_VSCALE_VSCALE2 >> _EMU_STATUS_VSCALE_SHIFT << _EMU_CMD_EM01VSCALE1_SHIFT);
+  while ((EMU->STATUS & _EMU_STATUS_VSCALEBUSY_MASK) == EMU_STATUS_VSCALEBUSY) {
+  }
+  return saved;
+}
+
+static void msc_vscale_exit(uint32_t saved) {
+  EMU->CMD = (EMU->CMD & ~(_EMU_CMD_EM01VSCALE1_MASK | _EMU_CMD_EM01VSCALE2_MASK)) |
+             (saved << _EMU_CMD_EM01VSCALE1_SHIFT);
+  while ((EMU->STATUS & _EMU_STATUS_VSCALEBUSY_MASK) == EMU_STATUS_VSCALEBUSY) {
+  }
+}
+
 static void msc_wait_not_busy(void) {
   while (msc_is_busy()) {
     /* Wait for erase/program to complete. */
@@ -110,6 +132,10 @@ void efl_lld_init(void) {
   /* Enable the MSC bus clock — without it register access bus-faults. */
   CMU->CLKEN1_SET = CMU_CLKEN1_MSC;
 
+  /* MSC access requires EM01 vscale VSCALE2: read back and save the
+     current setting, switch to VSCALE2 for the init, restore after. */
+  uint32_t saved_vscale = msc_vscale_enter();
+
   /* Build sector descriptors at init time. */
   for (uint32_t i = 0; i < EFR32_FLASH_PAGES; i++) {
     efl_sector_desc[i].offset = i * EFR32_FLASH_PAGE_SIZE;
@@ -120,6 +146,8 @@ void efl_lld_init(void) {
   efl_sector_desc[EFR32_FLASH_PAGES].size   = EFR32_USERDATA_SIZE;
 
   eflObjectInit(&EFLD1);
+
+  msc_vscale_exit(saved_vscale);
 }
 
 void efl_lld_start(EFlashDriver *eflp) {

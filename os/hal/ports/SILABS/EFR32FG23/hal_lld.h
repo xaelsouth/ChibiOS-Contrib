@@ -200,6 +200,38 @@
 #endif
 #endif
 
+/*===========================================================================*/
+/* Voltage scale auto-derivation.                                            */
+/*===========================================================================*/
+
+/*
+ * EM0/EM1 voltage scale: the lowest level supporting the configured HCLK
+ * is derived automatically (1V0 up to 40 MHz, 1V1 up to
+ * VSCALE_1V1_MAX_FREQ).  Override by defining EFR32_EM01VSCALE_SEL in
+ * mcuconf.h.
+ */
+#if !defined(EFR32_EM01VSCALE_SEL)
+#if EFR32_HCLK > VSCALE_1V0_MAX_FREQ
+#define EFR32_EM01VSCALE_SEL            EFR32_EM01_VSCALESEL_1V1
+#else
+#define EFR32_EM01VSCALE_SEL            EFR32_EM01_VSCALESEL_1V0
+#endif
+#endif
+
+/*
+ * EM2/EM3 voltage scale: the lowest level supporting the EM2/EM3 HF clock
+ * (HFRCOEM23) is derived automatically (0V9/1V0 up to 40 MHz — 0V9 has a
+ * slow EM2/EM3 startup — 1V1 up to VSCALE_1V1_MAX_FREQ).  Override by
+ * defining EFR32_EM23VSCALE_SEL in mcuconf.h.
+ */
+#if !defined(EFR32_EM23VSCALE_SEL)
+#if EFR32_HFRCOEM23_ENABLED && (EFR32_HFRCOEM23CLK > VSCALE_1V0_MAX_FREQ)
+#define EFR32_EM23VSCALE_SEL            EFR32_EM23_VSCALESEL_1V1
+#else
+#define EFR32_EM23VSCALE_SEL            EFR32_EM23_VSCALESEL_0V9
+#endif
+#endif
+
 #if EFR32_EM01VSCALE_SEL >= EFR32_EM23VSCALE_SEL
 #if EFR32_EM01VSCALE_SEL == EFR32_EM01_VSCALESEL_1V0
 #define EFR32_EM01_VSCALE                EFR32_EM01_VSCALE_1V0
