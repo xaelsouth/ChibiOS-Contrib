@@ -51,6 +51,30 @@
 #define EFR32_LCD_MUX_TRIPLEX       LCD_DISPCTRL_MUX_TRIPLEX
 #define EFR32_LCD_MUX_QUADRUPLEX    LCD_DISPCTRL_MUX_QUADRUPLEX
 
+/* Bias settings (DISPCTRL BIAS) — number of voltage levels. */
+#define EFR32_LCD_BIAS_STATIC       LCD_DISPCTRL_BIAS_STATIC
+#define EFR32_LCD_BIAS_ONEHALF      LCD_DISPCTRL_BIAS_ONEHALF
+#define EFR32_LCD_BIAS_ONETHIRD     LCD_DISPCTRL_BIAS_ONETHIRD
+#define EFR32_LCD_BIAS_ONEFOURTH    LCD_DISPCTRL_BIAS_ONEFOURTH
+
+/* Wave types (DISPCTRL WAVE). */
+#define EFR32_LCD_WAVE_LOPOWER      LCD_DISPCTRL_WAVE_TYPEB
+#define EFR32_LCD_WAVE_NORMAL       LCD_DISPCTRL_WAVE_TYPEA
+
+/* Operating mode (BIASCTRL MODE): charge pump needs no external divider. */
+#define EFR32_LCD_MODE_STEPDOWN     LCD_BIASCTRL_MODE_STEPDOWN
+#define EFR32_LCD_MODE_CHARGEPUMP   LCD_BIASCTRL_MODE_CHARGEPUMP
+
+/* Charge redistribution cycles (DISPCTRL CHGRDST). */
+#define EFR32_LCD_CHGRDST_DISABLE   LCD_DISPCTRL_CHGRDST_DISABLE
+#define EFR32_LCD_CHGRDST_ONE       LCD_DISPCTRL_CHGRDST_ONE
+#define EFR32_LCD_CHGRDST_TWO       LCD_DISPCTRL_CHGRDST_TWO
+#define EFR32_LCD_CHGRDST_THREE     LCD_DISPCTRL_CHGRDST_THREE
+#define EFR32_LCD_CHGRDST_FOUR      LCD_DISPCTRL_CHGRDST_FOUR
+
+/** Default contrast (BIASCTRL VLCD level, 0..31) when config passes 0. */
+#define EFR32_LCD_CONTRAST_DEFAULT  15U
+
 /*===========================================================================*/
 /* Driver pre-compile time settings.                                         */
 /*===========================================================================*/
@@ -106,17 +130,21 @@ typedef struct lcd_model {
 /**
  * @brief   LCD driver configuration.
  */
-typedef struct {
+typedef struct lcd_config {
   uint32_t          mux;          /**< EFR32_LCD_MUX_*. */
-  uint32_t          wave;         /**< LCD_DISPCTRL_WAVE_TYPEA/B. */
-  uint32_t          frame_rate;   /**< FRAMERATE value (0 = default ~30Hz). */
-  uint32_t          contrast;     /**< BIASCTRL contrast/bias level. */
+  uint32_t          bias;         /**< EFR32_LCD_BIAS_* (DISPCTRL BIAS). */
+  uint32_t          wave;         /**< EFR32_LCD_WAVE_*. */
+  uint32_t          mode;         /**< EFR32_LCD_MODE_* (charge pump/step down). */
+  uint32_t          charge_redist;/**< EFR32_LCD_CHGRDST_*. */
+  uint32_t          presc;        /**< LCD CTRL PRESCALE (LCDCLK divider, 0 = /1). */
+  uint32_t          frame_rate;   /**< FRAMERATE value (0 = hardware default). */
+  uint32_t          contrast;     /**< BIASCTRL VLCD level 0..31 (0 = EFR32_LCD_CONTRAST_DEFAULT). */
   uint32_t          seg_enable;   /**< GPIO->LCDSEG mask (bit n = segment n output on). */
   uint32_t          com_enable;   /**< GPIO->LCDCOM mask (bit n = COM n output on). */
   const lcd_model_t *model;       /**< Screen model (segment mapping). */
   void            (*callback)(void *arg, uint32_t events);
   void             *callback_arg;
-} LCDConfig;
+} LCDConfig;   /* struct lcd_config */
 
 /**
  * @brief   LCD driver structure.

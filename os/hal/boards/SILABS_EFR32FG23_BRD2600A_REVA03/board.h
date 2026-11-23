@@ -93,6 +93,38 @@
 #define EFR32FG23B010F512IM48           1
 #endif
 
+/*
+ * On-board segment LCD (CE322-1002 glass, 5 digits x 7 segments + 6 icons,
+ * 4 COM lines, 20 segment lines; see Gecko SDK segment_lcd config
+ * ce322_1002 and brd2600a/sl_segmentlcd_pin_config.h).
+ * Linear segment index = COM * 20 + segment line, where the glass logical
+ * segment S00..S09 maps to LCD segment lines 0,1,4,5,6,7,18,19,8,10.
+ */
+/*
+ * NOTE: board.h is included before halconf.h/hal_lcd.h, so the LCD model
+ * is declared via struct tags (lcd_model_t = struct lcd_model,
+ * LCDConfig = struct lcd_config) to stay independent of include order.
+ * The definitions in board.c require HAL_USE_LCD == TRUE.
+ */
+#if !defined(_FROM_ASM_) || defined(__DOXYGEN__)
+struct lcd_model;
+struct lcd_config;
+
+/** Icons on the BRD2600A LCD (order matches the glass config). */
+typedef enum {
+  BOARD_LCD_ICON_P2 = 0,  /**< decimal point after digit 3 */
+  BOARD_LCD_ICON_P3,      /**< decimal point after digit 4 */
+  BOARD_LCD_ICON_P4,      /**< decimal point after digit 5 */
+  BOARD_LCD_ICON_P5,      /**< decimal point / colon top */
+  BOARD_LCD_ICON_P6,      /**< decimal point / colon bottom */
+  BOARD_LCD_ICON_DEGC,    /**< degree-C symbol */
+  BOARD_LCD_NUM_ICONS
+} board_lcd_icon_t;
+
+extern const struct lcd_model  board_lcd_model;    /**< CE322-1002 glass map. */
+extern const struct lcd_config board_lcd_config;   /**< Recommended LCDConfig. */
+#endif
+
 #if !defined(_FROM_ASM_)
 #ifdef __cplusplus
 extern "C" {

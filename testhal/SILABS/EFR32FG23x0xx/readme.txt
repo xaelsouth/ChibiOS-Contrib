@@ -59,10 +59,11 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
   DAC         PASS  (VDAC0 both channels, polled + IRQ completion)
   ADC         PASS  (IADC0 single conversions: GND vs GND -> code 0,
               PA0 vs GND completes, clock gated off after stop)
-  LCD         PASS  (EN set after start, clear->SEGD=0, digit 8->SEGD0=0x7F,
-              digit 0->0x3F, seg79->SEGD3=0x80000, icon0->SEGD0=0x100,
-              stop->CLKEN1.LCD=0; fixed lcd_lld_start to also run from
-              LCD_UNINIT, not only LCD_STOP)
+  LCD         PASS  (BRD2600A CE322-1002 glass via board_lcd_model/
+              board_lcd_config: quadruplex mux, 1/3 bias, low-power wave,
+              charge-pump mode, VLCD contrast 15; EN set, clear->SEGD=0,
+              glass digit 8/0 checks, seg79->SEGD3=0x80000, icon P2->0x20,
+              stop->CLKEN1.LCD=0; ends with ALL 80 segments on - watch LCD)
   TEMP        PASS  (generic hal_temperature driver over TEMPv1 LLD:
               TEMPD1, tempStart/tempReadCelsius/tempStop; EMU->TEMP die temp
               3 reads over 3 s ~33 C, FIRSTTEMPDONE=1, spread <= 3 C;
@@ -116,8 +117,11 @@ Notes / driver quirks discovered on FG23 (all handled in the LLDs):
     peripheral signal never reaches the pin (SIGROUTE/LCD/KEYSCAN routes).
   - LCD needs its clock: CMU CLKEN0.LFRCO + LCDCLKCTRL.CLKSEL=LFRCO
     (lcd_lld_start does both) and segment outputs allocated via
-    GPIO->LCDSEG / LCDCOM; otherwise the panel stays blank while SEGD
-    registers still read back fine.
+    GPIO->LCDSEG/LCDCOM; otherwise the panel stays blank while SEGD
+    registers still read back fine. Blank panel cause found: BIASCTRL
+    must get MODE=CHARGEPUMP and a VLCD (contrast) level - VLCD=0 blanks
+    the glass; DISPCTRL BIAS (1/3 for the 4-COM glass) also required.
+    SEGDn bit b = segment line b, SEGDn index = COM line.
   - KEYSCAN: COLOUT pads = WIREDAND+DOUT1, ROWSENSE pads = INPUTPULL+DOUT1;
     unused rows must be routed to a used row pin (KEYSCAN_E301 errata),
     otherwise they float and produce phantom key presses.

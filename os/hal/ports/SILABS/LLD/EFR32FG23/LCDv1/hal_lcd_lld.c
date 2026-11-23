@@ -110,22 +110,43 @@ void lcd_lld_start(LCDDriver *lcdp, const LCDConfig *cfg) {
     GPIO->LCDCOM = cfg->com_enable & _GPIO_LCDCOM_MASK;
 
     LCD->EN_CLR = LCD_EN_EN;
+    /* Wait until the disable has propagated (WSTATIC fields need EN=0). */
+    while ((LCD->EN & LCD_EN_DISABLING) != 0U) {}
 
-    /* Display control: mux mode, wave type. */
+    /* LCDCLK prescaler (CTRL PRESCALE). */
+    LCD->CTRL = (LCD->CTRL & ~_LCD_CTRL_PRESCALE_MASK)
+                | ((cfg->presc << _LCD_CTRL_PRESCALE_SHIFT)
+                   & _LCD_CTRL_PRESCALE_MASK);
+
+    /* Display control: mux, bias (voltage levels), wave, charge redist. */
     LCD->DISPCTRL = (LCD->DISPCTRL & ~(_LCD_DISPCTRL_MUX_MASK |
-                                        _LCD_DISPCTRL_WAVE_MASK))
+                                        _LCD_DISPCTRL_BIAS_MASK |
+                                        _LCD_DISPCTRL_WAVE_MASK |
+                                        _LCD_DISPCTRL_CHGRDST_MASK))
                     | (cfg->mux & _LCD_DISPCTRL_MUX_MASK)
-                    | (cfg->wave & _LCD_DISPCTRL_WAVE_MASK);
+                    | (cfg->bias & _LCD_DISPCTRL_BIAS_MASK)
+                    | (cfg->wave & _LCD_DISPCTRL_WAVE_MASK)
+                    | (cfg->charge_redist & _LCD_DISPCTRL_CHGRDST_MASK);
 
     /* Frame rate. */
     if (cfg->frame_rate != 0U) {
       LCD->FRAMERATE = cfg->frame_rate;
     }
 
-    /* Bias control: contrast + DMA mode for display updates. */
-    LCD->BIASCTRL = (LCD->BIASCTRL & ~_LCD_BIASCTRL_DMAMODE_MASK)
-                    | LCD_BIASCTRL_DMAMODE_DMADISPLAY
-                    | (cfg->contrast & ~_LCD_BIASCTRL_DMAMODE_MASK);
+    /* Analog bias: operating mode (charge pump), VLCD contrast level,
+       DMA mode for display updates. VLCD=0 would blank the panel, so a
+       config contrast of 0 falls back to EFR32_LCD_CONTRAST_DEFAULT. */
+    {
+      uint32_t contrast = (cfg->contrast != 0U) ? cfg->contrast
+                                                : EFR32_LCD_CONTRAST_DEFAULT;
+      LCD->BIASCTRL = (LCD->BIASCTRL & ~(_LCD_BIASCTRL_MODE_MASK |
+                                         _LCD_BIASCTRL_VLCD_MASK |
+                                         _LCD_BIASCTRL_DMAMODE_MASK))
+                      | (cfg->mode & _LCD_BIASCTRL_MODE_MASK)
+                      | ((contrast << _LCD_BIASCTRL_VLCD_SHIFT)
+                         & _LCD_BIASCTRL_VLCD_MASK)
+                      | LCD_BIASCTRL_DMAMODE_DMADISPLAY;
+    }
 
     /* Clear segment data. */
     LCD->SEGD0 = 0U; LCD->SEGD1 = 0U; LCD->SEGD2 = 0U; LCD->SEGD3 = 0U;
