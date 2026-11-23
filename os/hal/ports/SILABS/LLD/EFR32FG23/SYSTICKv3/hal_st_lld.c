@@ -33,7 +33,9 @@
 #if OSAL_ST_MODE == OSAL_ST_MODE_FREERUNNING
   #if EFR32_ST_USE_TIMER == 1
     #if (OSAL_ST_RESOLUTION == 32) && !EFR32_LETIM1_IS_32BITS
-      #error "LETIM1 is not a 32 bit timer"
+      /* LETIM1 is 24-bit on FG23: the UF (underflow) interrupt extends
+         the counter to 32 bits in software (st_lld_uf_count, see
+         hal_st_lld.h) — this is exactly what the overflow IRQ is for. */
     #endif
 
     #if !EFR32_HAS_LETIM1
@@ -86,6 +88,12 @@
 /*===========================================================================*/
 /* Driver local variables and types.                                         */
 /*===========================================================================*/
+
+#if (OSAL_ST_RESOLUTION == 32) && !EFR32_LETIM1_IS_32BITS
+/* 24-bit hardware counter extension (see hal_st_lld.h). */
+volatile uint32_t st_lld_uf_count;
+volatile systime_t st_lld_alarm_abstime;
+#endif
 
 /*===========================================================================*/
 /* Driver local functions.                                                   */
@@ -154,6 +162,13 @@ void st_lld_init(void) {
   EFR32_ST_TIM->CNT    = 0;
   EFR32_ST_TIM->CMD    = LETIMER_CMD_START;
 
+#if (OSAL_ST_RESOLUTION == 32) && !EFR32_LETIM1_IS_32BITS
+  /* Enable the underflow interrupt: each 24-bit wrap increments
+     st_lld_uf_count, extending the counter to 32 bits. */
+  EFR32_ST_TIM->IF_CLR = LETIMER_IF_UF;
+  EFR32_ST_TIM->IEN_SET = LETIMER_IEN_UF;
+#endif
+
 #if !defined(EFR32_SYSTICK_SUPPRESS_ISR)
   /* IRQ enabled.*/
   nvicEnableVector(ST_NUMBER, EFR32_ST_IRQ_PRIORITY);
@@ -175,6 +190,18 @@ void st_lld_init(void) {
 void st_lld_serve_interrupt(void) {
 
 #if OSAL_ST_MODE == OSAL_ST_MODE_FREERUNNING
+#if (OSAL_ST_RESOLUTION == 32) && !EFR32_LETIM1_IS_32BITS
+  if ((EFR32_ST_TIM->IF & LETIMER_IF_UF) != 0U) {
+    EFR32_ST_TIM->IF_CLR = LETIMER_IF_UF;
+    st_lld_uf_count++;
+    /* 24-bit wrap: let OSAL process timers and re-arm the alarm in the
+       new window (st_lld_start_alarm recomputes COMP0 from the new
+       st_lld_uf_count). */
+    osalSysLockFromISR();
+    osalOsTimerHandlerI();
+    osalSysUnlockFromISR();
+  }
+#endif
   if ((EFR32_ST_TIM->IF & LETIMER_IF_COMP0) != 0U) {
     EFR32_ST_TIM->IF_CLR = LETIMER_IF_COMP0;
 #endif

@@ -35,9 +35,21 @@
  * @brief   Counter registry initial value.
  */
 #if (OSAL_ST_RESOLUTION == 32)
+  /* LETIMER0 on FG23 is a 24-bit down-counter (CNT mask 0x00FFFFFF), so the
+     32-bit OSAL counter is built as (st_lld_uf_count << 24) | low24, where
+     st_lld_uf_count is incremented by the UF (underflow) interrupt on every
+     24-bit wrap. */
   #define ST_INIT_VALUE                        0x00FFFFFFUL
 #else
   #define ST_INIT_VALUE                        0x0000FFFFUL
+#endif
+
+#if (OSAL_ST_RESOLUTION == 32) && !EFR32_LETIM1_IS_32BITS
+/* Software extension of the 24-bit hardware counter to 32 bits, see above.
+   st_lld_uf_count counts underflows (each = 2^24 ticks); st_lld_alarm_abstime
+   holds the currently armed absolute alarm time. */
+extern volatile uint32_t st_lld_uf_count;
+extern volatile systime_t st_lld_alarm_abstime;
 #endif
 
 /*===========================================================================*/
@@ -123,7 +135,22 @@ void st_lld_serve_interrupt(void);
  */
 static inline systime_t st_lld_get_counter(void) {
 
+#if (OSAL_ST_RESOLUTION == 32) && !EFR32_LETIM1_IS_32BITS
+  /* 24-bit hardware counter extended by the UF interrupt.  Race-safe
+     combine of the shadow high word and the hardware low word: if the
+     shadow changed while reading, the new shadow applies only when the
+     low word already wrapped (small value). */
+  uint32_t hi = st_lld_uf_count;
+  uint32_t lo = (uint32_t)(ST_INIT_VALUE - EFR32_ST_TIM->CNT);
+  if (st_lld_uf_count != hi) {
+    if (lo < 0x00800000UL) {
+      hi = st_lld_uf_count;
+    }
+  }
+  return (((systime_t)hi) << 24) | (systime_t)lo;
+#else
   return ((systime_t)(ST_INIT_VALUE - EFR32_ST_TIM->CNT));
+#endif
 }
 
 /**
@@ -139,12 +166,24 @@ static inline void st_lld_start_alarm(systime_t abstime) {
 
   EFR32_ST_TIM->IEN_CLR = LETIMER_IEN_COMP0;
 
+#if (OSAL_ST_RESOLUTION == 32) && !EFR32_LETIM1_IS_32BITS
+  st_lld_alarm_abstime = abstime;
+  if ((uint32_t)(abstime >> 24) != st_lld_uf_count) {
+    /* Alarm beyond the current 2^24 window: park it at the wrap point
+       (COMP0 = 0).  The UF handler lets OSAL re-arm it in the new window. */
+    EFR32_ST_TIM->COMP0 = 0U;
+  }
+  else
+#endif
+  {
   #if (OSAL_ST_RESOLUTION == 32)
-  EFR32_ST_TIM->COMP0 = (uint32_t)ST_INIT_VALUE - (uint32_t)abstime;
+    EFR32_ST_TIM->COMP0 = (uint32_t)ST_INIT_VALUE - (uint32_t)abstime;
   #else
-  EFR32_ST_TIM->COMP0 = (uint16_t)ST_INIT_VALUE - (uint16_t)abstime;
+    EFR32_ST_TIM->COMP0 = (uint16_t)ST_INIT_VALUE - (uint16_t)abstime;
   #endif
+  }
 
+  EFR32_ST_TIM->IF_CLR = LETIMER_IF_COMP0;
   EFR32_ST_TIM->IEN_SET = LETIMER_IEN_COMP0;
 }
 
@@ -179,7 +218,11 @@ static inline void st_lld_set_alarm(systime_t abstime) {
  */
 static inline systime_t st_lld_get_alarm(void) {
 
+#if (OSAL_ST_RESOLUTION == 32) && !EFR32_LETIM1_IS_32BITS
+  return st_lld_alarm_abstime;
+#else
   return ((systime_t)(ST_INIT_VALUE - EFR32_ST_TIM->COMP0));
+#endif
 }
 
 /**

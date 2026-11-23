@@ -58,3 +58,15 @@ chconf hook, FG14P port de-emlib'ed (raw CMU registers, escape hatch).)
 
 Note: application/ trees are not git repositories; keep their cfg/mcuconf.h
 in sync manually when the port contract changes.
+
+Rules for port/LLD code (SILABS):
+  - NO emlib in os/hal/ports/SILABS (EFR32FG14P, EFR32FG23, LLD/*): raw
+    register access only, using the device headers from
+    ext/gecko_sdk/platform/Device/SiliconLabs/<family>/Include and the
+    system_efr32*.c from .../Source (CMSIS-style device support, allowed).
+    The only exception is LLD/EFR32FG23/RAILv1, which wraps the Gecko RAIL
+    library (sl_rail_*), not emlib.
+  - When adding a new LLD driver under LLD/EFR32FG23/, add the matching
+    EFR32_HAS_* / capability macros to EFR32FG23/efr32_registry.h so the
+    port documents the real hardware (counts per ext/gecko_sdk device
+    header *_COUNT macros) and drivers can #if on them.

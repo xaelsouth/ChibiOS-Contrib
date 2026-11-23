@@ -76,8 +76,11 @@
 
 /*
  * LETIM driver system settings.
+ * NOTE: LETIMER0 on FG23 is a 24-bit counter (_LETIMER_CNT_MASK = 0x00FFFFFF),
+ * not 32-bit — SYSTICKv3 models it as 24-bit (ST_INIT_VALUE 0x00FFFFFF).
  */
-#define EFR32_LETIM1_IS_32BITS              TRUE
+#define EFR32_LETIM1_IS_32BITS              FALSE
+#define EFR32_LETIM1_IS_24BITS              TRUE
 #define EFR32_LETIM_MAX_CHANNELS            2
 #define EFR32_LETIM1_CHANNELS               2
 
@@ -117,6 +120,70 @@
  * CRC driver system settings.
  */
 #define EFR32_HAS_GPCRC                     TRUE
+
+/*
+ * TIMER driver system settings (TIMER_COUNT = 5: TIMER0..TIMER4,
+ * exposed as EFR32_TIMER1..5).
+ */
+#define EFR32_HAS_TIMER1                    TRUE
+#define EFR32_HAS_TIMER2                    TRUE
+#define EFR32_HAS_TIMER3                    TRUE
+#define EFR32_HAS_TIMER4                    TRUE
+#define EFR32_HAS_TIMER5                    TRUE
+
+/*
+ * I2C driver system settings (I2C_COUNT = 2: I2C0, I2C1).
+ */
+#define EFR32_HAS_I2C1                      TRUE
+#define EFR32_HAS_I2C2                      TRUE
+
+/*
+ * ADC driver system settings (IADC_COUNT = 1).
+ */
+#define EFR32_HAS_IADC                      TRUE
+
+/*
+ * COMP driver system settings (ACMP_COUNT = 2: ACMP0, ACMP1).
+ */
+#define EFR32_HAS_ACMP1                     TRUE
+#define EFR32_HAS_ACMP2                     TRUE
+
+/*
+ * LCD driver system settings (LCD_COUNT = 1).
+ */
+#define EFR32_HAS_LCD                       TRUE
+
+/*
+ * KEYSCAN driver system settings (KEYSCAN_COUNT = 1).
+ */
+#define EFR32_HAS_KEYSCAN                   TRUE
+
+/*
+ * QEI driver system settings (PCNT_COUNT = 1: PCNT0).
+ */
+#define EFR32_HAS_PCNT0                     TRUE
+
+/*
+ * SIGROUTE driver system settings (PRS_COUNT = 1).
+ * The upper layer is called SIGROUTE because "PRS" is a Silicon Labs
+ * trademark; the hardware peripheral is PRS.
+ */
+#define EFR32_HAS_PRS                       TRUE
+
+/*
+ * SYSRTC driver system settings (SYSRTC_COUNT = 1).
+ */
+#define EFR32_HAS_SYSRTC                    TRUE
+
+/*
+ * AES driver system settings (AES_COUNT = 1).
+ */
+#define EFR32_HAS_AES                       TRUE
+
+/*
+ * BURAM driver system settings (backup RAM, keeps content in EM4).
+ */
+#define EFR32_HAS_BURAM                     TRUE
 
 /*===========================================================================*/
 /* Common.                                                                   */
