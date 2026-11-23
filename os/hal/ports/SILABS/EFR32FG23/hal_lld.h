@@ -602,6 +602,10 @@ typedef struct {
 #define EFR32_LCD_HANDLER               Vector160
 #define EFR32_LCD_NUMBER                LCD_IRQn
 
+/* Vector164 = Vector(40 + 4*KEYSCAN_IRQn) */
+#define EFR32_KEYSCAN_HANDLER           Vector164
+#define EFR32_KEYSCAN_NUMBER            KEYSCAN_IRQn
+
 /*===========================================================================*/
 /* Driver data structures and types.                                         */
 /*===========================================================================*/

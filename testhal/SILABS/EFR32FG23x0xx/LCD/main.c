@@ -33,6 +33,8 @@ static const LCDConfig lcd_cfg = {
   .wave       = LCD_DISPCTRL_WAVE_TYPEA,
   .frame_rate = 0,
   .contrast   = 0,
+  .seg_enable = 0x000FFFFFU,   /* all 20 segment outputs */
+  .com_enable = 0x0000000FU,   /* all 4 COM outputs */
   .model      = &test_model,
   .callback   = NULL,
   .callback_arg = NULL,
@@ -49,9 +51,13 @@ int main(void) {
   lcd_lld_init();
   lcdStart(&LCDD1, &lcd_cfg);
   bool en = ((LCD->EN & LCD_EN_EN) != 0U);
-  PRINTF("after start: EN=%d state=%d %s\r\n", (int)en, (int)LCDD1.state,
-         en ? "PASS" : "FAIL");
-  ok = ok && en && (LCDD1.state == LCD_READY);
+  bool lfrco = ((CMU->CLKEN0 & CMU_CLKEN0_LFRCO) != 0U);
+  bool segcom = ((GPIO->LCDSEG != 0U) && (GPIO->LCDCOM != 0U));
+  PRINTF("after start: EN=%d state=%d LFRCO=%d LCDSEG=0x%lX LCDCOM=0x%lX %s\r\n",
+         (int)en, (int)LCDD1.state, (int)lfrco,
+         (unsigned long)GPIO->LCDSEG, (unsigned long)GPIO->LCDCOM,
+         (en && lfrco && segcom) ? "PASS" : "FAIL");
+  ok = ok && en && lfrco && segcom && (LCDD1.state == LCD_READY);
 
   /* 2) clear + update -> SEGD all zero. */
   lcdClear(&LCDD1);
@@ -63,13 +69,13 @@ int main(void) {
          (unsigned long)s3, clr ? "PASS" : "FAIL");
   ok = ok && clr;
 
-  /* 3) digit 8 -> all 8 mapped segments -> SEGD0 bits0-7 = 0xFF. */
+  /* 3) digit 8 -> font[8]=0x7F (segments a..g, no DP) -> SEGD0 = 0x7F. */
   lcdWriteDigit(&LCDD1, 0, 8);
   lcdUpdate(&LCDD1);
   s0 = LCD->SEGD0;
-  PRINTF("digit 8: SEGD0=%08lX (expect 0xFF) %s\r\n",
-         (unsigned long)s0, (s0 & 0xFFU) == 0xFFU ? "PASS" : "FAIL");
-  ok = ok && ((s0 & 0xFFU) == 0xFFU);
+  PRINTF("digit 8: SEGD0=%08lX (expect 0x7F) %s\r\n",
+         (unsigned long)s0, (s0 & 0xFFU) == 0x7FU ? "PASS" : "FAIL");
+  ok = ok && ((s0 & 0xFFU) == 0x7FU);
 
   /* 4) digit 0 -> font 0x3F. */
   lcdWriteDigit(&LCDD1, 0, 0);
@@ -105,6 +111,21 @@ int main(void) {
   ok = ok && (clk == 0U);
 
   PRINTF("result: %s\r\n", ok ? "PASS" : "FAIL");
+
+  /* Restart and switch ALL 80 segments on so the whole panel lights up. */
+  lcdStart(&LCDD1, &lcd_cfg);
+  for (uint32_t seg = 0; seg < EFR32_LCD_MAX_SEGMENTS; seg++) {
+    lcdSetSegment(&LCDD1, seg, true);
+  }
+  lcdUpdate(&LCDD1);
+  uint32_t a0 = LCD->SEGD0, a1 = LCD->SEGD1, a2 = LCD->SEGD2, a3 = LCD->SEGD3;
+  bool all_on = ((a0 & 0xFFFFFU) == 0xFFFFFU) && ((a1 & 0xFFFFFU) == 0xFFFFFU) &&
+                ((a2 & 0xFFFFFU) == 0xFFFFFU) && ((a3 & 0xFFFFFU) == 0xFFFFFU);
+  PRINTF("all segments on: SEGD=%08lX %08lX %08lX %08lX %s (watch the LCD)\r\n",
+         (unsigned long)a0, (unsigned long)a1, (unsigned long)a2, (unsigned long)a3,
+         all_on ? "PASS" : "FAIL");
+  ok = ok && all_on;
+  PRINTF("final result: %s\r\n", ok ? "PASS" : "FAIL");
 
   while (true) { chThdSleepMilliseconds(1000); }
 }

@@ -59,7 +59,19 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
   DAC         PASS  (VDAC0 both channels, polled + IRQ completion)
   ADC         PASS  (IADC0 single conversions: GND vs GND -> code 0,
               PA0 vs GND completes, clock gated off after stop)
-  LCD         test written (main.c), builds; on-target run pending board power-cycle
+  LCD         PASS  (EN set after start, clear->SEGD=0, digit 8->SEGD0=0x7F,
+              digit 0->0x3F, seg79->SEGD3=0x80000, icon0->SEGD0=0x100,
+              stop->CLKEN1.LCD=0; fixed lcd_lld_start to also run from
+              LCD_UNINIT, not only LCD_STOP)
+  TEMP        PASS  (EMU->TEMP die temp: 3 reads over 3 s, ~29-31 C,
+              FIRSTTEMPDONE=1, spread <= 3 C)
+  KEYSCAN     PASS  (3x4 matrix, cols PA0/3/4/6 wired-and, rows PB0/1/3
+              pull-up, unused rows 3-5 tied to row 2 per KEYSCAN_E301;
+              SCANNED irqs counted, no phantom KEY, NOKEY status set,
+              clock gated off after stop)
+  PRS         PASS  (async ch0 = GPIO PA0 routed to pin PA4: ASYNC_PEEK
+              and pad follow PA0; sw level/pulse; sync ch connect/
+              disconnect; clock gated off after stop)
 
 Notes / driver quirks discovered on FG23 (all handled in the LLDs):
   - Peripheral bus clocks must be enabled (CMU CLKEN0) before register
@@ -89,5 +101,18 @@ Notes / driver quirks discovered on FG23 (all handled in the LLDs):
     peripherals instead use EN_DISABLING + STATUS SYNCBUSY. CMU itself has
     no SYNCBUSY on xG23. Testhal tests rely on the LLD waits and do not poll
     SYNCBUSY directly.
+  - PA1 = SWCLK, PA2 = SWDIO on xG23 — never drive them as GPIO/peripheral
+    outputs or the debug connection dies (looks like an unhaltable CPU).
+    Avoid PA5 (BTN1), PB2 (LED), PA8/PA9 (VCOM) in tests too.
+  - Peripheral-driven output pins need a pad MODE *_ALT variant (e.g.
+    PUSHPULL_ALT) — with plain PUSHPULL the GPIO DOUT wins and the
+    peripheral signal never reaches the pin (PRS/LCD/KEYSCAN routes).
+  - LCD needs its clock: CMU CLKEN0.LFRCO + LCDCLKCTRL.CLKSEL=LFRCO
+    (lcd_lld_start does both) and segment outputs allocated via
+    GPIO->LCDSEG / LCDCOM; otherwise the panel stays blank while SEGD
+    registers still read back fine.
+  - KEYSCAN: COLOUT pads = WIREDAND+DOUT1, ROWSENSE pads = INPUTPULL+DOUT1;
+    unused rows must be routed to a used row pin (KEYSCAN_E301 errata),
+    otherwise they float and produce phantom key presses.
   - Stack sizes: tests use 0x1000 process/exceptions stacks (snprintf %f
     needs more than the 0x400 default).

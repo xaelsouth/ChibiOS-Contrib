@@ -97,8 +97,17 @@ void lcd_lld_init(void) {
 void lcd_lld_start(LCDDriver *lcdp, const LCDConfig *cfg) {
   lcdp->config = cfg;
 
-  if (lcdp->state == LCD_STOP) {
+  if (lcdp->state != LCD_READY) {
     CMU->CLKEN1_SET = CMU_CLKEN1_LCD;
+
+    /* LCD clock: LFRCO selected by default in LCDCLKCTRL, but the LFRCO
+       itself must be enabled or the display gets no clock (blank screen). */
+    CMU->CLKEN0_SET = CMU_CLKEN0_LFRCO;
+    CMU->LCDCLKCTRL = CMU_LCDCLKCTRL_CLKSEL_LFRCO;
+
+    /* Allocate segment/common outputs (fixed pin mapping on xG23). */
+    GPIO->LCDSEG = cfg->seg_enable & _GPIO_LCDSEG_MASK;
+    GPIO->LCDCOM = cfg->com_enable & _GPIO_LCDCOM_MASK;
 
     LCD->EN_CLR = LCD_EN_EN;
 
@@ -162,6 +171,8 @@ void lcd_lld_stop(LCDDriver *lcdp) {
       volatile uint32_t sp = 1000000UL;
       while (((LCD->EN & LCD_EN_DISABLING) != 0U) && (--sp != 0U)) {}
     }
+    GPIO->LCDSEG = 0U;
+    GPIO->LCDCOM = 0U;
     CMU->CLKEN1_CLR = CMU_CLKEN1_LCD;
     lcdp->state = LCD_STOP;
     lcdp->config = NULL;

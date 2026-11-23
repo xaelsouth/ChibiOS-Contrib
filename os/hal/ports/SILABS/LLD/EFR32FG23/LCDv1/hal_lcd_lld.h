@@ -111,6 +111,8 @@ typedef struct {
   uint32_t          wave;         /**< LCD_DISPCTRL_WAVE_TYPEA/B. */
   uint32_t          frame_rate;   /**< FRAMERATE value (0 = default ~30Hz). */
   uint32_t          contrast;     /**< BIASCTRL contrast/bias level. */
+  uint32_t          seg_enable;   /**< GPIO->LCDSEG mask (bit n = segment n output on). */
+  uint32_t          com_enable;   /**< GPIO->LCDCOM mask (bit n = COM n output on). */
   const lcd_model_t *model;       /**< Screen model (segment mapping). */
   void            (*callback)(void *arg, uint32_t events);
   void             *callback_arg;
