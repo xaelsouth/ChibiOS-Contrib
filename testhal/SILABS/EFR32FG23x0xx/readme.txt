@@ -74,9 +74,11 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
               pull-up, unused rows 3-5 tied to row 2 per KEYSCAN_E301;
               SCANNED irqs counted, no phantom KEY, NOKEY status set,
               clock gated off after stop)
-  PRS         PASS  (async ch0 = GPIO PA0 routed to pin PA4: ASYNC_PEEK
-              and pad follow PA0; sw level/pulse; sync ch connect/
-              disconnect; clock gated off after stop)
+  PRS         PASS  (generic hal_prs API, PRSD1: async ch0 = GPIO PA0
+              routed to pin PA4: ASYNC_PEEK and pad follow PA0;
+              prsSetLogic NOT_A FNSEL check; consumer route to
+              LETIMER0_START; sw level/pulse; sync ch connect/disconnect;
+              clock gated off after stop)
 
 Notes / driver quirks discovered on FG23 (all handled in the LLDs):
   - Peripheral bus clocks must be enabled (CMU CLKEN0) before register

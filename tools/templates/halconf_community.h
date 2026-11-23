@@ -88,6 +88,13 @@
 #endif
 
 /**
+ * @brief   Enables the PRS (peripheral reflex system) driver.
+ */
+#if !defined(HAL_USE_PRS) || defined(__DOXYGEN__)
+#define HAL_USE_PRS                 FALSE
+#endif
+
+/**
  * @brief   Enables the temperature sensor driver.
  */
 #if !defined(HAL_USE_TEMPERATURE) || defined(__DOXYGEN__)

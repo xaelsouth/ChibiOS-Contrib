@@ -210,6 +210,7 @@
 #define EEPROM_USE_EE25XX FALSE
 
 /* Enable the driver under test. */
+#define HAL_USE_PRS TRUE
 #define EFR32_PRS_USE_PRS TRUE
 
 #endif /* HALCONF_COMMUNITY_H */
