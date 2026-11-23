@@ -51,26 +51,21 @@ EFlashDriver EFLD1;
 /* Driver local variables.                                                   */
 /*===========================================================================*/
 
-/* Sector descriptors: 64 main flash pages + 1 USERDATA page. */
-static const flash_sector_descriptor_t efl_sectors[EFR32_FLASH_PAGES + 1] = {
-  /* Main flash: 64 sectors of 8 KB each, starting at offset 0. */
-  /* (filled at runtime — see efl_lld_get_descriptor) */
-  /* USERDATA: 1 sector of 1 KB at offset EFR32_FLASH_SIZE. */
-};
+/* Non-uniform sector descriptors (main pages uniform, userdata differs).
+   Filled at init time by efl_lld_init(). */
+static flash_sector_descriptor_t efl_sector_desc[EFR32_FLASH_PAGES + 1];
 
-/* Flash descriptor. */
-static const flash_descriptor_t efl_descriptor = {
+/* Flash descriptor.  Non-const only because it points at the runtime-filled
+   sector array; it is never written after init. */
+static flash_descriptor_t efl_descriptor = {
   .attributes    = FLASH_ATTR_ERASED_IS_ONE | FLASH_ATTR_MEMORY_MAPPED | FLASH_ATTR_REWRITABLE,
   .page_size     = 4,                          /* 32-bit word programming */
   .sectors_count = EFR32_FLASH_PAGES + 1,      /* 64 main + 1 userdata */
-  .sectors       = NULL,                       /* non-uniform: userdata differs */
+  .sectors       = efl_sector_desc,            /* non-uniform: userdata differs */
   .sectors_size  = 0,                          /* non-uniform sectors */
   .address       = (uint8_t *)EFR32_FLASH_BASE,
   .size          = EFR32_FLASH_SIZE,
 };
-
-/* Non-uniform sector descriptors (main pages uniform, userdata different). */
-static flash_sector_descriptor_t efl_sector_desc[EFR32_FLASH_PAGES + 1];
 
 /*===========================================================================*/
 /* Driver local functions.                                                   */
@@ -179,11 +174,9 @@ void efl_lld_stop(EFlashDriver *eflp) {
 
 const flash_descriptor_t *efl_lld_get_descriptor(void *instance) {
   (void)instance;
-  /* Return a descriptor with the runtime-built sector list. */
-  static flash_descriptor_t desc;
-  desc = efl_descriptor;
-  desc.sectors = efl_sector_desc;
-  return &desc;
+  /* Single stable descriptor object; the sector list is filled by
+     efl_lld_init() before the driver is started. */
+  return &efl_descriptor;
 }
 
 /* Map a flash offset to an absolute address; offsets at/above
