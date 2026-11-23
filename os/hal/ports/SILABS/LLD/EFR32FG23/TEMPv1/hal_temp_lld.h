@@ -40,21 +40,13 @@
 #endif
 
 /*===========================================================================*/
-/* Driver data structures and types.                                         */
+/* Driver constants.                                                         */
 /*===========================================================================*/
 
-/**
- * @brief   Quadratic temperature correction curve. The measured
- *          (factory-calibrated) value T in degC is corrected in Horner
- *          schema:  T_corrected = ((quad*T + lin)*T + offs).
- *          Typical use: coefficients fitted from a 2- or 3-point user
- *          calibration against a reference thermometer.
- */
-typedef struct {
-  float quad;   /**< Quadratic coefficient a (1/degC^2). */
-  float lin;    /**< Linear coefficient b (1/degC), usually ~1. */
-  float offs;   /**< Offset c (degC). */
-} temp_corr_t;
+/** Maximum number of correction coefficients (polynomial degree + 1). */
+#if !defined(EFR32_TEMP_CORR_MAX_COEFFS) || defined(__DOXYGEN__)
+#define EFR32_TEMP_CORR_MAX_COEFFS  8
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,9 +57,16 @@ extern "C" {
   uint32_t temp_lld_read_raw(void);
   float    temp_lld_read_kelvin(void);
   float    temp_lld_read_celsius(void);
-  /* Set the quadratic correction curve applied by temp_lld_read_celsius()
-     (NULL or temp_lld_clear_correction() restores raw factory calibration). */
-  void     temp_lld_set_correction(const temp_corr_t *corr);
+  /* Install a correction polynomial of any degree: coeffs[0..count-1] are
+     the ascending power coefficients, applied to the measured value T
+     (degC) in Horner schema:
+         T_corrected = ((c[n-1]*T + c[n-2])*T + ...) + c0
+     If no coefficients are provided (NULL, count==0, or after
+     temp_lld_clear_correction()) the coefficient store stays zeroed
+     (0,0,0,...) and the measured value is returned unchanged.
+     Typical use: coefficients fitted from a multi-point user calibration
+     against a reference thermometer. */
+  void     temp_lld_set_correction(const float *coeffs, size_t count);
   void     temp_lld_clear_correction(void);
 
 #ifdef __cplusplus

@@ -46,30 +46,40 @@ int main(void) {
          range_ok ? "PASS" : "FAIL", (double)spread, stable_ok ? "PASS" : "FAIL");
   ok = ok && range_ok && stable_ok;
 
-  /* Quadratic correction curve: T' = a*T^2 + b*T + c on top of the
-     factory-calibrated reading. First a pure -2.0 C offset, then a
-     quadratic term; then clear and confirm we are back at raw. */
+  /* Correction polynomial of any degree, applied to the measured value in
+     Horner schema: T' = ((c[n-1]*T + c[n-2])*T + ...) + c0. No coefficients
+     provided -> measured value unchanged. Test constant, quadratic and
+     cubic curves (with identity linear term c1=1), then clear. */
   float raw_c = temp_lld_read_celsius();
 
-  const temp_corr_t offs_corr = { 0.0f, 1.0f, -2.0f };
-  temp_lld_set_correction(&offs_corr);
+  const float offs_corr[3] = { -2.0f, 1.0f, 0.0f };       /* T' = T - 2 */
+  temp_lld_set_correction(offs_corr, 3U);
   float c_offs = temp_lld_read_celsius();
   bool offs_ok = (c_offs >= raw_c - 2.6f) && (c_offs <= raw_c - 1.4f);
-  PRINTF("correction offs -2.0: raw %.2f -> %.2f (expect ~%.2f) %s\r\n",
+  PRINTF("corr { -2, 1, 0 }: raw %.2f -> %.2f (expect ~%.2f) %s\r\n",
          (double)raw_c, (double)c_offs, (double)(raw_c - 2.0f),
          offs_ok ? "PASS" : "FAIL");
   ok = ok && offs_ok;
 
-  const temp_corr_t quad_corr = { 0.01f, 1.0f, 0.0f };  /* +0.01*T^2 ~ +9 C at 30 C */
-  temp_lld_set_correction(&quad_corr);
+  const float quad_corr[3] = { 0.0f, 1.0f, 0.01f };       /* T' = T + 0.01*T^2 */
+  temp_lld_set_correction(quad_corr, 3U);
   float c_quad = temp_lld_read_celsius();
-  float expect_quad = 0.01f * raw_c * raw_c + raw_c;
+  float expect_quad = raw_c + 0.01f * raw_c * raw_c;
   bool quad_ok = (c_quad >= expect_quad - 1.0f) && (c_quad <= expect_quad + 1.0f);
-  PRINTF("correction quad 0.01: %.2f (expect ~%.2f) %s\r\n",
+  PRINTF("corr { 0, 1, 0.01 }: %.2f (expect ~%.2f) %s\r\n",
          (double)c_quad, (double)expect_quad, quad_ok ? "PASS" : "FAIL");
   ok = ok && quad_ok;
 
-  temp_lld_clear_correction();
+  const float cubic_corr[4] = { 0.0f, 1.0f, 0.0f, 0.0001f };  /* T' = T + 1e-4*T^3 */
+  temp_lld_set_correction(cubic_corr, 4U);
+  float c_cub = temp_lld_read_celsius();
+  float expect_cub = raw_c + 0.0001f * raw_c * raw_c * raw_c;
+  bool cub_ok = (c_cub >= expect_cub - 1.5f) && (c_cub <= expect_cub + 1.5f);
+  PRINTF("corr { 0, 1, 0, 1e-4 } (degree 3): %.2f (expect ~%.2f) %s\r\n",
+         (double)c_cub, (double)expect_cub, cub_ok ? "PASS" : "FAIL");
+  ok = ok && cub_ok;
+
+  temp_lld_clear_correction();   /* default: all-zero coeffs = identity */
   float c_clear = temp_lld_read_celsius();
   bool clear_ok = (c_clear >= raw_c - 1.0f) && (c_clear <= raw_c + 1.0f);
   PRINTF("correction cleared: %.2f (back to raw ~%.2f) %s\r\n",

@@ -31,9 +31,11 @@
 /* Driver local variables.                                                   */
 /*===========================================================================*/
 
-/* Quadratic correction curve (degC domain), applied on read if valid. */
-static temp_corr_t temp_corr;
-static bool        temp_corr_valid;
+/* Correction polynomial (degC domain), ascending power coefficients,
+   evaluated in Horner schema on the measured value on read.
+   Zero-initialized (0,0,0,...); count==0 = not provided = raw passthrough. */
+static float  temp_corr[EFR32_TEMP_CORR_MAX_COEFFS];
+static size_t temp_corr_count;   /* 0 = no correction (all-zero coeffs) */
 
 /*===========================================================================*/
 /* Driver exported functions.                                                */
@@ -42,10 +44,7 @@ static bool        temp_corr_valid;
 void temp_lld_init(void) {
   /* Nothing to configure: the EMU temperature sensor is always clocked
      (always-on domain) and starts measuring after reset. */
-  temp_corr_valid = false;
-  temp_corr.quad = 0.0f;
-  temp_corr.lin  = 1.0f;
-  temp_corr.offs = 0.0f;
+  temp_lld_clear_correction();
 }
 
 void temp_lld_start(void) {
@@ -73,27 +72,37 @@ float temp_lld_read_kelvin(void) {
 
 float temp_lld_read_celsius(void) {
   float t = temp_lld_read_kelvin() - 273.15f;
-  if (temp_corr_valid) {
-    /* Horner schema on the measured value: ((a*T + b)*T + c) */
-    t = (temp_corr.quad * t + temp_corr.lin) * t + temp_corr.offs;
+  if (temp_corr_count > 0U) {
+    /* Horner schema on the measured value T: c0 + c1*T + ... + c[n-1]*T^(n-1) */
+    float r = temp_corr[temp_corr_count - 1U];
+    for (size_t i = temp_corr_count - 1U; i-- > 0U; ) {
+      r = r * t + temp_corr[i];
+    }
+    t = r;
   }
   return t;
 }
 
-void temp_lld_set_correction(const temp_corr_t *corr) {
-  if (corr == NULL) {
+void temp_lld_set_correction(const float *coeffs, size_t count) {
+  if (coeffs == NULL || count == 0U) {
     temp_lld_clear_correction();
     return;
   }
-  temp_corr = *corr;
-  temp_corr_valid = true;
+  if (count > EFR32_TEMP_CORR_MAX_COEFFS) {
+    count = EFR32_TEMP_CORR_MAX_COEFFS;
+  }
+  for (size_t i = 0U; i < count; i++) {
+    temp_corr[i] = coeffs[i];
+  }
+  temp_corr_count = count;
 }
 
 void temp_lld_clear_correction(void) {
-  temp_corr_valid = false;
-  temp_corr.quad = 0.0f;
-  temp_corr.lin  = 1.0f;
-  temp_corr.offs = 0.0f;
+  /* Default: all-zero coefficients = identity (no correction). */
+  for (size_t i = 0U; i < EFR32_TEMP_CORR_MAX_COEFFS; i++) {
+    temp_corr[i] = 0.0f;
+  }
+  temp_corr_count = 0U;
 }
 
 #endif /* EFR32_TEMP_USE_TEMP == TRUE */
