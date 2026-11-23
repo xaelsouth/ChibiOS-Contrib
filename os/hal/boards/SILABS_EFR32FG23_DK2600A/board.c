@@ -17,9 +17,21 @@
 #include "hal.h"
 
 /**
- * @brief   PAL setup.
- * @details Digital I/O ports static configuration as defined in @p board.h.
- *          This variable is used by the HAL when initializing the PAL driver.
+ * @brief   PAL setup — the board's static default GPIO configuration.
+ * @details halInit() calls palInit(&pal_default_config) (hal.c), and the PAL
+ *          LLD applies this table once in _pal_lld_init(): each PAData..PDData
+ *          entry programs the corresponding GPIO port registers
+ *          (CTRL/MODEL/MODEH/DOUT), i.e. the reset-time mode and output level
+ *          of every pin of that port.  Without it the pins would simply keep
+ *          their hardware reset state.
+ *          The values come from the PAL_EFR32_PORTx_{CTRL,MODEL,MODEH,DOUT}_DEFAULT
+ *          macros in hal_pal_lld.h, which default every pin to
+ *          PAL_EFR32_MODEL_DEFAULT (input, output driver disabled).  To give
+ *          a board pin a different power-on state (e.g. LED pin as push-pull
+ *          output, button pin with pull-up), redefine the matching macro in
+ *          board.h — this table picks it up automatically.
+ *          Runtime changes afterwards are done per pin with palSetPadMode() /
+ *          palSetPad() / palClearPad(), not through this const table.
  */
 #if HAL_USE_PAL || defined(__DOXYGEN__)
 const PALConfig pal_default_config =

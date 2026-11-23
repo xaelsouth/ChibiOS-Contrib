@@ -80,7 +80,13 @@
 #define PAL_EFR32_MODEL_WIREDANDALTPULLUP       GPIO_P_MODEL_MODE0_WIREDANDALTPULLUP
 #define PAL_EFR32_MODEL_WIREDANDALTPULLUPFILTER GPIO_P_MODEL_MODE0_WIREDANDALTPULLUPFILTER
 
-
+/*
+ * Per-port power-on defaults. These macros feed pal_default_config in the
+ * board's board.c (halInit() -> palInit(&pal_default_config) ->
+ * _pal_lld_init() programs GPIOx CTRL/MODEL/MODEH/DOUT from them). All pins
+ * default to PAL_EFR32_MODEL_DEFAULT; a board overrides individual pins by
+ * redefining the matching PAL_EFR32_PORTx_*_DEFAULT macro in its board.h.
+ */
 #define PAL_EFR32_PORTA_MODEL_DEFAULT           ((PAL_EFR32_MODEL_DEFAULT <<  0U) | \
                                                  (PAL_EFR32_MODEL_DEFAULT <<  4U) | \
                                                  (PAL_EFR32_MODEL_DEFAULT <<  8U) | \
