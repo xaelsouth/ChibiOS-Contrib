@@ -74,7 +74,7 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
               pull-up, unused rows 3-5 tied to row 2 per KEYSCAN_E301;
               SCANNED irqs counted, no phantom KEY, NOKEY status set,
               clock gated off after stop)
-  PRS         PASS  (generic hal_prs API, PRSD1: async ch0 = GPIO PA0
+  SIGROUTE    PASS  (generic hal_sigroute API, SIGROUTED1: async ch0 = GPIO PA0
               routed to pin PA4: ASYNC_PEEK and pad follow PA0;
               prsSetLogic NOT_A FNSEL check; consumer route to
               LETIMER0_START; sw level/pulse; sync ch connect/disconnect;
@@ -113,7 +113,7 @@ Notes / driver quirks discovered on FG23 (all handled in the LLDs):
     Avoid PA5 (BTN1), PB2 (LED), PA8/PA9 (VCOM) in tests too.
   - Peripheral-driven output pins need a pad MODE *_ALT variant (e.g.
     PUSHPULL_ALT) — with plain PUSHPULL the GPIO DOUT wins and the
-    peripheral signal never reaches the pin (PRS/LCD/KEYSCAN routes).
+    peripheral signal never reaches the pin (SIGROUTE/LCD/KEYSCAN routes).
   - LCD needs its clock: CMU CLKEN0.LFRCO + LCDCLKCTRL.CLKSEL=LFRCO
     (lcd_lld_start does both) and segment outputs allocated via
     GPIO->LCDSEG / LCDCOM; otherwise the panel stays blank while SEGD

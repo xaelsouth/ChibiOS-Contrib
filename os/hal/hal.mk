@@ -83,8 +83,8 @@ endif
 ifneq ($(findstring HAL_USE_COMP TRUE,$(HALCONF)),)
 HALSRC_CONTRIB += ${CHIBIOS_CONTRIB}/os/hal/src/hal_comp.c
 endif
-ifneq ($(findstring HAL_USE_PRS TRUE,$(HALCONF)),)
-HALSRC_CONTRIB += ${CHIBIOS_CONTRIB}/os/hal/src/hal_prs.c
+ifneq ($(findstring HAL_USE_SIGROUTE TRUE,$(HALCONF)),)
+HALSRC_CONTRIB += ${CHIBIOS_CONTRIB}/os/hal/src/hal_sigroute.c
 endif
 ifneq ($(findstring HAL_USE_TEMPERATURE TRUE,$(HALCONF)),)
 HALSRC_CONTRIB += ${CHIBIOS_CONTRIB}/os/hal/src/hal_temperature.c
@@ -119,7 +119,7 @@ HALSRC_CONTRIB := ${CHIBIOS_CONTRIB}/os/hal/src/hal_community.c \
                   ${CHIBIOS_CONTRIB}/os/hal/src/hal_usb_hid.c \
                   ${CHIBIOS_CONTRIB}/os/hal/src/hal_usb_msd.c \
                   ${CHIBIOS_CONTRIB}/os/hal/src/hal_comp.c \
-                  ${CHIBIOS_CONTRIB}/os/hal/src/hal_prs.c \
+                  ${CHIBIOS_CONTRIB}/os/hal/src/hal_sigroute.c \
                   ${CHIBIOS_CONTRIB}/os/hal/src/hal_temperature.c \
                   ${CHIBIOS_CONTRIB}/os/hal/src/hal_opamp.c
 endif

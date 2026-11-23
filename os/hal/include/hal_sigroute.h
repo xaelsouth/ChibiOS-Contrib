@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    hal_prs.h
+ * @file    hal_sigroute.h
  * @brief   Generic peripheral reflex/routing driver (upper layer).
  *
  * @details Portable abstraction of a peripheral signal crossbar, modelled
@@ -29,14 +29,14 @@
  *          onto one of the consumer's trigger slots.
  *
  *          Portable concepts:
- *          - prs_source_t   : event generator encoding (vendor specific,
- *                             e.g. PRS_GEN_TIMER0_CC0 in the LLD header)
- *          - prs_consumer_t : event consumer encoding (vendor specific)
+ *          - sigroute_source_t   : event generator encoding (vendor specific,
+ *                             e.g. SIGROUTE_GEN_TIMER0_CC0 in the LLD header)
+ *          - sigroute_consumer_t : event consumer encoding (vendor specific)
  *          - channel index  : async (low-power capable) or sync channel
- *          - prs_fn_t       : optional per-channel logic function
+ *          - sigroute_fn_t       : optional per-channel logic function
  *          - software events (pulse/level) and channel peek
  *
- * @addtogroup PRS
+ * @addtogroup SIGROUTE
  * @{
  */
 
@@ -45,7 +45,7 @@
 
 #include "hal.h"
 
-#if (HAL_USE_PRS == TRUE) || defined(__DOXYGEN__)
+#if (HAL_USE_SIGROUTE == TRUE) || defined(__DOXYGEN__)
 
 /*===========================================================================*/
 /* Driver constants.                                                         */
@@ -56,38 +56,38 @@
  *          (EM2 on EFR32), sync channels are cycle-accurate (HFPERCLK).
  */
 typedef enum {
-  PRS_PATH_ASYNC = 0,   /**< Low-power capable route. */
-  PRS_PATH_SYNC  = 1,   /**< Synchronous, cycle-accurate route. */
-} prs_path_t;
+  SIGROUTE_PATH_ASYNC = 0,   /**< Low-power capable route. */
+  SIGROUTE_PATH_SYNC  = 1,   /**< Synchronous, cycle-accurate route. */
+} sigroute_path_t;
 
 /**
  * @brief   Event generator (source) encoding. Vendor specific values are
- *          provided by the LLD header as PRS_GEN_* macros.
+ *          provided by the LLD header as SIGROUTE_GEN_* macros.
  */
-typedef uint32_t prs_source_t;
+typedef uint32_t sigroute_source_t;
 
 /**
  * @brief   Event consumer encoding. Vendor specific values are provided by
- *          the LLD header as PRS_CON_* macros.
+ *          the LLD header as SIGROUTE_CON_* macros.
  */
-typedef uint32_t prs_consumer_t;
+typedef uint32_t sigroute_consumer_t;
 
 /**
  * @brief   Optional per-channel logic function combining the channel
- *          signal A with an auxiliary channel signal B (PRS FNSEL).
+ *          signal A with an auxiliary channel signal B (hardware FNSEL).
  */
 typedef enum {
-  PRS_FN_PASS_A = 0,    /**< A (plain pass-through). */
-  PRS_FN_NOT_A,         /**< ~A */
-  PRS_FN_AND,           /**< A & B */
-  PRS_FN_OR,            /**< A | B */
-  PRS_FN_XOR,           /**< A ^ B */
-  PRS_FN_NAND,          /**< ~(A & B) */
-  PRS_FN_NOR,           /**< ~(A | B) */
-  PRS_FN_XNOR,          /**< ~(A ^ B) */
-  PRS_FN_ZERO,          /**< constant 0 */
-  PRS_FN_ONE,           /**< constant 1 */
-} prs_fn_t;
+  SIGROUTE_FN_PASS_A = 0,    /**< A (plain pass-through). */
+  SIGROUTE_FN_NOT_A,         /**< ~A */
+  SIGROUTE_FN_AND,           /**< A & B */
+  SIGROUTE_FN_OR,            /**< A | B */
+  SIGROUTE_FN_XOR,           /**< A ^ B */
+  SIGROUTE_FN_NAND,          /**< ~(A & B) */
+  SIGROUTE_FN_NOR,           /**< ~(A | B) */
+  SIGROUTE_FN_XNOR,          /**< ~(A ^ B) */
+  SIGROUTE_FN_ZERO,          /**< constant 0 */
+  SIGROUTE_FN_ONE,           /**< constant 1 */
+} sigroute_fn_t;
 
 /*===========================================================================*/
 /* Driver data structures and types.                                         */
@@ -97,17 +97,17 @@ typedef enum {
  * @brief   Driver state machine possible states.
  */
 typedef enum {
-  PRS_UNINIT = 0,                   /**< Not initialized.                    */
-  PRS_STOP = 1,                     /**< Stopped.                            */
-  PRS_READY = 2,                    /**< Ready.                              */
-} prsstate_t;
+  SIGROUTE_UNINIT = 0,                   /**< Not initialized.                    */
+  SIGROUTE_STOP = 1,                     /**< Stopped.                            */
+  SIGROUTE_READY = 2,                    /**< Ready.                              */
+} sigroutestate_t;
 
 /**
- * @brief   Type of a structure representing a PRS driver.
+ * @brief   Type of a structure representing a SIGROUTE driver.
  */
-typedef struct PRSDriver PRSDriver;
+typedef struct SIGROUTEDriver SIGROUTEDriver;
 
-#include "hal_prs_lld.h"
+#include "hal_sigroute_lld.h"
 
 /*===========================================================================*/
 /* External declarations.                                                    */
@@ -116,39 +116,39 @@ typedef struct PRSDriver PRSDriver;
 #ifdef __cplusplus
 extern "C" {
 #endif
-  void     prsInit(void);
-  void     prsObjectInit(PRSDriver *pp);
-  void     prsStart(PRSDriver *pp, const PRSConfig *config);
-  void     prsStop(PRSDriver *pp);
+  void     sigrouteInit(void);
+  void     sigrouteObjectInit(SIGROUTEDriver *pp);
+  void     sigrouteStart(SIGROUTEDriver *pp, const SIGROUTEConfig *config);
+  void     sigrouteStop(SIGROUTEDriver *pp);
 
-  /* Route a source to a channel (PRS: ASYNC_CH/SYNC_CH CTRL). */
-  void     prsConnect(PRSDriver *pp, prs_path_t path, uint8_t ch,
-                      prs_source_t gen);
-  void     prsDisconnect(PRSDriver *pp, prs_path_t path, uint8_t ch);
+  /* Route a source to a channel (hardware: ASYNC_CH/SYNC_CH CTRL). */
+  void     sigrouteConnect(SIGROUTEDriver *pp, sigroute_path_t path, uint8_t ch,
+                      sigroute_source_t gen);
+  void     sigrouteDisconnect(SIGROUTEDriver *pp, sigroute_path_t path, uint8_t ch);
   /* Optional logic function on an async channel (aux = second channel). */
-  void     prsSetLogic(PRSDriver *pp, uint8_t ch, prs_fn_t fn, uint8_t aux);
+  void     sigrouteSetLogic(SIGROUTEDriver *pp, uint8_t ch, sigroute_fn_t fn, uint8_t aux);
 
   /* Route a channel to a peripheral consumer. */
-  void     prsConnectConsumer(PRSDriver *pp, prs_consumer_t consumer,
-                              prs_path_t path, uint8_t ch);
+  void     sigrouteConnectConsumer(SIGROUTEDriver *pp, sigroute_consumer_t consumer,
+                              sigroute_path_t path, uint8_t ch);
 
   /* Route a channel to a GPIO pin (pad mode: peripheral output, *_ALT). */
-  void     prsRoutePin(PRSDriver *pp, prs_path_t path, uint8_t ch,
+  void     sigrouteRoutePin(SIGROUTEDriver *pp, sigroute_path_t path, uint8_t ch,
                        ioportid_t port, ioportmask_t pad);
-  void     prsUnroutePin(PRSDriver *pp, prs_path_t path, uint8_t ch);
+  void     sigrouteUnroutePin(SIGROUTEDriver *pp, sigroute_path_t path, uint8_t ch);
 
   /* Software events on async channels (bit mask of channels). */
-  void     prsSwPulse(PRSDriver *pp, uint16_t ch_mask);
-  void     prsSwLevelSet(PRSDriver *pp, uint16_t ch_mask);
-  void     prsSwLevelClear(PRSDriver *pp, uint16_t ch_mask);
+  void     sigrouteSwPulse(SIGROUTEDriver *pp, uint16_t ch_mask);
+  void     sigrouteSwLevelSet(SIGROUTEDriver *pp, uint16_t ch_mask);
+  void     sigrouteSwLevelClear(SIGROUTEDriver *pp, uint16_t ch_mask);
 
   /* Current channel levels. */
-  uint32_t prsPeek(PRSDriver *pp, prs_path_t path);
+  uint32_t sigroutePeek(SIGROUTEDriver *pp, sigroute_path_t path);
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* HAL_USE_PRS */
+#endif /* HAL_USE_SIGROUTE */
 
 #endif /* HAL_PRS_H_ */
 

@@ -88,10 +88,10 @@
 #endif
 
 /**
- * @brief   Enables the PRS (peripheral reflex system) driver.
+ * @brief   Enables the SIGROUTE (peripheral signal routing/crossbar) driver.
  */
-#if !defined(HAL_USE_PRS) || defined(__DOXYGEN__)
-#define HAL_USE_PRS                 FALSE
+#if !defined(HAL_USE_SIGROUTE) || defined(__DOXYGEN__)
+#define HAL_USE_SIGROUTE                 FALSE
 #endif
 
 /**

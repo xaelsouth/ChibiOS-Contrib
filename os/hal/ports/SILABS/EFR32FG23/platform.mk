@@ -83,7 +83,7 @@ include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/LCDv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/EFLv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/TEMPv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/KEYSCANv1/driver.mk
-include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/PRSv1/driver.mk
+include ${CHIBIOS_CONTRIB}/os/hal/ports/SILABS/LLD/EFR32FG23/SIGROUTEv1/driver.mk
 # emlib binding (optional, for apps that use emlib directly without RAIL).
 # When EFR32_RAIL_USE_RAIL=TRUE, RAILv1 already provides the same shims.
 

@@ -31,8 +31,8 @@
 #define HAL_USE_COMP                        FALSE
 #endif
 
-#if !defined(HAL_USE_PRS)
-#define HAL_USE_PRS                         FALSE
+#if !defined(HAL_USE_SIGROUTE)
+#define HAL_USE_SIGROUTE                         FALSE
 #endif
 
 #if !defined(HAL_USE_TEMPERATURE)
@@ -110,7 +110,7 @@
 #include "hal_timcap.h"
 #include "hal_qei.h"
 #include "hal_comp.h"
-#include "hal_prs.h"
+#include "hal_sigroute.h"
 #include "hal_temperature.h"
 #include "hal_lcd.h"
 #include "hal_opamp.h"
