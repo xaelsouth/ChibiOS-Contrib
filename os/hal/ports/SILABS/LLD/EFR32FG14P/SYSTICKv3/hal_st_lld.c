@@ -157,8 +157,8 @@ void st_lld_init(void) {
   /* Set prescaler. */
   ST_SET_PRESCALER();
 
-  /* Enable timer. */
-  EFR32_ST_TIM->EN_SET = LETIMER_EN_EN;
+  /* On Series 1 there is no EN register: the timer is started below
+     with LETIMER_CMD_START. */
 
   /* Initializing the counter in free running mode. */
   EFR32_ST_TIM->IEN    = 0;

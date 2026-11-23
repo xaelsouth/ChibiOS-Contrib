@@ -35,6 +35,18 @@
 #define EFR32_HFXO_FREQ                 (38400000UL)
 #endif
 
+#if !defined(EFR32_LFRCO_FREQ)
+#define EFR32_LFRCO_FREQ                (32768UL)
+#endif
+
+#if !defined(EFR32_ULFRCO_FREQ)
+#define EFR32_ULFRCO_FREQ               (1000UL)
+#endif
+
+#if !defined(EFR32_HFRCO_STARTUP_FREQ)
+#define EFR32_HFRCO_STARTUP_FREQ        (19000000UL)
+#endif
+
 #define GPIO_ESCAPE_HATCH_PORT          gpioPortB
 #define GPIO_ESCAPE_HATCH_PIN           0
 

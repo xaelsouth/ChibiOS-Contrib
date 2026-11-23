@@ -50,9 +50,11 @@ How to check all projects at once:
       make -C "$d" -j8 > /tmp/bo.log 2>&1 && echo "OK   $d" || { echo "FAIL $d"; grep -E 'error:|#error' /tmp/bo.log | head -3; }
     done
 
-(Latest audit: 33/35 build; the 2 failures are pre-existing and unrelated —
-RT-EFR32FG23B010F512-DK2600A chconf.h missing CH_CFG_SAFETY_CHECK_HOOK,
-RT-EFR32FG14P-SLWSTK6061B missing em_device.h include path.)
+(Latest audit: 35/35 build OK. Previously broken demos fixed:
+RT-EFR32FG23B010F512-DK2600A — chconf.h CH_CFG_SAFETY_CHECK_HOOK, halconf.h
+bumped to VER_9_1, Makefile uses contrib hal.mk + streams.mk;
+RT-EFR32FG14P-SLWSTK6061B — startup mk gecko SDK paths, halconf VER_9_1,
+chconf hook, FG14P port de-emlib'ed (raw CMU registers, escape hatch).)
 
 Note: application/ trees are not git repositories; keep their cfg/mcuconf.h
 in sync manually when the port contract changes.

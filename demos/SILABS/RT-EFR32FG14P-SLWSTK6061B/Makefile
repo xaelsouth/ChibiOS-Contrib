@@ -100,7 +100,8 @@ include $(CHIBIOS)/os/license/license.mk
 # Startup files.
 include $(CHIBIOS_CONTRIB)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_efr32fg14p23x.mk
 # HAL-OSAL files (optional).
-include $(CHIBIOS)/os/hal/hal.mk
+include $(CHIBIOS_CONTRIB)/os/hal/hal.mk
+include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 include $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/EFR32FG14P/platform.mk
 include $(CHIBIOS_CONTRIB)/os/hal/boards/SILABS_SLWSTK6061B/board.mk
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk

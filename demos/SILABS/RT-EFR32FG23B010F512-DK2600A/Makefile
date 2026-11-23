@@ -100,7 +100,7 @@ include $(CHIBIOS)/os/license/license.mk
 # Startup files.
 include $(CHIBIOS_CONTRIB)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_efr32fg23x.mk
 # HAL-OSAL files (optional).
-include $(CHIBIOS)/os/hal/hal.mk
+include $(CHIBIOS_CONTRIB)/os/hal/hal.mk
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 include $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/EFR32FG23/platform.mk
 include $(CHIBIOS_CONTRIB)/os/hal/boards/SILABS_EFR32FG23_DK2600A/board.mk
@@ -114,7 +114,7 @@ include $(CHIBIOS)/tools/mk/autobuild.mk
 #include $(CHIBIOS)/os/test/test.mk
 #include $(CHIBIOS)/test/rt/rt_test.mk
 #include $(CHIBIOS)/test/oslib/oslib_test.mk
-#include $(CHIBIOS)/os/hal/lib/streams/streams.mk
+include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 include $(CHIBIOS)/os/common/abstractions/cmsis_os/cmsis_os.mk
 
 # Define linker script file here

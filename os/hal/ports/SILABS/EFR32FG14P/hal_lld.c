@@ -97,7 +97,8 @@ static void efr32_clock_points_init(void) {
 
 void efr32_chip_init(void) {
 
-  CHIP_Init();
+  /* CHIP_Init() is not provided by the current Gecko SDK (Series 1 chip
+     revision fixups are no longer needed); nothing to do here. */
 }
 
 /**
@@ -108,47 +109,52 @@ void efr32_chip_init(void) {
  * @special
  */
 void efr32_clock_init(void) {
-  SystemCoreClockUpdate();
+  SystemCoreClock = SystemCoreClockGet();
     
 #if EFR32_LFXO_ENABLED
-  CMU_OscillatorEnable(cmuOsc_LFXO, true, true);
+  CMU->OSCENCMD = CMU_OSCENCMD_LFXOEN;
+  while (!(CMU->STATUS & CMU_STATUS_LFXORDY)) {}
 #else
-  CMU_OscillatorEnable(cmuOsc_LFXO, false, false);
+  CMU->OSCENCMD = CMU_OSCENCMD_LFXODIS;
+  while (CMU->STATUS & CMU_STATUS_LFXORDY) {}
 #endif
 
 #if EFR32_HFXO_ENABLED
-  CMU_OscillatorEnable(cmuOsc_HFXO, true, true);
+  CMU->OSCENCMD = CMU_OSCENCMD_HFXOEN;
+  while (!(CMU->STATUS & CMU_STATUS_HFXORDY)) {}
 #else
-  CMU_OscillatorEnable(cmuOsc_HFXO, false, false);
+  CMU->OSCENCMD = CMU_OSCENCMD_HFXODIS;
+  while (CMU->STATUS & CMU_STATUS_HFXORDY) {}
 #endif
 
 #if EFR32_LFRCO_ENABLED
-  CMU_OscillatorEnable(cmuOsc_LFRCO, true, true);
+  CMU->OSCENCMD = CMU_OSCENCMD_LFRCOEN;
+  while (!(CMU->STATUS & CMU_STATUS_LFRCORDY)) {}
 #else
-  CMU_OscillatorEnable(cmuOsc_LFRCO, false, false);
+  CMU->OSCENCMD = CMU_OSCENCMD_LFRCODIS;
+  while (CMU->STATUS & CMU_STATUS_LFRCORDY) {}
 #endif
 
 #if EFR32_HFRCO_ENABLED
-  CMU_OscillatorEnable(cmuOsc_HFRCO, true, true);
+  CMU->OSCENCMD = CMU_OSCENCMD_HFRCOEN;
+  while (!(CMU->STATUS & CMU_STATUS_HFRCORDY)) {}
 #else
-  CMU_OscillatorEnable(cmuOsc_HFRCO, false, false);
+  CMU->OSCENCMD = CMU_OSCENCMD_HFRCODIS;
+  while (CMU->STATUS & CMU_STATUS_HFRCORDY) {}
 #endif
 
 #if defined(EFR32_RTCCSEL)
 #if EFR32_RTCCSEL == EFR32_RTCCSEL_NOCLOCK
-  CMU_ClockSelectSet(cmuClock_RTCC, cmuSelect_Disabled);
+  CMU->LFECLKSEL = CMU_LFECLKSEL_LFE_DISABLED;
   
 #elif EFR32_RTCCSEL == EFR32_RTCCSEL_LFXO
-  CMU_ClockEnable(cmuClock_HFLE, true);
-  CMU_ClockSelectSet(cmuClock_LFE, cmuSelect_LFXO);
+  CMU->LFECLKSEL = CMU_LFECLKSEL_LFE_LFXO;
 
 #elif EFR32_RTCCSEL == EFR32_RTCCSEL_LFRCO
-  CMU_ClockEnable(cmuClock_HFLE, true);
-  CMU_ClockSelectSet(cmuClock_LFE, cmuSelect_LFRCO);
+  CMU->LFECLKSEL = CMU_LFECLKSEL_LFE_LFRCO;
 
 #elif EFR32_RTCCSEL == EFR32_RTCCSEL_ULFRCO
-  CMU_ClockEnable(cmuClock_HFLE, true);
-  CMU_ClockSelectSet(cmuClock_LFE, cmuSelect_ULFRCO);
+  CMU->LFECLKSEL = CMU_LFECLKSEL_LFE_ULFRCO;
 
 #else
 #error "EFR32_RTCCSEL not specified"
@@ -157,19 +163,16 @@ void efr32_clock_init(void) {
 
 #if defined(EFR32_LETIM1SEL)
 #if EFR32_LETIM1SEL == EFR32_LETIM1SEL_NOCLOCK
-  CMU_ClockSelectSet(cmuClock_LETIMER0, cmuSelect_Disabled);
+  CMU->LFACLKSEL = CMU_LFACLKSEL_LFA_DISABLED;
   
 #elif EFR32_LETIM1SEL == EFR32_LETIM1SEL_LFXO
-  CMU_ClockEnable(cmuClock_HFLE, true);
-  CMU_ClockSelectSet(cmuClock_LFA, cmuSelect_LFXO);
+  CMU->LFACLKSEL = CMU_LFACLKSEL_LFA_LFXO;
 
 #elif EFR32_LETIM1SEL == EFR32_LETIM1SEL_LFRCO
-  CMU_ClockEnable(cmuClock_HFLE, true);
-  CMU_ClockSelectSet(cmuClock_LFA, cmuSelect_LFRCO);
+  CMU->LFACLKSEL = CMU_LFACLKSEL_LFA_LFRCO;
 
 #elif EFR32_LETIM1SEL == EFR32_LETIM1SEL_ULFRCO
-  CMU_ClockEnable(cmuClock_HFLE, true);
-  CMU_ClockSelectSet(cmuClock_LFA, cmuSelect_ULFRCO);
+  CMU->LFACLKSEL = CMU_LFACLKSEL_LFA_ULFRCO;
 
 #else
 #error "EFR32_LETIM1SEL not specified"
@@ -231,5 +234,56 @@ bool hal_lld_clock_switch_mode(const halclkcfg_t *ccp) {
   return true;
 }
 #endif /* defined(HAL_LLD_USE_CLOCK_MANAGEMENT) */
+
+/**
+ * @brief   efr32_escape_hatch()
+ * @details When developing or debugging code that enters EM2 or lower, it's
+ *          a good idea to have an "escape hatch" mechanism, e.g. a way to
+ *          pause the device so that a debugger can connect in order to
+ *          erase flash, among other things. If the ESCAPE_HATCH_PIN pin is
+ *          low, execute the breakpoint instruction to stop the processor.
+ */
+void efr32_escape_hatch(void) {
+
+#if defined(ESCAPE_HATCH_ENABLE) && (ESCAPE_HATCH_ENABLE == TRUE)
+  const uint32_t port = ESCAPE_HATCH_PORT;
+  const uint32_t pin  = ESCAPE_HATCH_PIN;
+  const bool gpio_clk_was_enabled =
+      (CMU->HFBUSCLKEN0 & CMU_HFBUSCLKEN0_GPIO) != 0U;
+  unsigned int pin_state;
+
+  CMU->HFBUSCLKEN0 |= CMU_HFBUSCLKEN0_GPIO;
+
+  GPIO->P[port].DOUT = 1UL << pin;
+  if (pin < 8) {
+    GPIO->P[port].MODEL = (GPIO->P[port].MODEL & ~(0xFu << (pin * 4))) |
+                          (GPIO_P_MODEL_MODE0_INPUTPULLFILTER << (pin * 4));
+  }
+  else {
+    GPIO->P[port].MODEH = (GPIO->P[port].MODEH & ~(0xFu << ((pin - 8) * 4))) |
+                          (GPIO_P_MODEH_MODE8_INPUTPULLFILTER << ((pin - 8) * 4));
+  }
+
+  pin_state = (GPIO->P[port].DIN >> pin) & 1;
+
+  if (pin_state == 0) { /* Pin asserted, so break into debugger. */
+    __BKPT(0);
+  }
+  else { /* Pin not asserted, so disable input. */
+    if (pin < 8) {
+      GPIO->P[port].MODEL = (GPIO->P[port].MODEL & ~(0xFu << (pin * 4))) |
+                            (GPIO_P_MODEL_MODE0_DISABLED << (pin * 4));
+    }
+    else {
+      GPIO->P[port].MODEH = (GPIO->P[port].MODEH & ~(0xFu << ((pin - 8) * 4))) |
+                            (GPIO_P_MODEH_MODE8_DISABLED << ((pin - 8) * 4));
+    }
+
+    if (!gpio_clk_was_enabled) {
+      CMU->HFBUSCLKEN0 &= ~CMU_HFBUSCLKEN0_GPIO;
+    }
+  }
+#endif
+}
 
 /** @} */
