@@ -148,7 +148,14 @@
  * @details If set to @p TRUE the SIO drivers allocate an LDMA stream per
  *          instance and use it for TX transfers of at least
  *          EFR32_SIO_DMA_MIN_TRANSFER bytes (through a bounce buffer in the
- *          driver structure). RX stays FIFO/interrupt driven.
+ *          driver structure). RX stays FIFO/interrupt driven on purpose:
+ *          sio_lld_read() is non-blocking and the HAL-level async read
+ *          passes a different (advancing) buffer pointer on every call,
+ *          so a peripheral-to-memory DMA into the caller buffer could
+ *          not work, and the LLD keeps no RX queue to bounce into.
+ *          For large buffered receives use the SPI driver (full-duplex
+ *          DMA) or a dedicated DMA-based driver with idle-line
+ *          termination.
  * @note    The default is @p FALSE.
  */
 #if !defined(EFR32_SIO_USE_DMA) || defined(__DOXYGEN__)
