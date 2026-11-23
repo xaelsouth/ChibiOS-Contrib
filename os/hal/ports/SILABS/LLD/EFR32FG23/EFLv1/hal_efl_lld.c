@@ -97,7 +97,7 @@ static bool msc_is_busy(void) {
 }
 
 /*
- * MSC flash init, erase and write require the EM0/EM1 voltage scale at
+ * MSC flash erase and write require the EM0/EM1 voltage scale at
  * level VSCALE2 (see em_msc.c: "Flash erase and write requires VSCALE2").
  * These helpers read back the current level from EMU->STATUS, switch to
  * VSCALE2 and restore the saved level afterwards.  They are idempotent,
@@ -146,9 +146,9 @@ void efl_lld_init(void) {
   /* Enable the MSC bus clock — without it register access bus-faults. */
   CMU->CLKEN1_SET = CMU_CLKEN1_MSC;
 
-  /* MSC access requires EM01 vscale VSCALE2: read back and save the
-     current setting, switch to VSCALE2 for the init, restore after. */
-  msc_vscale_enter();
+  /* No VSCALE2 handling here: init only touches MSC registers, never the
+     flash array.  VSCALE2 is forced by efl_lld_program and the erase
+     paths, where the flash pump actually needs it. */
 
   /* Build sector descriptors at init time. */
   for (uint32_t i = 0; i < EFR32_FLASH_PAGES; i++) {
@@ -160,8 +160,6 @@ void efl_lld_init(void) {
   efl_sector_desc[EFR32_FLASH_PAGES].size   = EFR32_USERDATA_SIZE;
 
   eflObjectInit(&EFLD1);
-
-  msc_vscale_exit();
 }
 
 void efl_lld_start(EFlashDriver *eflp) {
