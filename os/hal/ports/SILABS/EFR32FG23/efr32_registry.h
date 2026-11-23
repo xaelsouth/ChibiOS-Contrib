@@ -185,6 +185,65 @@
  */
 #define EFR32_HAS_BURAM                     TRUE
 
+/*
+ * BURTC driver system settings (BURTC_COUNT = 1: 32-bit backup RTC,
+ * also usable as system tick — SYSTICKv4).
+ */
+#define EFR32_HAS_BURTC                     TRUE
+
+/*
+ * Additional hardware blocks (from the device header of
+ * EFR32FG23B010F512IM48; all FG23 variants share these):
+ *
+ * HAL numbering is 1-based throughout: EFR32_HAS_EUSART1 refers to
+ * hardware EUSART0, EFR32_HAS_TIMER1 to TIMER0, and so on.
+ */
+
+/* VDAC (DAC_COUNT = 1, channels CH0/CH1) — the hardware block behind
+ * EFR32_HAS_DAC1_CH1/CH2 above. */
+#define EFR32_HAS_VDAC                      TRUE
+#define EFR32_VDAC_NUM_CHANNELS             2
+
+/* LCDRF (LCDRF_COUNT = 1) — LCD charge-redistribution/waveform companion
+ * of the LCD controller. */
+#define EFR32_HAS_LCDRF                     TRUE
+
+/* Radio mailboxes (HOSTMAILBOX_COUNT = 1, SEMAILBOX_COUNT = 1) — used by
+ * the RAIL/radio glue to exchange commands with the modem. */
+#define EFR32_HAS_HOSTMAILBOX               TRUE
+#define EFR32_HAS_SEMAILBOX                 TRUE
+
+/* DPLL (DPLL_COUNT = 1) — precision clock source for the radio.
+ * ICACHE (ICACHE_COUNT = 1) — flash instruction cache. */
+#define EFR32_HAS_DPLL                      TRUE
+#define EFR32_HAS_ICACHE                    TRUE
+
+/* LDMA (LDMA_COUNT = 1, CH[8]) — the DMA engine; EFR32_HAS_DMA above refers
+ * to it. LDMAXBAR (LDMAXBAR_COUNT = 1) is the DMA request crossbar. */
+#define EFR32_HAS_LDMA                      TRUE
+#define EFR32_LDMA_NUM_CHANNELS             8
+#define EFR32_HAS_LDMAXBAR                  TRUE
+
+/* RADIOAES (RADIOAES_COUNT = 1) — AES engine inside the radio block;
+ * EFR32_HAS_AES above refers to it. */
+#define EFR32_HAS_RADIOAES                  TRUE
+
+/* PRS has ASYNC_CH[12] + SYNC_CH[4]. */
+#define EFR32_PRS_NUM_CHANNELS              12
+#define EFR32_PRS_NUM_SYNC_CHANNELS         4
+
+/* External interrupt lines (EXT_IRQ_COUNT = 76). */
+#define EFR32_EXT_IRQ_COUNT                 76
+
+/* GPIO pin counts per port (GPIO_Px_COUNT). */
+#define EFR32_GPIO_PA_PINS                  11
+#define EFR32_GPIO_PB_PINS                  4
+#define EFR32_GPIO_PC_PINS                  10
+#define EFR32_GPIO_PD_PINS                  6
+
+/* All five TIMERs are 32-bit on FG23 (_TIMER_CNT_MASK = 0xFFFFFFFF). */
+#define EFR32_TIMERS_ARE_32BITS             TRUE
+
 /*===========================================================================*/
 /* Common.                                                                   */
 /*===========================================================================*/
