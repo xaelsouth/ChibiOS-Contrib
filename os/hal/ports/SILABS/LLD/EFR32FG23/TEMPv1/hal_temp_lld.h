@@ -44,10 +44,11 @@
 /*===========================================================================*/
 
 /**
- * @brief   Quadratic temperature correction curve, applied in degC:
- *          T_corrected = quad*T^2 + lin*T + offs   (T = factory-calibrated
- *          reading in degC). Typical use: coefficients fitted from a
- *          2- or 3-point user calibration against a reference thermometer.
+ * @brief   Quadratic temperature correction curve. The measured
+ *          (factory-calibrated) value T in degC is corrected in Horner
+ *          schema:  T_corrected = ((quad*T + lin)*T + offs).
+ *          Typical use: coefficients fitted from a 2- or 3-point user
+ *          calibration against a reference thermometer.
  */
 typedef struct {
   float quad;   /**< Quadratic coefficient a (1/degC^2). */

@@ -74,7 +74,8 @@ float temp_lld_read_kelvin(void) {
 float temp_lld_read_celsius(void) {
   float t = temp_lld_read_kelvin() - 273.15f;
   if (temp_corr_valid) {
-    t = temp_corr.quad * t * t + temp_corr.lin * t + temp_corr.offs;
+    /* Horner schema on the measured value: ((a*T + b)*T + c) */
+    t = (temp_corr.quad * t + temp_corr.lin) * t + temp_corr.offs;
   }
   return t;
 }
