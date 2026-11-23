@@ -16,26 +16,23 @@
 
 /**
  * @file    TEMPv1/hal_temp_lld.c
- * @brief   EFR32FG23 die temperature sensor LLD (EMU->TEMP).
+ * @brief   EFR32FG23 temperature sensor LLD (EMU->TEMP) for the generic
+ *          hal_temperature driver.
  *
- * @addtogroup TEMP
+ * @addtogroup TEMPERATURE
  * @{
  */
 
 #include "hal.h"
-#include "hal_temp_lld.h"
+#include "hal_temperature_lld.h"
 
-#if (EFR32_TEMP_USE_TEMP == TRUE) || defined(__DOXYGEN__)
+#if (HAL_USE_TEMPERATURE == TRUE) && (EFR32_TEMP_USE_TEMP == TRUE) || defined(__DOXYGEN__)
 
 /*===========================================================================*/
-/* Driver local variables.                                                   */
+/* Driver exported variables.                                                */
 /*===========================================================================*/
 
-/* Correction polynomial (degC domain), ascending power coefficients,
-   evaluated in Horner schema on the measured value on read.
-   Zero-initialized (0,0,0,...); count==0 = not provided = raw passthrough. */
-static float  temp_corr[EFR32_TEMP_CORR_MAX_COEFFS];
-static size_t temp_corr_count;   /* 0 = no correction (all-zero coeffs) */
+TEMPERATUREDriver TEMPD1;
 
 /*===========================================================================*/
 /* Driver exported functions.                                                */
@@ -44,17 +41,23 @@ static size_t temp_corr_count;   /* 0 = no correction (all-zero coeffs) */
 void temp_lld_init(void) {
   /* Nothing to configure: the EMU temperature sensor is always clocked
      (always-on domain) and starts measuring after reset. */
-  temp_lld_clear_correction();
 }
 
-void temp_lld_start(void) {
+void temp_lld_start(TEMPERATUREDriver *tp) {
+  (void)tp;
   /* Wait for the first temperature conversion to complete. */
   volatile uint32_t sp = 1000000UL;
   while (((EMU->STATUS & EMU_STATUS_FIRSTTEMPDONE) == 0U) && (--sp != 0U)) {
   }
 }
 
-uint32_t temp_lld_read_raw(void) {
+void temp_lld_stop(TEMPERATUREDriver *tp) {
+  (void)tp;
+  /* Always-on sensor: nothing to stop. */
+}
+
+uint32_t temp_lld_read_raw(TEMPERATUREDriver *tp) {
+  (void)tp;
   /* EMU->TEMP: bits 2..10 = TEMP, bits 0..1 = TEMPLSB; value = Kelvin x 4.
      Read twice until stable (the sensor updates asynchronously). */
   uint32_t val1, val2;
@@ -66,45 +69,11 @@ uint32_t temp_lld_read_raw(void) {
   return val1 >> _EMU_TEMP_TEMPLSB_SHIFT;
 }
 
-float temp_lld_read_kelvin(void) {
-  return (float)temp_lld_read_raw() / 4.0f;
+float temp_lld_read_celsius(TEMPERATUREDriver *tp) {
+  /* Uncorrected, factory-calibrated value. */
+  return ((float)temp_lld_read_raw(tp) / 4.0f) - 273.15f;
 }
 
-float temp_lld_read_celsius(void) {
-  float t = temp_lld_read_kelvin() - 273.15f;
-  if (temp_corr_count > 0U) {
-    /* Horner schema on the measured value T: c0 + c1*T + ... + c[n-1]*T^(n-1) */
-    float r = temp_corr[temp_corr_count - 1U];
-    for (size_t i = temp_corr_count - 1U; i-- > 0U; ) {
-      r = r * t + temp_corr[i];
-    }
-    t = r;
-  }
-  return t;
-}
-
-void temp_lld_set_correction(const float *coeffs, size_t count) {
-  if (coeffs == NULL || count == 0U) {
-    temp_lld_clear_correction();
-    return;
-  }
-  if (count > EFR32_TEMP_CORR_MAX_COEFFS) {
-    count = EFR32_TEMP_CORR_MAX_COEFFS;
-  }
-  for (size_t i = 0U; i < count; i++) {
-    temp_corr[i] = coeffs[i];
-  }
-  temp_corr_count = count;
-}
-
-void temp_lld_clear_correction(void) {
-  /* Default: all-zero coefficients = identity (no correction). */
-  for (size_t i = 0U; i < EFR32_TEMP_CORR_MAX_COEFFS; i++) {
-    temp_corr[i] = 0.0f;
-  }
-  temp_corr_count = 0U;
-}
-
-#endif /* EFR32_TEMP_USE_TEMP == TRUE */
+#endif /* HAL_USE_TEMPERATURE && EFR32_TEMP_USE_TEMP */
 
 /** @} */

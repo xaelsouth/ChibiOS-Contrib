@@ -211,6 +211,7 @@
 
 /* Enable the driver under test. */
 #define EFR32_TEMP_USE_TEMP TRUE
+#define HAL_USE_TEMPERATURE TRUE
 
 #endif /* HALCONF_COMMUNITY_H */
 

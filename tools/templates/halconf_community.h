@@ -88,6 +88,12 @@
 #endif
 
 /**
+ * @brief   Enables the temperature sensor driver.
+ */
+#if !defined(HAL_USE_TEMPERATURE) || defined(__DOXYGEN__)
+#define HAL_USE_TEMPERATURE         FALSE
+
+/**
  * @brief   Enables the OPAMP subsystem.
  */
 #if !defined(HAL_USE_OPAMP) || defined(__DOXYGEN__)

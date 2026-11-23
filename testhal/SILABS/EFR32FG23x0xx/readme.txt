@@ -63,12 +63,13 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
               digit 0->0x3F, seg79->SEGD3=0x80000, icon0->SEGD0=0x100,
               stop->CLKEN1.LCD=0; fixed lcd_lld_start to also run from
               LCD_UNINIT, not only LCD_STOP)
-  TEMP        PASS  (EMU->TEMP die temp: 3 reads over 3 s, ~33 C,
-              FIRSTTEMPDONE=1, spread <= 3 C; correction polynomial of any
-              degree via temp_lld_set_correction(coeffs, n), Horner-evaluated
-              on the measured value (T' = ((c[n-1]*T+...)*T)+c0); default
-              zero coeffs = raw passthrough. Verified: { -2,1,0 }, { 0,1,0.01 }
-              and cubic { 0,1,0,1e-4 } all exact, clear restores raw)
+  TEMP        PASS  (generic hal_temperature driver over TEMPv1 LLD:
+              TEMPD1, tempStart/tempReadCelsius/tempStop; EMU->TEMP die temp
+              3 reads over 3 s ~33 C, FIRSTTEMPDONE=1, spread <= 3 C;
+              correction polynomial of any degree via tempSetCorrection()
+              in the upper layer, Horner on the measured value; default
+              zero coeffs = no correction. Verified: { -2,1,0 }, { 0,1,0.01 },
+              cubic { 0,1,0,1e-4 } exact, clear restores raw)
   KEYSCAN     PASS  (3x4 matrix, cols PA0/3/4/6 wired-and, rows PB0/1/3
               pull-up, unused rows 3-5 tied to row 2 per KEYSCAN_E301;
               SCANNED irqs counted, no phantom KEY, NOKEY status set,

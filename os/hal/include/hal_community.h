@@ -31,6 +31,10 @@
 #define HAL_USE_COMP                        FALSE
 #endif
 
+#if !defined(HAL_USE_TEMPERATURE)
+#define HAL_USE_TEMPERATURE                 FALSE
+#endif
+
 #if !defined(HAL_USE_CRC)
 #define HAL_USE_CRC                         FALSE
 #endif
@@ -102,6 +106,7 @@
 #include "hal_timcap.h"
 #include "hal_qei.h"
 #include "hal_comp.h"
+#include "hal_temperature.h"
 #include "hal_lcd.h"
 #include "hal_opamp.h"
 #include "hal_fsmc.h"
