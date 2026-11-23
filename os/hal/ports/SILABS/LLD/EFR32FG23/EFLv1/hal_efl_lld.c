@@ -97,25 +97,39 @@ static bool msc_is_busy(void) {
 }
 
 /*
- * Flash erase and write require the EM0/EM1 voltage scale at level
- * VSCALE2 (see em_msc.c: "Flash erase and write requires VSCALE2").
+ * MSC flash init, erase and write require the EM0/EM1 voltage scale at
+ * level VSCALE2 (see em_msc.c: "Flash erase and write requires VSCALE2").
  * These helpers read back the current level from EMU->STATUS, switch to
- * VSCALE2, and restore the saved level afterwards.
+ * VSCALE2 and restore the saved level afterwards.  They are idempotent,
+ * so the VSCALE2 level can be held across the asynchronous erase until
+ * efl_lld_query_erase()/efl_lld_verify_erase() report completion.
+ * Only ever raises to VSCALE2 and restores a level that was valid for the
+ * configured HCLK, so no invalid transition can occur.
  */
-static uint32_t msc_vscale_enter(void) {
-  uint32_t saved = (EMU->STATUS & _EMU_STATUS_VSCALE_MASK) >> _EMU_STATUS_VSCALE_SHIFT;
+static uint32_t msc_saved_vscale;
+static bool msc_vscale_held;
+
+static void msc_vscale_enter(void) {
+  if (msc_vscale_held) {
+    return;
+  }
+  msc_saved_vscale = (EMU->STATUS & _EMU_STATUS_VSCALE_MASK) >> _EMU_STATUS_VSCALE_SHIFT;
   EMU->CMD = (EMU->CMD & ~(_EMU_CMD_EM01VSCALE1_MASK | _EMU_CMD_EM01VSCALE2_MASK)) |
              (EMU_STATUS_VSCALE_VSCALE2 >> _EMU_STATUS_VSCALE_SHIFT << _EMU_CMD_EM01VSCALE1_SHIFT);
   while ((EMU->STATUS & _EMU_STATUS_VSCALEBUSY_MASK) == EMU_STATUS_VSCALEBUSY) {
   }
-  return saved;
+  msc_vscale_held = true;
 }
 
-static void msc_vscale_exit(uint32_t saved) {
+static void msc_vscale_exit(void) {
+  if (!msc_vscale_held) {
+    return;
+  }
   EMU->CMD = (EMU->CMD & ~(_EMU_CMD_EM01VSCALE1_MASK | _EMU_CMD_EM01VSCALE2_MASK)) |
-             (saved << _EMU_CMD_EM01VSCALE1_SHIFT);
+             (msc_saved_vscale << _EMU_CMD_EM01VSCALE1_SHIFT);
   while ((EMU->STATUS & _EMU_STATUS_VSCALEBUSY_MASK) == EMU_STATUS_VSCALEBUSY) {
   }
+  msc_vscale_held = false;
 }
 
 static void msc_wait_not_busy(void) {
@@ -134,7 +148,7 @@ void efl_lld_init(void) {
 
   /* MSC access requires EM01 vscale VSCALE2: read back and save the
      current setting, switch to VSCALE2 for the init, restore after. */
-  uint32_t saved_vscale = msc_vscale_enter();
+  msc_vscale_enter();
 
   /* Build sector descriptors at init time. */
   for (uint32_t i = 0; i < EFR32_FLASH_PAGES; i++) {
@@ -147,7 +161,7 @@ void efl_lld_init(void) {
 
   eflObjectInit(&EFLD1);
 
-  msc_vscale_exit(saved_vscale);
+  msc_vscale_exit();
 }
 
 void efl_lld_start(EFlashDriver *eflp) {
@@ -220,6 +234,7 @@ flash_error_t efl_lld_program(void *instance, flash_offset_t offset,
   }
 
   osalSysLock();
+  msc_vscale_enter();
   msc_unlock();
   msc_write_enable();
 
@@ -233,6 +248,7 @@ flash_error_t efl_lld_program(void *instance, flash_offset_t offset,
       MSC->WRITECMD = MSC_WRITECMD_WRITEEND;
       msc_write_disable();
       msc_lock();
+      msc_vscale_exit();
       osalSysUnlock();
       return FLASH_ERROR_PROGRAM;
     }
@@ -242,6 +258,7 @@ flash_error_t efl_lld_program(void *instance, flash_offset_t offset,
   msc_wait_not_busy();
   msc_write_disable();
   msc_lock();
+  msc_vscale_exit();
   osalSysUnlock();
 
   return FLASH_NO_ERROR;
@@ -249,8 +266,10 @@ flash_error_t efl_lld_program(void *instance, flash_offset_t offset,
 
 flash_error_t efl_lld_start_erase_all(void *instance) {
   (void)instance;
-  /* Mass erase of main flash region 0. */
+  /* Mass erase of main flash region 0.  VSCALE2 is held until the erase
+     completes (see efl_lld_query_erase/efl_lld_verify_erase). */
   osalSysLock();
+  msc_vscale_enter();
   msc_unlock();
   msc_write_enable();
   MSC->WRITECMD = MSC_WRITECMD_ERASEMAIN0;
@@ -273,6 +292,7 @@ flash_error_t efl_lld_start_erase_sector(void *instance, flash_sector_t sector) 
   }
 
   osalSysLock();
+  msc_vscale_enter();
   msc_unlock();
   msc_write_enable();
   MSC->ADDRB = addr;
@@ -288,11 +308,13 @@ flash_error_t efl_lld_query_erase(void *instance, uint32_t *msec) {
     if (msec != NULL) *msec = 1;  /* suggest 1ms poll interval */
     return FLASH_BUSY_ERASING;
   }
+  msc_vscale_exit();  /* erase finished — restore the saved vscale level */
   return FLASH_NO_ERROR;
 }
 
 flash_error_t efl_lld_verify_erase(void *instance, flash_sector_t sector) {
   (void)instance;
+  msc_vscale_exit();  /* no-op unless an erase is still holding VSCALE2 */
   if (sector >= EFR32_FLASH_PAGES + 1) {
     return FLASH_ERROR_VERIFY;
   }
