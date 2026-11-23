@@ -63,8 +63,10 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
               digit 0->0x3F, seg79->SEGD3=0x80000, icon0->SEGD0=0x100,
               stop->CLKEN1.LCD=0; fixed lcd_lld_start to also run from
               LCD_UNINIT, not only LCD_STOP)
-  TEMP        PASS  (EMU->TEMP die temp: 3 reads over 3 s, ~29-31 C,
-              FIRSTTEMPDONE=1, spread <= 3 C)
+  TEMP        PASS  (EMU->TEMP die temp: 3 reads over 3 s, ~33 C,
+              FIRSTTEMPDONE=1, spread <= 3 C; quadratic correction curve
+              a*T^2+b*T+c via temp_lld_set_correction verified: -2 C offset
+              and +0.01*T^2 term applied exactly, clear restores raw)
   KEYSCAN     PASS  (3x4 matrix, cols PA0/3/4/6 wired-and, rows PB0/1/3
               pull-up, unused rows 3-5 tied to row 2 per KEYSCAN_E301;
               SCANNED irqs counted, no phantom KEY, NOKEY status set,

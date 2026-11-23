@@ -39,6 +39,22 @@
 #define EFR32_TEMP_USE_TEMP     FALSE
 #endif
 
+/*===========================================================================*/
+/* Driver data structures and types.                                         */
+/*===========================================================================*/
+
+/**
+ * @brief   Quadratic temperature correction curve, applied in degC:
+ *          T_corrected = quad*T^2 + lin*T + offs   (T = factory-calibrated
+ *          reading in degC). Typical use: coefficients fitted from a
+ *          2- or 3-point user calibration against a reference thermometer.
+ */
+typedef struct {
+  float quad;   /**< Quadratic coefficient a (1/degC^2). */
+  float lin;    /**< Linear coefficient b (1/degC), usually ~1. */
+  float offs;   /**< Offset c (degC). */
+} temp_corr_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,8 +62,12 @@ extern "C" {
   void     temp_lld_init(void);
   void     temp_lld_start(void);
   uint32_t temp_lld_read_raw(void);
-  float    temp_lld_read_celsius(void);
   float    temp_lld_read_kelvin(void);
+  float    temp_lld_read_celsius(void);
+  /* Set the quadratic correction curve applied by temp_lld_read_celsius()
+     (NULL or temp_lld_clear_correction() restores raw factory calibration). */
+  void     temp_lld_set_correction(const temp_corr_t *corr);
+  void     temp_lld_clear_correction(void);
 
 #ifdef __cplusplus
 }

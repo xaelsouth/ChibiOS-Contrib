@@ -46,6 +46,36 @@ int main(void) {
          range_ok ? "PASS" : "FAIL", (double)spread, stable_ok ? "PASS" : "FAIL");
   ok = ok && range_ok && stable_ok;
 
+  /* Quadratic correction curve: T' = a*T^2 + b*T + c on top of the
+     factory-calibrated reading. First a pure -2.0 C offset, then a
+     quadratic term; then clear and confirm we are back at raw. */
+  float raw_c = temp_lld_read_celsius();
+
+  const temp_corr_t offs_corr = { 0.0f, 1.0f, -2.0f };
+  temp_lld_set_correction(&offs_corr);
+  float c_offs = temp_lld_read_celsius();
+  bool offs_ok = (c_offs >= raw_c - 2.6f) && (c_offs <= raw_c - 1.4f);
+  PRINTF("correction offs -2.0: raw %.2f -> %.2f (expect ~%.2f) %s\r\n",
+         (double)raw_c, (double)c_offs, (double)(raw_c - 2.0f),
+         offs_ok ? "PASS" : "FAIL");
+  ok = ok && offs_ok;
+
+  const temp_corr_t quad_corr = { 0.01f, 1.0f, 0.0f };  /* +0.01*T^2 ~ +9 C at 30 C */
+  temp_lld_set_correction(&quad_corr);
+  float c_quad = temp_lld_read_celsius();
+  float expect_quad = 0.01f * raw_c * raw_c + raw_c;
+  bool quad_ok = (c_quad >= expect_quad - 1.0f) && (c_quad <= expect_quad + 1.0f);
+  PRINTF("correction quad 0.01: %.2f (expect ~%.2f) %s\r\n",
+         (double)c_quad, (double)expect_quad, quad_ok ? "PASS" : "FAIL");
+  ok = ok && quad_ok;
+
+  temp_lld_clear_correction();
+  float c_clear = temp_lld_read_celsius();
+  bool clear_ok = (c_clear >= raw_c - 1.0f) && (c_clear <= raw_c + 1.0f);
+  PRINTF("correction cleared: %.2f (back to raw ~%.2f) %s\r\n",
+         (double)c_clear, (double)raw_c, clear_ok ? "PASS" : "FAIL");
+  ok = ok && clear_ok;
+
   PRINTF("result: %s\r\n", ok ? "PASS" : "FAIL");
 
   while (true) { chThdSleepMilliseconds(1000); }
