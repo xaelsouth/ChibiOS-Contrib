@@ -243,11 +243,25 @@ __STATIC_INLINE void _rtc_lld_to_timespec(uint32_t tv_sec, uint32_t tv_msec, RTC
  *
  * @isr
  */
+#if !defined(EFR32_ST_OWNS_BURTC) || (EFR32_ST_OWNS_BURTC == 0) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_BURTC_HANDLER) {
 
-  uint32_t isr;
-
   OSAL_IRQ_PROLOGUE();
+
+  rtc_lld_serve_interrupt();
+
+  OSAL_IRQ_EPILOGUE();
+}
+#endif
+
+/**
+ * @brief   BURTC interrupt event processing (shared with SYSTICKv4).
+ *
+ * @isr
+ */
+void rtc_lld_serve_interrupt(void) {
+
+  uint32_t isr;
 
   isr = BURTC->IF & _BURTC_IF_MASK;
   BURTC->IF_CLR = isr;
@@ -273,8 +287,6 @@ OSAL_IRQ_HANDLER(EFR32_BURTC_HANDLER) {
     }
     #endif
   }
-
-  OSAL_IRQ_EPILOGUE();
 }
 
 /*===========================================================================*/
