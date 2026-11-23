@@ -66,7 +66,9 @@
 #define EFR32_FSRCOCLK                   20000000UL
 #define EFR32_LFRCOCLK                   32768UL
 #define EFR32_ULFRCOCLK                  1000UL
-#define EFR32_HFRCODPLL_FREQ             19000000UL
+#if !defined(EFR32_HFRCODPLL_FREQ)
+#define EFR32_HFRCODPLL_FREQ             19000000UL   /* reset default HFRCO band */
+#endif
 
 #define EFR32_EM01_VSCALESEL_1V0         (1U << 0)
 #define EFR32_EM01_VSCALESEL_1V1         (1U << 1)
@@ -224,6 +226,40 @@
 #error "EFR32_HCLK must be lower than VSCALE_1V1_MAX_FREQ"
 #elif (EFR32_HCLK > VSCALE_1V0_MAX_FREQ) && (EFR32_EM01VSCALE_SEL != EFR32_EM01_VSCALESEL_1V1)
 #error "EFR32_EM01VSCALE_SEL must be set to EFR32_EM01_VSCALESEL_1V1 when HCLK > 40 MHz"
+#endif
+
+/*
+ * EM2/EM3 voltage scale vs the EM2/EM3 HF clock: when HFRCOEM23 keeps HCLK
+ * alive in EM2/EM3, its frequency must respect the EM23 voltage scale
+ * (0.9/1.0 V: up to 40 MHz, 1.1 V: up to 80 MHz).
+ */
+#if EFR32_HFRCOEM23_ENABLED && (EFR32_HFRCOEM23CLK > VSCALE_1V0_MAX_FREQ) && \
+    (EFR32_EM23VSCALE_SEL != EFR32_EM23_VSCALESEL_1V1)
+#error "EFR32_EM23VSCALE_SEL must be EFR32_EM23_VSCALESEL_1V1 when EFR32_HFRCOEM23CLK > 40 MHz (EM2/EM3 HCLK)"
+#endif
+
+/*
+ * Flash read wait states (MSC_READCTRL.MODE), derived from HCLK:
+ * WS0 for HCLK <= 40 MHz, WS1 for HCLK <= 80 MHz (requires EM01 vscale 1V1,
+ * enforced above).  hal_lld.c programs this into MSC->READCTRL at boot;
+ * the reset default WS2 is always safe.  Override by defining
+ * EFR32_MSC_READCTRL_MODE (shifted value, e.g. (0UL << 20) for WS0).
+ */
+#define EFR32_FLASH_WS0_MAX_FREQ   40000000UL
+#define EFR32_FLASH_WS1_MAX_FREQ   VSCALE_1V1_MAX_FREQ
+
+#if !defined(EFR32_MSC_READCTRL_MODE)
+#if EFR32_HCLK <= EFR32_FLASH_WS0_MAX_FREQ
+#define EFR32_MSC_READCTRL_MODE    (0UL << 20)   /* WS0: zero wait states */
+#elif EFR32_HCLK <= EFR32_FLASH_WS1_MAX_FREQ
+#define EFR32_MSC_READCTRL_MODE    (1UL << 20)   /* WS1: one wait state */
+#else
+#define EFR32_MSC_READCTRL_MODE    (2UL << 20)   /* WS2: safe default */
+#endif
+#endif
+
+#if (EFR32_HCLK > EFR32_FLASH_WS0_MAX_FREQ) && (EFR32_MSC_READCTRL_MODE == (0UL << 20))
+#error "WS0 flash wait states are not allowed above 40 MHz HCLK"
 #endif
 
 #define EFR32_EM01GRPACLKSEL_NOCLOCK     (1u << 0)

@@ -413,6 +413,13 @@ void efr32_clock_init(void) {
 
   /* After all clocks were set, set also the voltage scaling. */
   efr32_set_voltage_scaling();
+
+  /* Program the flash read wait states for the configured HCLK
+     (EFR32_MSC_READCTRL_MODE is derived from EFR32_HCLK in hal_lld.h;
+     the reset default WS2 is always safe but never zero-wait). */
+  CMU->CLKEN1_SET = CMU_CLKEN1_MSC;
+  MSC->READCTRL = (MSC->READCTRL & ~_MSC_READCTRL_MODE_MASK) |
+                  EFR32_MSC_READCTRL_MODE;
 }
 
 /**
