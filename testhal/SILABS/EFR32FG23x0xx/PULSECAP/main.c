@@ -9,16 +9,18 @@
                                           -> LETIMER0 START (FREE mode; PRS START
                                              while running is a no-op => the
                                              window is NOT restarted by pulses)
-      BURTC COMP (window expired, 1 s) --\
-                                        +--> PRS ch2 (FNSEL A|B) -> LDMAXBAR DMAREQ0
-      PCNT0 UFOF (counter overflow) ----/                          |
+      BURTC COMP (window expired, 1 s) --> PRS ch2 (FNSEL A) -> LDMAXBAR DMAREQ0
+                                                                    |
                                                                     v
                                             LDMA ch (REQ=PRSREQ0) reads PCNT0->CNT
                                             into the next ring slot (circular
                                             linked-descriptor chain); DONE irq
                                             commits the slot and signals the app.
 
-    The app computes deltas from the monotonic 16-bit CNT itself.
+    PCNT overflow deliberately does NOT trigger DMA: the window sample
+    right after a wrap already spans it via 16-bit delta math, and an
+    extra overflow-triggered sample would double-count the pulses around
+    the wrap. The app computes deltas from the monotonic 16-bit CNT.
 
     HW notes discovered on target (EFR32FG23B010F512IM48 / DK2600A):
       - PCNT in external-clock mode (CLKSEL=PCNTS0) syncs its LF register
@@ -78,13 +80,11 @@ static void dma_isr(void *p, uint32_t flags) {
   }
 }
 
-/* PCNT event (overflow/underflow) -> PRS ch2 pulse -> DMAREQ0 -> LDMA.
-   Used instead of the PCNT0_UFOF PRS producer: with PCNT clocked by the S0
-   PRS signal itself, the overflow event pulse is too short for the async
-   PRS synchronizer, so the event is translated to a SWPULSE from the IRQ. */
-static void pcnt_evt_cb(QEIDriver *qp) {
+/* PCNT event counter only (overflow must NOT trigger DMA — see header). */
+static volatile uint32_t pcnt_irq_cnt;
+static void pcnt_irq_cb(QEIDriver *qp) {
   (void)qp;
-  sigrouteSwPulse(&SIGROUTED1, (1U << 2));
+  pcnt_irq_cnt++;
 }
 
 static void inject_pulses(SIGROUTEDriver *srp, uint32_t n) {
@@ -150,10 +150,9 @@ int main(void) {
   sigrouteConnect(&SIGROUTED1, SIGROUTE_PATH_ASYNC, PCAP_PULSE_CH, SIGROUTE_GEN_GPIO_PIN0);
   sigrouteConnectConsumer(&SIGROUTED1, SIGROUTE_CON_PCNT0_S0IN, SIGROUTE_PATH_ASYNC, PCAP_PULSE_CH);
   sigrouteConnectConsumer(&SIGROUTED1, SIGROUTE_CON_LETIMER0_START, SIGROUTE_PATH_ASYNC, PCAP_PULSE_CH);
-  /* ch1: PCNT0 overflow; ch2: BURTC COMP (window end), OR-combined with ch1. */
-  sigrouteConnect(&SIGROUTED1, SIGROUTE_PATH_ASYNC, 1, SIGROUTE_GEN_PCNT0_UFOF);
+  /* ch2: BURTC COMP (window end) -> LDMAXBAR DMAREQ0. PCNT overflow is
+     intentionally NOT routed (see header comment). */
   sigrouteConnect(&SIGROUTED1, SIGROUTE_PATH_ASYNC, 2, SIGROUTE_GEN_BURTC_COMP);
-  sigrouteSetLogic(&SIGROUTED1, 2, SIGROUTE_FN_OR, 1);
   sigrouteConnectConsumer(&SIGROUTED1, SIGROUTE_CON_LDMAXBAR_DMAREQ0, SIGROUTE_PATH_ASYNC, 2);
   uint32_t c_pcnt = PRS->CONSUMER_PCNT0_S0IN;
   uint32_t c_let  = PRS->CONSUMER_LETIMER0_START;
@@ -274,10 +273,12 @@ int main(void) {
          (got1 && v1 == cnt7 && ldma_done_cnt >= 1U) ? "PASS" : "FAIL");
   ok = ok && got1 && (v1 == cnt7) && (ldma_done_cnt >= 1U);
 
-  /* 7) PCNT overflow path: restart PCNT with TOP=2, inject 3 pulses ->
-        CNT 0,1,2,wrap->0, OF irq -> pcnt_evt_cb -> PRS ch2 -> DMAREQ0
-        -> LDMA -> ring entry v2=0; app-side delta vs previous sample is
-        (0 - cnt7) mod 65536. */
+  /* 7) PCNT overflow must NOT trigger DMA (else pulses around a wrap are
+        double-counted together with the next window sample). Restart PCNT
+        with TOP=2, inject 3 pulses -> wrap (OF irq fires, CNT wraps), but
+        no ring entry may appear. Then re-arm a short BURTC window and check
+        that the next window sample spans the wrap with the correct 16-bit
+        monotonic delta. */
   qeiStop(&QEID1);
   static const QEIConfig qei_cfg_of = {
     .cfg  = PCNT_CFG_MODE_EXTCLKSINGLE,
@@ -289,21 +290,42 @@ int main(void) {
     .max  = QEI_COUNT_MAX,
     .overflow = QEI_OVERFLOW_WRAP,
     .overflow_cb = NULL,
-    .callback = pcnt_evt_cb,
+    .callback = pcnt_irq_cb,
   };
   qeiStart(&QEID1, &qei_cfg_of);
   chThdSleepMilliseconds(10);
+  uint32_t c0 = (uint32_t)qeiGetCount(&QEID1) & 0xFFFFU;
+  uint32_t irq0 = pcnt_irq_cnt;
+  uint32_t ringn0 = ringbufCount(&ring);
+  uint32_t done0 = ldma_done_cnt;
   inject_pulses(&SIGROUTED1, 3U);
-  for (int i = 0; (i < 100) && (ringbufCount(&ring) == 0U); i++) {
+  chThdSleepMilliseconds(300);
+  uint32_t c1 = (uint32_t)qeiGetCount(&QEID1) & 0xFFFFU;
+  bool wrapped = (c1 == ((c0 + 3U) % 3U)) && ((c0 + 3U) > 2U);  /* TOP+1 = 3 */
+  bool of_irq  = (pcnt_irq_cnt > irq0);
+  bool no_dma  = (ringbufCount(&ring) == ringn0) && (ldma_done_cnt == done0);
+  PRINTF("overflow: CNT %lu->%lu (wrapped=%d) of_irq=%d dma_untouched=%d %s\r\n",
+         (unsigned long)c0, (unsigned long)c1, (int)wrapped, (int)of_irq, (int)no_dma,
+         (wrapped && of_irq && no_dma) ? "PASS" : "FAIL");
+  ok = ok && wrapped && of_irq && no_dma;
+
+  /* re-arm a short BURTC window (~100 ms) and check the next sample */
+  BURTC->IF_CLR = _BURTC_IF_MASK;
+  BURTC->COMP = BURTC->CNT + 3277U;    /* ~100 ms at 32768 Hz */
+  burtc_sync_wait();
+  for (int i = 0; (i < 150) && (ringbufCount(&ring) == 0U); i++) {
     chThdSleepMilliseconds(10);
   }
   uint32_t v2 = 0xFFFFFFFFU;
   bool got2 = (ringbufRead(&ring, &v2) != 0U);
-  uint32_t delta = (v2 - cnt7) & 0xFFFFU;  /* monotonic 16-bit delta */
-  uint32_t exp_delta = (0U - cnt7) & 0xFFFFU;
-  bool of_ok = got2 && (v2 == 0U) && (delta == exp_delta);
-  PRINTF("overflow: ring v2=%lu delta=%lu (expect v2=0 delta=%lu) %s\r\n",
-         (unsigned long)v2, (unsigned long)delta, (unsigned long)exp_delta,
+  uint32_t c2 = (uint32_t)qeiGetCount(&QEID1) & 0xFFFFU;  /* CNT at/after sample */
+  uint32_t delta = (v2 - cnt7) & 0xFFFFU;          /* monotonic 16-bit delta */
+  /* PCNT CNT is LF-domain: an LDMA read right at a wrap can lag the CPU
+     readback by one sync tick, so accept v2 == c2 or c2-1 (mod 2^16). */
+  bool near = (v2 == c2) || (v2 == ((c2 - 1U) & 0xFFFFU));
+  bool of_ok = got2 && near && (delta == ((v2 - cnt7) & 0xFFFFU));
+  PRINTF("wrap sample: ring v2=%lu (CNT now %lu) delta=%lu %s\r\n",
+         (unsigned long)v2, (unsigned long)c2, (unsigned long)delta,
          of_ok ? "PASS" : "FAIL");
   ok = ok && of_ok;
 

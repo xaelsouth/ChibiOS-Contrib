@@ -82,12 +82,16 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
               clock gated off after stop)
   PULSECAP    PASS  (PRS async ch4 sw-pulse -> PCNT0 S0IN (CNT++, never
               reset) + LETIMER0 START (FREE mode, PRS START while running
-              is a no-op => no restart); BURTC COMP (1 s window, EM2) and
-              PCNT overflow -> PRS ch2 (FNSEL A|B) -> LDMAXBAR DMAREQ0 ->
-              LDMA ch0 (REQSEL LDMAXBARPRSREQ0) copies PCNT0->CNT into a
-              circular linked-descriptor ring buffer; DONE irq commits the
-              slot + signals the app. Window sample == CNT (8) PASS,
-              overflow sample 0 with 16-bit delta 65528 PASS)
+              is a no-op => no restart); BURTC COMP (1 s window, EM2) ->
+              PRS ch2 (FNSEL A) -> LDMAXBAR DMAREQ0 -> LDMA ch0
+              (REQSEL LDMAXBARPRSREQ0) copies PCNT0->CNT into a circular
+              linked-descriptor ring buffer; DONE irq commits the slot +
+              signals the app. Window sample == CNT (8) PASS. PCNT
+              overflow deliberately does NOT trigger DMA (would
+              double-count pulses around a wrap together with the next
+              window sample): overflow fires its IRQ, no ring entry
+              appears, and the next window sample spans the wrap with
+              the correct 16-bit monotonic delta PASS)
 
 Notes / driver quirks discovered on FG23 (all handled in the LLDs):
   - Peripheral bus clocks must be enabled (CMU CLKEN0) before register
