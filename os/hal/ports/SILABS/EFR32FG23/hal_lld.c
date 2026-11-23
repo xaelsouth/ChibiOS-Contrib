@@ -143,6 +143,16 @@ __STATIC_INLINE void efr32_set_voltage_scaling(void) {
     while (((EMU->STATUS & _EMU_STATUS_VSCALEBUSY_MASK) == EMU_STATUS_VSCALEBUSY) && (--sp != 0U)); }
 }
 
+__STATIC_INLINE void efr32_set_flash_wait_states(void) {
+
+  /* Program the flash read wait states for the configured HCLK
+     (EFR32_MSC_READCTRL_MODE is derived from EFR32_HCLK in hal_lld.h;
+     the reset default WS2 is always safe but never zero-wait). */
+  CMU->CLKEN1_SET = CMU_CLKEN1_MSC;
+  MSC->READCTRL = (MSC->READCTRL & ~_MSC_READCTRL_MODE_MASK) |
+                  EFR32_MSC_READCTRL_MODE;
+}
+
 __STATIC_INLINE void efr32_enable_clock_sources(void) {
 
 #if EFR32_LFXO_ENABLED
@@ -411,15 +421,10 @@ void efr32_clock_init(void) {
   efr32_enable_eusartclk();
   efr32_enable_vdacclk();
 
-  /* After all clocks were set, set also the voltage scaling. */
+  /* After all clocks were set, set also the voltage scaling and the
+     flash wait states matching the configured HCLK. */
   efr32_set_voltage_scaling();
-
-  /* Program the flash read wait states for the configured HCLK
-     (EFR32_MSC_READCTRL_MODE is derived from EFR32_HCLK in hal_lld.h;
-     the reset default WS2 is always safe but never zero-wait). */
-  CMU->CLKEN1_SET = CMU_CLKEN1_MSC;
-  MSC->READCTRL = (MSC->READCTRL & ~_MSC_READCTRL_MODE_MASK) |
-                  EFR32_MSC_READCTRL_MODE;
+  efr32_set_flash_wait_states();
 }
 
 /**
