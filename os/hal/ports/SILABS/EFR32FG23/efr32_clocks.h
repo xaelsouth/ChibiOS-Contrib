@@ -39,6 +39,18 @@ extern "C" {
   void efr32_clock_points_print(BaseSequentialStream *ssp);
   void efr32_clock_tree_print(BaseSequentialStream *ssp);
 
+  /*
+   * Consumer registry: drivers register a consumer on a clock point while
+   * they need that clock running (e.g. a peripheral on HCLK/PCLK, the radio
+   * on RHCLK, the LF oscillator for the RTC).  The "clocks" command prints
+   * the counts; efr32_em2_allowed() uses them to decide whether the device
+   * may enter EM2 (any consumer on an EM0-only clock point blocks EM2).
+   */
+  void     efr32_clock_consumer_acquire(halclkpt_t pt);
+  void     efr32_clock_consumer_release(halclkpt_t pt);
+  unsigned efr32_clock_consumers(halclkpt_t pt);
+  bool     efr32_em2_allowed(void);
+
 #ifdef __cplusplus
 }
 #endif

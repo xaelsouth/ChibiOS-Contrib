@@ -50,10 +50,106 @@ void efr32_clock_points_print(BaseSequentialStream *ssp) {
   static const char *names[CLK_ARRAY_SIZE] = CLK_POINT_NAMES;
   unsigned i;
 
-  chprintf(ssp, "%-14s %12s\r\n", "clock", "rate [Hz]");
+  chprintf(ssp, "%-14s %12s %6s\r\n", "clock", "rate [Hz]", "users");
   for (i = 0U; i < (unsigned)CLK_ARRAY_SIZE; i++) {
-    chprintf(ssp, "%-14s %12u\r\n", names[i], (unsigned)halClockGetPointX(i));
+    chprintf(ssp, "%-14s %12u %6u\r\n", names[i], (unsigned)halClockGetPointX(i),
+             efr32_clock_consumers((halclkpt_t)i));
   }
+}
+
+/*===========================================================================*/
+/* Consumer registry.                                                        */
+/*===========================================================================*/
+
+static uint8_t efr32_clk_consumers[CLK_ARRAY_SIZE];
+
+void efr32_clock_consumer_acquire(halclkpt_t pt) {
+
+  osalSysLock();
+  if ((unsigned)pt < (unsigned)CLK_ARRAY_SIZE) {
+    efr32_clk_consumers[pt]++;
+  }
+  osalSysUnlock();
+}
+
+void efr32_clock_consumer_release(halclkpt_t pt) {
+
+  osalSysLock();
+  if (((unsigned)pt < (unsigned)CLK_ARRAY_SIZE) && (efr32_clk_consumers[pt] > 0U)) {
+    efr32_clk_consumers[pt]--;
+  }
+  osalSysUnlock();
+}
+
+unsigned efr32_clock_consumers(halclkpt_t pt) {
+
+  return ((unsigned)pt < (unsigned)CLK_ARRAY_SIZE) ? efr32_clk_consumers[pt] : 0U;
+}
+
+/*
+ * Clock points that stop in EM2/EM3 — a consumer on any of these blocks
+ * EM2.  The LF/EM23/EM4 domain points keep running in EM2.
+ */
+static bool clk_pt_blocks_em2(halclkpt_t pt) {
+
+  switch (pt) {
+  case EFR32_CLK_HFRCOEM23:
+  case EFR32_CLK_EM23GRPACLK:
+  case EFR32_CLK_EM4GRPACLK:
+  case EFR32_CLK_LFXO:
+  case EFR32_CLK_LFRCO:
+  case EFR32_CLK_ULFRCO:
+    return false;
+  default:
+    return true;
+  }
+}
+
+bool efr32_em2_allowed(void) {
+  unsigned i;
+  bool allowed = true;
+
+  osalSysLock();
+  for (i = 0U; i < (unsigned)CLK_ARRAY_SIZE; i++) {
+    if ((efr32_clk_consumers[i] > 0U) && clk_pt_blocks_em2((halclkpt_t)i)) {
+      allowed = false;
+      break;
+    }
+  }
+  osalSysUnlock();
+  return allowed;
+}
+
+/*===========================================================================*/
+/* cli hooks (os/various/cli/clock_cmds.c): users column + em2 command.      */
+/*===========================================================================*/
+
+unsigned cli_clock_users(halclkpt_t pt);
+unsigned cli_clock_users(halclkpt_t pt) {
+
+  return efr32_clock_consumers(pt);
+}
+
+bool cli_pm_point_blocks_em2(halclkpt_t pt);
+bool cli_pm_point_blocks_em2(halclkpt_t pt) {
+
+  return clk_pt_blocks_em2(pt);
+}
+
+bool cli_pm_em2_allowed(void);
+bool cli_pm_em2_allowed(void) {
+
+  return efr32_em2_allowed();
+}
+
+void cli_pm_em2_enter_once(void);
+void cli_pm_em2_enter_once(void) {
+
+  /* On Series 2, WFI with SLEEPDEEP set enters EM2; any enabled interrupt
+     (e.g. the LETIMER0 tick, which keeps running in EM2) wakes the CPU. */
+  SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+  __WFI();
+  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
 }
 
 /*===========================================================================*/

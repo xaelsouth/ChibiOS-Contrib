@@ -19,7 +19,10 @@
  * @brief   Generic clock commands, usable with both shell and xshell.
  *
  * @details Commands:
- *          - clocks        flat list of all clock points and their rates
+ *          - clocks        flat list of all clock points, rates and
+ *                          consumer counts
+ *          - em2 [seconds] show the EM2 decision (consumer registry) and
+ *                          sleep in EM2, waking on each interrupt
  *          - clocks w      clock tree view, if the port provides one via
  *                          the cli_clock_tree_print() hook (e.g. EFR32FG23
  *                          prints a Linux clk debugfs style tree)
@@ -62,9 +65,18 @@ extern "C" {
 #endif
 
   void cli_cmd_clocks(BaseSequentialStream *chp, int argc, char *argv[]);
+  void cli_cmd_em2(BaseSequentialStream *chp, int argc, char *argv[]);
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
   void cli_cmd_clock(BaseSequentialStream *chp, int argc, char *argv[]);
 #endif
+
+  /* Consumer-count hook for the "clocks" users column (weak default 0). */
+  unsigned cli_clock_users(halclkpt_t pt);
+  /* EM2 hooks for the "em2" command (weak defaults: all points block EM2,
+     EM2 not allowed, enter is a no-op). */
+  bool cli_pm_point_blocks_em2(halclkpt_t pt);
+  bool cli_pm_em2_allowed(void);
+  void cli_pm_em2_enter_once(void);
 
   /* Tree-view hook: weak default prints the flat list; ports with a real
      clock tree (e.g. EFR32FG23/efr32_clocks.c) override it with a strong
@@ -74,6 +86,7 @@ extern "C" {
 #if CLI_HAS_XSHELL
   /* xshell adapters (defined in clock_cmds.c), for CLI_XSHELL_ENTRY(). */
   void cli_xshell_cli_cmd_clocks(xshell_t *xshp, int argc, char *argv[], char *envp[]);
+  void cli_xshell_cli_cmd_em2(xshell_t *xshp, int argc, char *argv[], char *envp[]);
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
   void cli_xshell_cli_cmd_clock(xshell_t *xshp, int argc, char *argv[], char *envp[]);
 #endif
@@ -87,6 +100,8 @@ extern "C" {
    HAL_LLD_USE_CLOCK_MANAGEMENT is disabled. */
 #define CLI_CLOCKS_SHELL_ENTRY    CLI_SHELL_ENTRY(cli_cmd_clocks, "clocks")
 #define CLI_CLOCKS_XSHELL_ENTRY   CLI_XSHELL_ENTRY(cli_cmd_clocks, "clocks")
+#define CLI_EM2_SHELL_ENTRY       CLI_SHELL_ENTRY(cli_cmd_em2, "em2")
+#define CLI_EM2_XSHELL_ENTRY      CLI_XSHELL_ENTRY(cli_cmd_em2, "em2")
 
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
 #define CLI_CLOCK_SHELL_ENTRY     CLI_SHELL_ENTRY(cli_cmd_clock, "clock")
