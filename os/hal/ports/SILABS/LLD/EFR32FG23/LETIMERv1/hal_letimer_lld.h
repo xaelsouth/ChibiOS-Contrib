@@ -73,6 +73,18 @@ void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb);
  * @brief   Disarm the LETIMER0 window (stops the timer, frees the vector).
  */
 void letimer_lld_window_stop(void);
+
+/**
+ * @brief   Restart the window if it is not running.
+ * @details Race fix for the UF handler: a PRS START pulse that arrives in
+ *          the same LF cycle as the underflow can be ignored (the timer
+ *          still looked RUNNING). The caller detects such a late pulse
+ *          (e.g. a PCNT increment after its CNT snapshot) and calls this;
+ *          it issues CMD START only when the timer is stopped, so a window
+ *          that a PRS pulse already restarted is not disturbed. START while
+ *          running is a hardware no-op anyway.
+ */
+void letimer_lld_window_kick(void);
 #endif
 
 #if (HAL_USE_GPT == TRUE) || defined(__DOXYGEN__)

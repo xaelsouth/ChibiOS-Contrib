@@ -85,6 +85,12 @@ void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb) {
   nvicEnableVector(EFR32_LETIM1_NUMBER, EFR32_LETIMER_WIN_IRQ_PRIORITY);
 }
 
+void letimer_lld_window_kick(void) {
+  if ((LETIMER0->STATUS & LETIMER_STATUS_RUNNING) == 0U) {
+    LETIMER0->CMD_SET = LETIMER_CMD_START;
+  }
+}
+
 void letimer_lld_window_stop(void) {
   nvicDisableVector(EFR32_LETIM1_NUMBER);
   LETIMER0->IEN = 0U;
