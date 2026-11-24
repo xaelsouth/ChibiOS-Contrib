@@ -110,6 +110,20 @@ typedef struct {
  *          region at once and no magic per-field offsets are needed.
  */
 typedef struct {
+  /*
+   * Every member is volatile on purpose (CMSIS-style: the qualifier lives
+   * on the data, not on the pointer): this struct lives in BURAM, which is
+   * shared between contexts and persists across resets/EM4 —
+   *   - ovf_counter is incremented in the BURTC interrupt
+   *     (rtc_lld_serve_interrupt) while rtc_lld_get_time reads it from
+   *     thread context between two CNT reads; without volatile the
+   *     compiler could cache it in a register and miss an overflow;
+   *   - tv_sec/tv_msec/dstflag may also be written by a previous firmware
+   *     run or the bootloader, i.e. the memory can change behind the
+   *     compiler's back.
+   * Member-level volatile keeps the accesses volatile no matter how the
+   * struct is reached (even through a non-volatile pointer cast).
+   */
   volatile uint32_t ovf_counter;  /**< BURTC overflow counter (high word of the 64-bit tick). */
   volatile uint32_t tv_sec;       /**< Calendar anchor: seconds since RTC_BASE_YEAR. */
   volatile uint32_t tv_msec;      /**< Calendar anchor: millisecond remainder. */
