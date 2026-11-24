@@ -30,6 +30,12 @@
 /* Driver constants.                                                         */
 /*===========================================================================*/
 
+/*
+ * The FG23 BURAM is the 32 RETx_REG retention registers (RM 17.2): 32 x 32-bit
+ * = 128 bytes at BURAM_BASE + 0x000..0x07C (SET/CLR/TGL aliases at +0x1000/
+ * +0x2000/+0x3000). The four 32-byte blocks below map to RET word groups:
+ * BURAM1 = RET0..7, BURAM2 = RET8..15, BURAM3 = RET16..23, BURAM4 = RET24..31.
+ */
 #define BURAM1_ADDRESS          (BURAM_BASE + 0UL)
 #define BURAM1_SIZE             32U
 
