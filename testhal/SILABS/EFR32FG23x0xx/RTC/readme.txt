@@ -1,1 +1,1 @@
-RTC: BURTC calendar (RTCD1) set/get round-trip + alarm. BURAM keeps overflow counter.
+RTC: BURTC calendar (RTCD1, COMP-driven, 1 s resolution, no alarm) set/get round-trip. BURAM keeps ovf_counter + comp_cnt.

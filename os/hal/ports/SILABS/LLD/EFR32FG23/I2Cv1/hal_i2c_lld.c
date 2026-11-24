@@ -150,6 +150,16 @@ void i2c_lld_start(I2CDriver *i2cp) {
     i2c->IF_CLR = _I2C_IF_MASK;
     i2c->IEN = 0;
 
+    /* Route SDA/SCL pins (GPIO->I2CxROUTE is owned by this driver). */
+    GPIO->I2CROUTE[index].SDAROUTE =
+        ((uint32_t)i2cp->config->sda_port << _GPIO_I2C_SDAROUTE_PORT_SHIFT) |
+        ((uint32_t)i2cp->config->sda_pin  << _GPIO_I2C_SDAROUTE_PIN_SHIFT);
+    GPIO->I2CROUTE[index].SCLROUTE =
+        ((uint32_t)i2cp->config->scl_port << _GPIO_I2C_SCLROUTE_PORT_SHIFT) |
+        ((uint32_t)i2cp->config->scl_pin  << _GPIO_I2C_SCLROUTE_PIN_SHIFT);
+    GPIO->I2CROUTE[index].ROUTEEN =
+        GPIO_I2C_ROUTEEN_SDAPEN | GPIO_I2C_ROUTEEN_SCLPEN;
+
     /* Enable I2C module. */
     i2c->EN_SET = I2C_EN_EN;
 
@@ -189,6 +199,8 @@ void i2c_lld_stop(I2CDriver *i2cp) {
     i2c->IEN = 0;
     i2c->IF_CLR = _I2C_IF_MASK;
     nvicDisableVector(efr32_i2c_irqn[i2cp->index]);
+    GPIO->I2CROUTE_CLR[i2cp->index].ROUTEEN =
+        GPIO_I2C_ROUTEEN_SDAPEN | GPIO_I2C_ROUTEEN_SCLPEN;
     i2c->EN_CLR = I2C_EN_EN;
     CMU->CLKEN0_CLR = efr32_i2c_clken[i2cp->index];
   }

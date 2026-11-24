@@ -12,7 +12,7 @@ Tests:
      BURAM-resident ovf_counter (high word of the 64-bit tick) must
      increment. This corrupts the calendar CNT, so it runs last.
 
-The calendar set/get + alarm path is covered by the RTC test, not repeated
+The calendar set/get path is covered by the RTC test, not repeated
 here.
 
 Expected: "BURTC: ALL PASS" (after one self-reset for test 1).

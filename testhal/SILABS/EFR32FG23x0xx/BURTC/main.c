@@ -120,7 +120,27 @@ int main(void) {
   }
 
   /*
-   * 2+3. Rate + 32-bit overflow in one shot, measured against the SYSRTC
+   * 2. Calendar tick: COMP fires every EFR32_RTC_COMP_PERIOD ticks (1 s) and
+   *    increments comp_cnt in BURAM. Re-anchor first with rtcSetTime (resets
+   *    CNT, comp_cnt=0, COMP=period) so the CNT<->comp_cnt relation is
+   *    aligned — the OF sub-test below deliberately breaks it.
+   */
+  {
+    RTCDateTime ts = { .year = 46, .month = 11, .day = 22, .dayofweek = 0,
+                       .millisecond = 0, .dstflag = 0 };
+    rtcSetTime(&RTCD1, &ts);
+    uint32_t c0 = RTCD1.buram_state->comp_cnt;
+    chThdSleepMilliseconds(2000);
+    uint32_t c1 = RTCD1.buram_state->comp_cnt;
+    uint32_t delta = c1 - c0;
+    bool pass = (delta >= 2U) && (delta <= 3U);   /* 2 s -> 2 ticks, +1 slack */
+    PRINTF("calendar tick: comp_cnt %lu -> %lu over 2000 ms (expect 2): %s\r\n",
+           (unsigned long)c0, (unsigned long)c1, pass ? "PASS" : "FAIL");
+    ok = ok && pass;
+  }
+
+  /*
+   * 3. Rate + 32-bit overflow in one shot, measured against the SYSRTC
    *      system tick (accurate 32768 Hz): set CNT to (top - 32768) so it
    *      must wrap after exactly 32768 BURTC ticks, then wait for the OF
    *      flag. If BURTCCLK really is 32768 Hz this takes ~1000 ms of

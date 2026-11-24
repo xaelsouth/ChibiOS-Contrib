@@ -19,20 +19,21 @@
  * @brief   EFR32 RTC subsystem low level driver header.
  *
  * @details BURTC is used as the backup-domain calendar/timekeeper (the
- *          system tick is SYSRTC, see SYSTICKv2). The 64-bit tick is
- *          CNT + 2^32 * ovf_counter, with ovf_counter kept in BURAM and
- *          incremented from the OF interrupt.
+ *          system tick is SYSRTC, see SYSTICKv2). The calendar is driven
+ *          entirely by interrupts, never by CNT reads: COMP fires every
+ *          EFR32_RTC_COMP_PERIOD ticks (1 s at 32768 Hz) and increments
+ *          comp_cnt in BURAM; OF fires on the 2^32 wrap and increments
+ *          ovf_counter (64-bit extension). rtcGetTime() only reads BURAM
+ *          words — resolution is 1 s. There is no alarm channel
+ *          (EFR32_RTC_NUM_ALARMS = 0): BURTC has a single COMP, which is
+ *          owned by the calendar.
  *
- *          Known issue on EFR32FG23B010: reads of BURTC->CNT can return a
+ *          Rationale: on EFR32FG23B010, reads of BURTC->CNT can return a
  *          stale value that lags the real counter (observed: reads advance
  *          only ~0.4% of the true 32768 Hz rate, while the OF interrupt
  *          timing proves the counter itself runs at exactly 32768 Hz; CNT
- *          writes and the OF/COMP interrupts are exact). Reads are done
- *          with a read-until-two-consecutive-equal loop (burtc_lld_cnt_get),
- *          which removes tearing; the long-term calendar accuracy therefore
- *          relies on the OF interrupt for the high word. If exact
- *          second-level timekeeping is needed despite this, the calendar
- *          can alternatively be driven from the COMP interrupt.
+ *          writes and the OF/COMP interrupts are exact). Driving the
+ *          calendar from the COMP interrupt sidesteps this completely.
  *
  * @addtogroup RTC
  * @{
@@ -142,6 +143,7 @@ typedef struct {
    */
   volatile uint32_t magic;        /**< EFR32_RTC_BURAM_MAGIC when initialized. */
   volatile uint32_t ovf_counter;  /**< BURTC overflow counter (high word of the 64-bit tick). */
+  volatile uint32_t comp_cnt;     /**< COMP ticks elapsed since anchor (calendar seconds). */
   volatile uint32_t tv_sec;       /**< Calendar anchor: seconds since RTC_BASE_YEAR. */
   volatile uint32_t tv_msec;      /**< Calendar anchor: millisecond remainder. */
   volatile uint32_t dstflag;      /**< DST flag. */

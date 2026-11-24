@@ -56,37 +56,17 @@
 
 #define EFR32_RTCCLK                (EFR32_BURTCCLK / EFR32_RTCCLK_DIV)
 
+/* COMP period in BURTCCLK ticks — the calendar tick (1 s at 32768 Hz).
+   Must divide 2^32 so the mod-2^32 COMP re-arm stays aligned across OF
+   wraps; 32768 = 2^15 does, 1000 (ULFRCO) does not — use LFXO/LFRCO. */
+#define EFR32_RTC_COMP_PERIOD       EFR32_RTCCLK
+
 #define EFR32_RTC_OVERFLOW_VALUE    ((_BURTC_CNT_CNT_MASK >> _BURTC_CNT_CNT_SHIFT) + 1UL)
 
 #define EFR32_RTC_OVERFLOW_INTERVAL (EFR32_RTC_OVERFLOW_VALUE / EFR32_RTCCLK)
 
 #define EFR32_RTC_OVERFLOW_INTERVAL_REMAINDER \
                                     (EFR32_RTC_OVERFLOW_VALUE % EFR32_RTCCLK)
-
-/*===========================================================================*/
-/* Driver local functions.                                                   */
-/*===========================================================================*/
-
-/**
- * @brief   Read the BURTC counter with a stable (non-torn) value.
- * @details CNT lives in the LF (BURTCCLK) domain. A single read right after
- *          a long idle period can return a stale value (observed on
- *          hardware: a read after a 1 s sleep was off by hundreds of ticks,
- *          while back-to-back reads are consistent). Reading until two
- *          consecutive reads agree yields a coherent snapshot; at 32768 Hz
- *          the counter changes every ~30 us, so this converges in 1-2
- *          iterations. Bounded to 1000 iterations as a safety net.
- */
-__STATIC_INLINE uint32_t burtc_lld_cnt_get(void) {
-
-  uint32_t cnt, cnt2;
-  uint32_t n = 1000U;
-  do {
-    cnt = BURTC->CNT;
-    cnt2 = BURTC->CNT;
-  } while ((cnt != cnt2) && (--n != 0U));
-  return cnt2;
-}
 
 /*===========================================================================*/
 /* Driver exported variables.                                                */
@@ -276,11 +256,16 @@ __STATIC_INLINE void _rtc_lld_store_time(RTCDriver *rtcp, uint32_t tv_sec,
   BURTC->CNT_CLR = _BURTC_CNT_CNT_MASK;
 
   rtcp->buram_state->ovf_counter = 0U;
+  rtcp->buram_state->comp_cnt = 0U;
   rtcp->buram_state->tv_sec = tv_sec;
   rtcp->buram_state->tv_msec = tv_msec;
   rtcp->buram_state->dstflag = dstflag;
 
   while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
+
+  /* Re-anchor the COMP calendar tick (CNT was just cleared, comp_cnt = 0). */
+  BURTC->COMP = EFR32_RTC_COMP_PERIOD;
+  while ((BURTC->SYNCBUSY & BURTC_SYNCBUSY_COMP) != 0U);
 
   if (rtcp->callback != NULL) {
     rtcp->callback(rtcp, RTC_EVENT_TIME_SET);
@@ -331,13 +316,15 @@ void rtc_lld_serve_interrupt(void) {
   }
 
   if ((isr & _BURTC_IF_COMP_MASK) == BURTC_IF_COMP) {
-    /* Disable alarm. */
-    BURTC->IEN_CLR = BURTC_IEN_COMP;
-
     #if EFR32_RTC_USE_RTC1 == TRUE
-    if (RTCD1.callback != NULL) {
-      RTCD1.callback(&RTCD1, RTC_EVENT_ALARM);
-    }
+    /* Calendar tick: one COMP period (EFR32_RTC_COMP_PERIOD = 1 s at 32768 Hz)
+       elapsed. Re-arm COMP from the BURAM software counter only — CNT reads
+       lag the real counter on this part, so the calendar never reads CNT.
+       With period = 2^15 the mod-2^32 relation COMP = comp_cnt*period stays
+       aligned across OF wraps. */
+    RTCD1.buram_state->comp_cnt += 1U;
+    while ((BURTC->SYNCBUSY & BURTC_SYNCBUSY_COMP) != 0U) { }
+    BURTC->COMP = RTCD1.buram_state->comp_cnt * EFR32_RTC_COMP_PERIOD;
     #endif
   }
 }
@@ -403,18 +390,23 @@ void rtc_lld_init(void) {
 
     #if EFR32_RTC_USE_RTC1 == TRUE
     RTCD1.buram_state->ovf_counter = 0U;
+    RTCD1.buram_state->comp_cnt = 0U;
     RTCD1.buram_state->tv_sec = 0U;
     RTCD1.buram_state->tv_msec = 0U;
     RTCD1.buram_state->dstflag = 0U;
     RTCD1.buram_state->magic = EFR32_RTC_BURAM_MAGIC;
     #endif
 
+    /* Arm the COMP calendar tick (CNT was just cleared, comp_cnt = 0). */
+    BURTC->COMP = EFR32_RTC_COMP_PERIOD;
+    while ((BURTC->SYNCBUSY & BURTC_SYNCBUSY_COMP) != 0U);
+
     /* Clear interrupt flags. */
     BURTC->IF_CLR = _BURTC_IF_MASK;
 
-    /* Enable interrupts. */
+    /* Enable interrupts: OF (64-bit extension) + COMP (calendar tick). */
     BURTC->IEN_CLR = _BURTC_IEN_MASK;
-    BURTC->IEN_SET = BURTC_IEN_OF;
+    BURTC->IEN_SET = BURTC_IEN_OF | BURTC_IEN_COMP;
   }
   else {
 
@@ -425,6 +417,7 @@ void rtc_lld_init(void) {
     #if EFR32_RTC_USE_RTC1 == TRUE
     if (RTCD1.buram_state->magic != EFR32_RTC_BURAM_MAGIC) {
       RTCD1.buram_state->ovf_counter = 0U;
+      RTCD1.buram_state->comp_cnt = 0U;
       RTCD1.buram_state->tv_sec = 0U;
       RTCD1.buram_state->tv_msec = 0U;
       RTCD1.buram_state->dstflag = 0U;
@@ -432,8 +425,10 @@ void rtc_lld_init(void) {
     }
     #endif
 
-    /* Clear interrupt flags. */
+    /* Clear interrupt flags and make sure both calendar interrupts are
+       enabled (backup-domain IEN survives warm resets, but be explicit). */
     BURTC->IF_CLR = _BURTC_IF_MASK;
+    BURTC->IEN_SET = BURTC_IEN_OF | BURTC_IEN_COMP;
 
     /* If BURTC was enabled before, the interrupts ae still enabled
        but inactive because BURTC is not started yet. */
@@ -529,33 +524,28 @@ void rtc_lld_set_time(RTCDriver *rtcp, const RTCDateTime *timespec) {
 void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec) {
 
   syssts_t sts;
-  uint32_t cnt, cnt2;
-  uint32_t ovf_counter, tv_sec, tv_msec, dstflag;
+  uint32_t ovf_counter, comp_cnt;
+  uint32_t tv_sec, tv_msec, dstflag;
 
   /* Entering a reentrant critical zone.*/
   sts = osalSysGetStatusAndLockX();
 
-  /* Read counter, then overflow counter, then counter again.
-     If the counter wrapped between the two reads (cnt2 < cnt), the
-     overflow counter was incremented after we read it — re-read it. */
-  do {
-    cnt = burtc_lld_cnt_get();
-    ovf_counter = rtcp->buram_state->ovf_counter;
-    cnt2 = burtc_lld_cnt_get();
-  } while (cnt2 < cnt);
-
-  tv_sec = rtcp->buram_state->tv_sec;
-  tv_msec = rtcp->buram_state->tv_msec;
-  dstflag = rtcp->buram_state->dstflag;
+  /* Calendar state lives entirely in BURAM (written from ISR context):
+     ovf_counter from the OF interrupt, comp_cnt from the COMP interrupt.
+     CNT is deliberately NOT read — CNT reads lag the real counter on this
+     part, which would make the calendar drift. Resolution: 1 s. */
+  ovf_counter = rtcp->buram_state->ovf_counter;
+  comp_cnt    = rtcp->buram_state->comp_cnt;
+  tv_sec      = rtcp->buram_state->tv_sec;
+  tv_msec     = rtcp->buram_state->tv_msec;
+  dstflag     = rtcp->buram_state->dstflag;
 
   /* Leaving a reentrant critical zone.*/
   osalSysRestoreStatusX(sts);
 
   tv_sec += (ovf_counter * EFR32_RTC_OVERFLOW_INTERVAL) +
             (ovf_counter * EFR32_RTC_OVERFLOW_INTERVAL_REMAINDER) / EFR32_RTCCLK +
-            (cnt / EFR32_RTCCLK);
-
-  tv_msec += (cnt % EFR32_RTCCLK * 1000U) / EFR32_RTCCLK;
+            comp_cnt;
 
   tv_sec += tv_msec / 1000U;
   tv_msec = tv_msec % 1000U;

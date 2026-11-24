@@ -93,6 +93,16 @@ typedef struct {
    * @brief   Duty cycle, not used on EFR32 (fixed 6:3).
    */
   uint32_t                  duty_cycle;
+  /**
+   * @brief   SDA/SCL pin routing (programmed into GPIO->I2CxROUTE on start).
+   * @details Ports are 0=A, 1=B, ... Use palSetPadMode() on the same pins
+   *          for the output driver; the route registers are owned by this
+   *          driver.
+   */
+  uint8_t                   sda_port;
+  uint8_t                   sda_pin;
+  uint8_t                   scl_port;
+  uint8_t                   scl_pin;
 } I2CConfig;
 
 /**

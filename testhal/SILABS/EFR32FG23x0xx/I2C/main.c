@@ -64,7 +64,11 @@ static void rtt_write(const char *s, size_t n) {
 
 static const I2CConfig i2c_cfg = {
   .clock_speed = 400000U,
-  .duty_cycle = 0,
+  .duty_cycle  = 0,
+  .sda_port    = 0,   /* PA7 */
+  .sda_pin     = 7,
+  .scl_port    = 0,   /* PA8 */
+  .scl_pin     = 8,
 };
 
 int main(void) {
@@ -76,10 +80,7 @@ int main(void) {
 
   palSetPadMode(GPIOA, 8, PAL_MODE_OUTPUT_OPENDRAIN);  /* SCL */
   palSetPadMode(GPIOA, 7, PAL_MODE_OUTPUT_OPENDRAIN);  /* SDA */
-  GPIO->I2CROUTE[0].ROUTEEN = GPIO_I2C_ROUTEEN_SDAPEN | GPIO_I2C_ROUTEEN_SCLPEN;
-  GPIO->I2CROUTE[0].SDAROUTE = (0U << _GPIO_I2C_SDAROUTE_PORT_SHIFT) | (7U << _GPIO_I2C_SDAROUTE_PIN_SHIFT);
-  GPIO->I2CROUTE[0].SCLROUTE = (0U << _GPIO_I2C_SCLROUTE_PORT_SHIFT) | (8U << _GPIO_I2C_SCLROUTE_PIN_SHIFT);
-
+  /* GPIO->I2CROUTE is programmed by the I2C LLD from i2c_cfg. */
   i2cStart(&I2CD1, &i2c_cfg);
 
   int found = 0;

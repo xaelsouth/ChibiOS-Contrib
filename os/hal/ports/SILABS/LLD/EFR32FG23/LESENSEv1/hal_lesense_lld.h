@@ -142,6 +142,7 @@ extern "C" {
   void lesense_lld_start_scan(LESENSEDriver *lp);
   void lesense_lld_stop_scan(LESENSEDriver *lp);
   uint32_t lesense_lld_get_scanres(LESENSEDriver *lp);
+  void lesense_lld_set_scan_hz(LESENSEDriver *lp, float hz);
   void lesense_lld_start_fifo_dma(LESENSEDriver *lp, uint32_t *buf, size_t n);
   void lesense_lld_stop_fifo_dma(LESENSEDriver *lp);
   void lesense_lld_serve_interrupt(LESENSEDriver *lp);
