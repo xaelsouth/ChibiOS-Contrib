@@ -1,11 +1,23 @@
 SYSTICKv4 — BURTC as the ChibiOS system tick (EFR32FG23)
 =========================================================
 
-Alternative to the default SYSTICKv3 (LETIMER0, 24-bit, EM2-capable):
+Alternative to the default SYSTICKv3 (LETIMER0, 24-bit, EM2-capable).
+NOT the default, on purpose:
 
-  - BURTC CNT is a full 32-bit up-counter -> no software extension needed
-    (contrast SYSTICKv3, which extends the 24-bit LETIMER via the UF IRQ)
-  - BURTC runs from EM4GRPACLK and keeps counting in EM4 (deepest sleep)
+  - BURTC's EM4 counting is useless for a systick: EM4 wake-up is via
+    reset, so the kernel never observes the tick in EM4. EM2 (the mode
+    that matters) is already covered by LETIMER0/SYSTICKv3.
+  - "CNT is natively 32-bit" is no real advantage: SYSTICKv3 extends the
+    24-bit LETIMER to 32 bits in software via the UF IRQ.
+  - BURTC has a single COMP channel, shared between the kernel tick alarm
+    and the BURTCv1 RTC alarm, and one interrupt vector shared with the
+    RTC driver (EFR32_ST_OWNS_BURTC forwarding) — real coupling costs.
+    BURTC's proper role is the backup-domain timekeeper (BURTCv1
+    calendar, EM4-retained), not the systick.
+
+Use only if you specifically want a 32-bit hardware tick and accept the
+COMP/vector sharing. Otherwise stay on SYSTICKv3.
+
   - single compare channel (COMP) used as the kernel tick alarm
 
 Select with EFR32_USE_SYSTICKV4=yes in the project Makefile (platform.mk
