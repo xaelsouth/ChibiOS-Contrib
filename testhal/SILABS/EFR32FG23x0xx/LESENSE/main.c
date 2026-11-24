@@ -53,10 +53,6 @@ int main(void) {
 
   uint32_t cnt = scandone_cnt;
   uint32_t scanres = lesense_lld_get_scanres(&LESENSED1);
-  PRINTF("stopping scan...\r\n");
-  lesense_lld_stop_scan(&LESENSED1);
-  lesense_lld_stop(&LESENSED1);
-  PRINTF("stopped\r\n");
 
   float hz = (float)cnt / 5.0f;
   PRINTF("SCANDONE in 5 s: %lu -> %.1f scans/s\r\n", (unsigned long)cnt, (double)hz);
@@ -65,6 +61,23 @@ int main(void) {
   /* Expect roughly 683 scans/s with LFPRESC DIV8; accept 300..1500 Hz. */
   bool ok = (cnt > 10000U) && (hz > 3000.0f);
   PRINTF("result: %s\r\n", ok ? "PASS" : "FAIL");
+
+  /* set_scan_hz: reprogram the scan period counter to ~100 Hz while running. */
+  lesense_lld_set_scan_hz(&LESENSED1, 100.0f);
+  chThdSleepMilliseconds(100);
+  scandone_cnt = 0;
+  chThdSleepMilliseconds(3000);
+  uint32_t cnt2 = scandone_cnt;
+  lesense_lld_stop_scan(&LESENSED1);
+  lesense_lld_stop(&LESENSED1);
+  float hz2 = (float)cnt2 / 3.0f;
+  /* 32768/((1+PCTOP)*2^PCPRESC): for 100 Hz -> PCTOP=255,PCPRESC=0 gives 128 Hz,
+     PCTOP=127,PCPRESC=1 gives 128 Hz; grid picks the smallest f >= 100 Hz. */
+  bool ok2 = (hz2 > 60.0f) && (hz2 < 200.0f);
+  PRINTF("set_scan_hz(100): %lu scans in 3 s -> %.1f Hz: %s\r\n",
+         (unsigned long)cnt2, (double)hz2, ok2 ? "PASS" : "FAIL");
+  ok = ok && ok2;
+  PRINTF("LESENSE: %s\r\n", ok ? "ALL PASS" : "FAIL");
 
   while (true) { chThdSleepMilliseconds(1000); }
 }

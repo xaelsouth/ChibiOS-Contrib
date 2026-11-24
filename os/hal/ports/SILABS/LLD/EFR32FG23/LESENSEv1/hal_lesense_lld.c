@@ -175,13 +175,16 @@ uint32_t lesense_lld_get_scanres(LESENSEDriver *lp) {
 
 /**
  * @brief   Change the scan frequency at runtime.
- * @details Reprograms only the LFPRESC/STARTDLY fields of TIMCTRL, so the
- *          scan period becomes
- *            f_scan = EFR32_EM23GRPACLK / (2^(LFPRESC+1) x (STARTDLY+1)).
- *          The smallest achievable frequency >= @p hz is selected; if
- *          @p hz is above the grid maximum, the maximum is used.
- *          SYNCBUSY is waited out (bounded) before touching the LF-domain
- *          register — writing while busy bus-faults on xG23.
+ * @details Reprograms the PCPRESC/PCTOP fields of TIMCTRL (the scan period
+ *          counter), so the scan frequency becomes
+ *            Fscan = EFR32_EM23GRPACLK / ((1 + PCTOP) * 2^PCPRESC)  (RM Fig 29.2)
+ *          with PCPRESC 0..7 and PCTOP 0..255 -> 1 Hz .. 32768 Hz at 32768 Hz
+ *          LESENSECLK (practical max is lower: each scan needs excitation +
+ *          measurement time). The smallest achievable frequency >= @p hz is
+ *          selected (never undersample); above the grid maximum the maximum
+ *          is used. LFPRESC/STARTDLY are channel-timing fields and are NOT
+ *          touched here. SYNCBUSY is waited out (bounded) first — writing
+ *          while busy bus-faults on xG23.
  *
  * @param[in] lp    pointer to LESENSEDriver
  * @param[in] hz    requested scan frequency in Hz
@@ -189,30 +192,36 @@ uint32_t lesense_lld_get_scanres(LESENSEDriver *lp) {
 void lesense_lld_set_scan_hz(LESENSEDriver *lp, float hz) {
   (void)lp;
 
-  /* Grid search: smallest f >= hz over LFPRESC (0..7 -> div 2..256) and
-     STARTDLY (0..3 -> mul 1..4). */
-  uint32_t best_p = 0U, best_d = 0U;
+  /* Grid search over PCPRESC (0..7 -> div 1..128) and PCTOP (0..255):
+     pick the smallest f >= hz. */
+  uint32_t best_pr = 0U, best_top = 0U;
   float best_f = 0.0f;
   for (uint32_t pr = 0U; pr < 8U; pr++) {
-    for (uint32_t d = 0U; d < 4U; d++) {
-      float f = (float)EFR32_EM23GRPACLK /
-                ((float)(1UL << (pr + 1U)) * (float)(d + 1U));
-      if (f >= hz && (best_f == 0.0f || f < best_f)) {
-        best_f = f; best_p = pr; best_d = d;
-      }
+    float div = (float)(1UL << pr);
+    float ftop = (float)EFR32_EM23GRPACLK / (hz * div);   /* (1+PCTOP) needed */
+    if (ftop < 1.0f) {
+      continue;   /* hz above this prescaler's max -> handled by pr=0 */
+    }
+    uint32_t top = (uint32_t)(ftop + 0.5f) - 1U;
+    if (top > 255U) {
+      top = 255U;
+    }
+    float f = (float)EFR32_EM23GRPACLK / ((float)(top + 1U) * div);
+    if (f >= hz && (best_f == 0.0f || f < best_f)) {
+      best_f = f; best_pr = pr; best_top = top;
     }
   }
   if (best_f == 0.0f) {   /* hz above grid max -> maximum rate */
-    best_p = 0U; best_d = 0U;
+    best_pr = 0U; best_top = 0U;
   }
 
   volatile uint32_t sp = 4000000UL;
   while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
 
   uint32_t timctrl = LESENSE->TIMCTRL;
-  timctrl &= ~(_LESENSE_TIMCTRL_LFPRESC_MASK | _LESENSE_TIMCTRL_STARTDLY_MASK);
-  timctrl |= (best_p << _LESENSE_TIMCTRL_LFPRESC_SHIFT) & _LESENSE_TIMCTRL_LFPRESC_MASK;
-  timctrl |= (best_d << _LESENSE_TIMCTRL_STARTDLY_SHIFT) & _LESENSE_TIMCTRL_STARTDLY_MASK;
+  timctrl &= ~(_LESENSE_TIMCTRL_PCPRESC_MASK | _LESENSE_TIMCTRL_PCTOP_MASK);
+  timctrl |= (best_pr << _LESENSE_TIMCTRL_PCPRESC_SHIFT) & _LESENSE_TIMCTRL_PCPRESC_MASK;
+  timctrl |= (best_top << _LESENSE_TIMCTRL_PCTOP_SHIFT) & _LESENSE_TIMCTRL_PCTOP_MASK;
   LESENSE->TIMCTRL = timctrl;
 }
 
