@@ -91,6 +91,16 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   LESENSE->PERCTRL = cfg->perctrl;
   LESENSE->PRSCTRL = cfg->prsctrl;
 
+  /* Decoder control + FSM arcs. With PRSCNT set, an arc with PRSACT=UP
+     pulses DECOUT0 per count event — route it via PRS to PCNT to count hits
+     autonomously, without any per-scan CPU interrupt. */
+  LESENSE->DECCTRL = cfg->decctrl;
+  if (cfg->arcs != NULL) {
+    for (uint32_t i = 0; i < cfg->num_arcs && i < EFR32_LESENSE_MAX_ARCS; i++) {
+      LESENSE->ST[i].ARC = cfg->arcs[i];
+    }
+  }
+
   /* Configure each channel. */
   for (uint32_t i = 0; i < cfg->num_channels && i < EFR32_LESENSE_MAX_CHANNELS; i++) {
     LESENSE->CH[i].INTERACT  = cfg->channels[i].interact;
@@ -104,8 +114,15 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   LESENSE->CMD_SET = LESENSE_CMD_CLEARBUF;
   LESENSE->IF_CLR = _LESENSE_IF_MASK;
 
-  /* Enable interrupts for all active channels + scan done + result watermark. */
-  LESENSE->IEN_SET = chen | LESENSE_IEN_SCANDONE | LESENSE_IEN_RESWL;
+  /* Enable interrupts only when a callback is registered. With callback ==
+     NULL the driver runs fully autonomously in EM2 (detection consumed via
+     decoder PRS outputs) — no per-scan SCANDONE wakeup of the CPU. */
+  if (cfg->callback != NULL) {
+    LESENSE->IEN_SET = chen | LESENSE_IEN_SCANDONE | LESENSE_IEN_RESWL;
+  }
+  else {
+    LESENSE->IEN_CLR = _LESENSE_IEN_MASK;
+  }
 
   /* Enable LESENSE last, after all configuration. */
   LESENSE->EN_SET = LESENSE_EN_EN;
@@ -117,7 +134,9 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
     while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
   }
 
-  nvicEnableVector(EFR32_LESENSE_NUMBER, EFR32_LESENSE_IRQ_PRIORITY);
+  if (cfg->callback != NULL) {
+    nvicEnableVector(EFR32_LESENSE_NUMBER, EFR32_LESENSE_IRQ_PRIORITY);
+  }
 
   /* Allocate DMA stream for result FIFO if configured. */
 #if defined(EFR32_DMA_REQUIRED)

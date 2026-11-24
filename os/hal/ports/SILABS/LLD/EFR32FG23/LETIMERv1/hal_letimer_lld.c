@@ -38,6 +38,15 @@
 #if (EFR32_LETIMER_WIN_USE_LETIMER0 == TRUE) || defined(__DOXYGEN__)
 
 static letimer_window_cb_t letimer_window_cb;
+/* Period of the next window; written by letimer_lld_window_set_period()
+   (thread context), read/re-armed by the UF ISR. 32-bit aligned access is
+   atomic on Cortex-M, so the ISR always sees a consistent value. */
+static volatile uint32_t letimer_window_ticks;
+
+static void letimer_sync_wait(void) {
+  volatile uint32_t sp = 4000000UL;
+  while (((LETIMER0->SYNCBUSY & 0xFFFFFFFFUL) != 0U) && (--sp != 0U)) { }
+}
 
 OSAL_IRQ_HANDLER(EFR32_LETIM1_HANDLER) {
   OSAL_IRQ_PROLOGUE();
@@ -46,17 +55,24 @@ OSAL_IRQ_HANDLER(EFR32_LETIM1_HANDLER) {
     if (letimer_window_cb != NULL) {
       letimer_window_cb();
     }
+    /* Re-arm the next one-shot window with the current period. In ONESHOT
+       mode the counter is stopped right after UF, and COMP0 must only be
+       written while stopped — so this is glitch-free. SYNCBUSY is pumped
+       because CMD writes while busy bus-fault on xG23. */
+    uint32_t ticks = letimer_window_ticks;
+    if (ticks != 0U) {
+      letimer_sync_wait();
+      LETIMER0->COMP0 = 0xFFFFFFU - (ticks & 0xFFFFFFU);
+      letimer_sync_wait();
+      LETIMER0->CMD_SET = LETIMER_CMD_START;
+    }
   }
   OSAL_IRQ_EPILOGUE();
 }
 
-static void letimer_sync_wait(void) {
-  volatile uint32_t sp = 4000000UL;
-  while (((LETIMER0->SYNCBUSY & 0xFFFFFFFFUL) != 0U) && (--sp != 0U)) { }
-}
-
 void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb) {
   letimer_window_cb = cb;
+  letimer_window_ticks = ticks & 0xFFFFFFU;
 
   CMU->CLKEN0_SET = CMU_CLKEN0_LETIMER0;
 
@@ -91,6 +107,21 @@ void letimer_lld_window_kick(void) {
   }
 }
 
+void letimer_lld_window_set_period(uint32_t ticks) {
+  letimer_window_ticks = ticks & 0xFFFFFFU;
+  /* If the window chain is enabled but currently stopped, start it now with
+     the new period; otherwise the UF ISR picks the new period up at the next
+     re-arm. COMP0 is only written while the counter is stopped. */
+  if (((LETIMER0->EN & LETIMER_EN_EN) != 0U) &&
+      ((LETIMER0->STATUS & LETIMER_STATUS_RUNNING) == 0U) &&
+      (letimer_window_ticks != 0U)) {
+    letimer_sync_wait();
+    LETIMER0->COMP0 = 0xFFFFFFU - letimer_window_ticks;
+    letimer_sync_wait();
+    LETIMER0->CMD_SET = LETIMER_CMD_START;
+  }
+}
+
 void letimer_lld_window_stop(void) {
   nvicDisableVector(EFR32_LETIM1_NUMBER);
   LETIMER0->IEN = 0U;
@@ -101,6 +132,7 @@ void letimer_lld_window_stop(void) {
   letimer_sync_wait();
   CMU->CLKEN0_CLR = CMU_CLKEN0_LETIMER0;
   letimer_window_cb = NULL;
+  letimer_window_ticks = 0U;
 }
 #endif /* EFR32_LETIMER_WIN_USE_LETIMER0 */
 

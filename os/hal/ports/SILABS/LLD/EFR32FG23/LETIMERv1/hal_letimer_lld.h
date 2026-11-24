@@ -55,14 +55,20 @@ typedef void (*letimer_window_cb_t)(void);
 /*===========================================================================*/
 
 /**
- * @brief   Arm a PRS-started one-shot window on LETIMER0.
- * @details Configures LETIMER0 in REPMODE_ONESHOT with PRS start enabled on
- *          the async channel selected by the SIGROUTE consumer route
- *          (SIGROUTE_CON_LETIMER0_START). Each PRS pulse starts the window;
- *          while running, further START pulses are ignored (no retrigger).
- *          On underflow (window end) the UF interrupt fires and @p cb is
- *          called from ISR context — the natural place to snapshot a pulse
- *          counter (e.g. PCNT0) plus the system time into a ring buffer.
+ * @brief   Arm a self-re-arming window chain on LETIMER0.
+ * @details Configures LETIMER0 in REPMODE_ONESHOT. The UF interrupt fires at
+ *          the end of every window and @p cb is called from ISR context —
+ *          the natural place to snapshot a pulse counter (e.g. PCNT0) plus
+ *          the system time into a ring buffer. Right after the callback the
+ *          ISR re-arms the next one-shot window with the current period
+ *          (letimer_lld_window_set_period), so windows keep coming
+ *          periodically without any CPU involvement; a PRS START pulse
+ *          (SIGROUTE_CON_LETIMER0_START) can additionally start a stopped
+ *          window but never restarts a running one (no retrigger).
+ *
+ *          Because the sampled counter (e.g. PCNT) is free-running and never
+ *          reset, pulses arriving between windows are never lost — they are
+ *          simply attributed to the next window's delta.
  *
  * @param[in] ticks         window length in EM23GRPACLK ticks (24-bit)
  * @param[in] cb            window-end callback (ISR context), may be NULL
@@ -70,18 +76,24 @@ typedef void (*letimer_window_cb_t)(void);
 void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb);
 
 /**
- * @brief   Disarm the LETIMER0 window (stops the timer, frees the vector).
+ * @brief   Change the window period.
+ * @details The new period applies from the next window (the UF ISR re-arms
+ *          with the stored value). COMP0 is only rewritten while the one-shot
+ *          counter is stopped, so there is no glitch. If the timer is enabled
+ *          but currently stopped, it is (re)started immediately.
+ *
+ * @param[in] ticks         new window length in EM23GRPACLK ticks (24-bit)
+ */
+void letimer_lld_window_set_period(uint32_t ticks);
+
+/**
+ * @brief   Disarm the LETIMER0 window chain (stops the timer, frees the vector).
  */
 void letimer_lld_window_stop(void);
 
 /**
  * @brief   Restart the window if it is not running.
- * @details Race fix for the UF handler: a PRS START pulse that arrives in
- *          the same LF cycle as the underflow can be ignored (the timer
- *          still looked RUNNING). The caller detects such a late pulse
- *          (e.g. a PCNT increment after its CNT snapshot) and calls this;
- *          it issues CMD START only when the timer is stopped, so a window
- *          that a PRS pulse already restarted is not disturbed. START while
+ * @details Issues CMD START only when the timer is stopped; START while
  *          running is a hardware no-op anyway.
  */
 void letimer_lld_window_kick(void);

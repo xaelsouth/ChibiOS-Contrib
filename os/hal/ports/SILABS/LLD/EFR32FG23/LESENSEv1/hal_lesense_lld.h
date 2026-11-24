@@ -51,6 +51,17 @@
 #define EFR32_LESENSE_EX_LOW          LESENSE_CH_INTERACT_EXMODE_LOW
 #define EFR32_LESENSE_EX_DACOUT       LESENSE_CH_INTERACT_EXMODE_DACOUT
 
+/* Decoder control: count mode pulses DECOUT0 on every count-up event
+   (STx_ARC with PRSACT=UP) and DECOUT1 with the direction — route DECOUT0
+   via PRS to PCNT to count sensor hits fully autonomously, no CPU IRQ. */
+#define EFR32_LESENSE_DEC_PRSCNT      LESENSE_DECCTRL_PRSCNT
+
+/* Convenience value for STx_ARC.PRSACT in count mode. */
+#define EFR32_LESENSE_ARC_COUNT_UP    LESENSE_ST_ARC_PRSACT_UP
+
+/** Number of decoder FSM arcs (ST0..ST63). */
+#define EFR32_LESENSE_MAX_ARCS        64
+
 /*===========================================================================*/
 /* Driver pre-compile time settings.                                         */
 /*===========================================================================*/
@@ -108,14 +119,27 @@ typedef struct {
   uint32_t  scanmode;     /**< EFR32_LESENSE_SCAN_*. */
   uint32_t  timctrl;      /**< TIMCTRL value (scan frequency, startup, etc.). */
   uint32_t  perctrl;      /**< PERCTRL value (ACMP modes, warmup, etc.). */
-  uint32_t  prsctrl;      /**< PRSCTRL value (DECOUTx/DECCMP PRS outputs, e.g.
-                               LESENSE_PRSCTRL_DECOUT0? see efr32fg23_lesense.h;
-                               0 = no PRS output). */
+  uint32_t  prsctrl;      /**< PRSCTRL value (DECCMP PRS output enable/mask/val;
+                               the decoder DECOUT0..2 producers are driven by the
+                               decoder arcs, see arcs[] below). */
+  uint32_t  decctrl;      /**< DECCTRL value (decoder control), e.g.
+                               EFR32_LESENSE_DEC_PRSCNT for count mode.
+                               0 = reset default (decoder on, no count mode). */
+  const uint32_t *arcs;   /**< Decoder FSM arcs: ST[0..num_arcs-1].ARC values,
+                               NULL = leave arcs at reset. Example for counting
+                               channel-0 hits: arc0 = SCOMP(1) | SMASK(0xE) |
+                               CURSTATE(0) | PRSACT(EFR32_LESENSE_ARC_COUNT_UP)
+                               | NEXTSTATE(0) — every ch0 hit pulses DECOUT0. */
+  uint8_t   num_arcs;     /**< Number of valid entries in arcs (0..64). */
   uint8_t   num_channels; /**< Number of active channels (1-16). */
   LESENSEChannelConfig channels[EFR32_LESENSE_MAX_CHANNELS];
   /**
    * @brief   Callback invoked on scan complete (channel hit or buffer full).
    * @param[in] result  SCANRES register value (bitmask of hit channels).
+   * @note    If NULL, no interrupt is enabled at all: the driver runs fully
+   *          autonomously in EM2 and per-scan detection is meant to be
+   *          consumed via the decoder PRS outputs (arcs[]/decctrl), e.g.
+   *          DECOUT0 -> PRS -> PCNT. This avoids one CPU wakeup per scan.
    */
   void (*callback)(uint32_t scanres, void *arg);
   void     *callback_arg;
