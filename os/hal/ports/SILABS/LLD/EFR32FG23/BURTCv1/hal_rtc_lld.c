@@ -234,6 +234,65 @@ __STATIC_INLINE void _rtc_lld_to_timespec(uint32_t tv_sec, uint32_t tv_msec, RTC
   return _rtc_lld_to_timespec_slow(tv_sec, tv_msec, timespec, dstflag);
 }
 
+/**
+ * @brief   Store the calendar anchor for a new time.
+ * @details When SYSTICKv4 owns BURTC (EFR32_ST_OWNS_BURTC), BURTC->CNT is
+ *          the system tick and must NOT be cleared — clearing it would yank
+ *          the systick to 0 and break all pending OSAL timers/sleeps.
+ *          Instead the BURAM anchor is rebased so that
+ *          anchor + (ovf<<32 | CNT) == desired time; the counter keeps
+ *          running undisturbed.  Without SYSTICKv4 the classic path is
+ *          used: CNT is cleared and the anchor is the time itself.
+ */
+__STATIC_INLINE void _rtc_lld_store_time(RTCDriver *rtcp, uint32_t tv_sec,
+                                         uint32_t tv_msec, uint32_t dstflag) {
+
+  syssts_t sts;
+
+  sts = osalSysGetStatusAndLockX();
+
+#if defined(EFR32_ST_OWNS_BURTC) && (EFR32_ST_OWNS_BURTC == 1) && !defined(__DOXYGEN__)
+  {
+    uint32_t cnt, cnt2, ovf;
+    uint64_t now, want, anchor;
+    uint32_t low;
+
+    /* Race-safe tick read (same pattern as rtc_lld_get_time). */
+    do {
+      cnt = BURTC->CNT;
+      ovf = rtcp->buram_state->ovf_counter;
+      cnt2 = BURTC->CNT;
+    } while (cnt2 < cnt);
+
+    now = ((uint64_t)ovf << 32) | cnt;
+    want = (uint64_t)tv_sec * EFR32_RTCCLK + ((uint64_t)tv_msec * EFR32_RTCCLK) / 1000U;
+    anchor = want - now;   /* mod 2^64; only mod 2^32 ticks matter (32768 | 2^32) */
+
+    low = (uint32_t)anchor;
+    rtcp->buram_state->ovf_counter = (uint32_t)(anchor >> 32);
+    rtcp->buram_state->tv_sec = low / EFR32_RTCCLK;
+    rtcp->buram_state->tv_msec = (low % EFR32_RTCCLK) * 1000U / EFR32_RTCCLK;
+  }
+#else
+  /* Clear all counters resetting the overflow counter as well. */
+  BURTC->CNT_CLR = _BURTC_CNT_CNT_MASK;
+
+  rtcp->buram_state->ovf_counter = 0U;
+  rtcp->buram_state->tv_sec = tv_sec;
+  rtcp->buram_state->tv_msec = tv_msec;
+
+  while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
+#endif
+
+  rtcp->buram_state->dstflag = dstflag;
+
+  if (rtcp->callback != NULL) {
+    rtcp->callback(rtcp, RTC_EVENT_TIME_SET);
+  }
+
+  osalSysRestoreStatusX(sts);
+}
+
 /*===========================================================================*/
 /* Driver interrupt handlers.                                                */
 /*===========================================================================*/
@@ -319,7 +378,10 @@ void rtc_lld_init(void) {
   CMU->CLKEN0_SET = CMU_CLKEN0_BURTC;
 
   /* After reboot the BURTC must remain enabled.
-     Check this before changing its configuration. */
+     Check this before changing its configuration.
+     NOTE: when SYSTICKv4 owns BURTC (EFR32_ST_OWNS_BURTC), the ST driver
+     has already configured and started it — do not touch CFG/EN here. */
+#if !defined(EFR32_ST_OWNS_BURTC) || (EFR32_ST_OWNS_BURTC == 0) || defined(__DOXYGEN__)
   if ((BURTC->EN & _BURTC_EN_MASK) == BURTC_EN_EN) {
 
     /* Disable BURTC if cfg prescaler is not set as wanted. */
@@ -331,6 +393,7 @@ void rtc_lld_init(void) {
       while ((BURTC->EN & _BURTC_EN_DISABLING_MASK) == BURTC_EN_DISABLING);
     }
   }
+#endif
 
   /* If calendar has not been initialized yet, then proceed with the
      initial setup.*/
@@ -371,17 +434,20 @@ void rtc_lld_init(void) {
        but inactive because BURTC is not started yet. */
   }
 
-  /* Start BURTC. */
+  /* Start BURTC (no-op if already running, e.g. when SYSTICKv4 owns it). */
   BURTC->CMD_SET = BURTC_CMD_START;
   while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
 
-  /* IRQ vectors permanently assigned to this driver.*/
+#if !defined(EFR32_ST_OWNS_BURTC) || (EFR32_ST_OWNS_BURTC == 0) || defined(__DOXYGEN__)
+  /* IRQ vectors permanently assigned to this driver. When SYSTICKv4 owns
+     BURTC it has already enabled the vector (with the ST priority) and
+     forwards RTC events via rtc_lld_serve_interrupt(). */
   nvicEnableVector(EFR32_BURTC_NUMBER, EFR32_BURTC_PRIORITY);
+#endif
 }
 
 __STATIC_INLINE void rtc_lld_set_time_slow(RTCDriver* rtcp, const RTCDateTime* timespec) {
 
-  syssts_t sts;
   uint32_t tv_sec, tv_msec;
 
   /* Number of leap corrections to apply up to end of last year. */
@@ -410,30 +476,11 @@ __STATIC_INLINE void rtc_lld_set_time_slow(RTCDriver* rtcp, const RTCDateTime* t
   tv_sec = day * 86400 + timespec->millisecond / 1000;
   tv_msec = timespec->millisecond % 1000;
 
-  /* Entering a reentrant critical zone. */
-  sts = osalSysGetStatusAndLockX();
-
-  /* Clear all counters resetting the overflow counter as well. */
-  BURTC->CNT_CLR = _BURTC_CNT_CNT_MASK;
-
-  rtcp->buram_state->ovf_counter = 0U;
-  rtcp->buram_state->tv_sec = tv_sec;
-  rtcp->buram_state->tv_msec = tv_msec;
-  rtcp->buram_state->dstflag = timespec->dstflag;
-
-  while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
-
-  if (rtcp->callback != NULL) {
-    rtcp->callback(rtcp, RTC_EVENT_TIME_SET);
-  }
-
-/* Leaving a reentrant critical zone.*/
-  osalSysRestoreStatusX(sts);
+  _rtc_lld_store_time(rtcp, tv_sec, tv_msec, timespec->dstflag);
 }
 
 __STATIC_INLINE void rtc_lld_set_time_approx(RTCDriver *rtcp, const RTCDateTime *timespec) {
 
-  syssts_t sts;
   uint32_t tv_sec, tv_msec;
 
   int year = timespec->year;
@@ -451,25 +498,7 @@ __STATIC_INLINE void rtc_lld_set_time_approx(RTCDriver *rtcp, const RTCDateTime 
   tv_sec = day * 86400 + timespec->millisecond / 1000;
   tv_msec = timespec->millisecond % 1000;
 
-  /* Entering a reentrant critical zone. */
-  sts = osalSysGetStatusAndLockX();
-
-  /* Clear all counters resetting the overflow counter as well. */
-  BURTC->CNT_CLR = _BURTC_CNT_CNT_MASK;
-
-  rtcp->buram_state->ovf_counter = 0U;
-  rtcp->buram_state->tv_sec = tv_sec;
-  rtcp->buram_state->tv_msec = tv_msec;
-  rtcp->buram_state->dstflag = timespec->dstflag;
-
-  while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
-
-  if (rtcp->callback != NULL) {
-    rtcp->callback(rtcp, RTC_EVENT_TIME_SET);
-  }
-
-/* Leaving a reentrant critical zone.*/
-  osalSysRestoreStatusX(sts);
+  _rtc_lld_store_time(rtcp, tv_sec, tv_msec, timespec->dstflag);
 }
 
 /**

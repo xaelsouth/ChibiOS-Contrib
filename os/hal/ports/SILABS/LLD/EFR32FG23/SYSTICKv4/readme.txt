@@ -15,6 +15,11 @@ FREERUNNING only (OSAL_ST_MODE_PERIODIC is not supported).
 BURTC is shared with the BURTCv1 RTC calendar driver: SYSTICKv4 owns the
 BURTC interrupt vector (EFR32_ST_OWNS_BURTC) and forwards RTC events to
 rtc_lld_serve_interrupt(); BURTCv1 must not define its own handler then.
+CNT is the shared time base for both the systick and the calendar, so
+rtcSetTime() under EFR32_ST_OWNS_BURTC does NOT clear CNT (that would yank
+the systick to 0) — it rebases the BURAM calendar anchor instead
+(_rtc_lld_store_time). Only the single COMP channel is truly shared
+between the kernel alarm and the RTC alarm.
 
 Hardware note (DK2600A, EFR32FG23B010F512IM48), RESOLVED: an earlier
 observation of "CNT measures only ~8 Hz" was a measurement artifact —
