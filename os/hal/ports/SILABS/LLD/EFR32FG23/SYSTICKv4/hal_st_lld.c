@@ -123,9 +123,12 @@ void st_lld_init(void) {
     while ((BURTC->EN & BURTC_EN_DISABLING) != 0U) {}
   }
 
-  /* Counter prescaler + compare against CNT (not the top). */
-  BURTC->CFG = (BURTC->CFG & ~(_BURTC_CFG_CNTPRESC_MASK | _BURTC_CFG_COMPTOP_MASK))
-               | EFR32_ST_PRESC | BURTC_CFG_COMPTOP;
+  /* Counter prescaler + compare against CNT (not the top). DEBUGRUN keeps
+     the counter running while the debugger has the CPU halted (RM 16.3.3),
+     otherwise CNT freezes on every halt and rate measurements are bogus. */
+  BURTC->CFG = (BURTC->CFG & ~(_BURTC_CFG_CNTPRESC_MASK | _BURTC_CFG_COMPTOP_MASK |
+                                _BURTC_CFG_DEBUGRUN_MASK))
+               | EFR32_ST_PRESC | BURTC_CFG_COMPTOP | BURTC_CFG_DEBUGRUN;
 
   /* Enable module (LF domain starts clocking).  NOTE: CFG above had to be
      written while disabled, but the async-domain registers (COMP, CNT)

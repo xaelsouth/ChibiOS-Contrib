@@ -337,8 +337,10 @@ void rtc_lld_init(void) {
   if ((BURTC->EN & _BURTC_EN_MASK) != BURTC_EN_EN) {
 
     /* Note that the CFG register can only be written when BURTC
-       is disabled. */
-    BURTC->CFG = (BURTC->CFG & ~_BURTC_CFG_CNTPRESC_MASK) | EFR32_BURTC_CFG_CNTPRESC;
+       is disabled. DEBUGRUN keeps the counter running while the
+       debugger has the CPU halted (RM 16.3.3). */
+    BURTC->CFG = (BURTC->CFG & ~(_BURTC_CFG_CNTPRESC_MASK | _BURTC_CFG_DEBUGRUN_MASK))
+                 | EFR32_BURTC_CFG_CNTPRESC | BURTC_CFG_DEBUGRUN;
 
     /* Enable BURTC. */
     BURTC->EN_SET = BURTC_EN_EN;
