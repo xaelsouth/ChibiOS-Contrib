@@ -536,21 +536,39 @@ void rtc_lld_set_time(RTCDriver *rtcp, const RTCDateTime *timespec) {
 void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec) {
 
   syssts_t sts;
-  uint32_t ovf_counter, comp_cnt;
+  uint32_t ovf_counter, comp_cnt, comp_cnt2;
   uint32_t tv_sec, tv_msec, dstflag;
 
   /* Entering a reentrant critical zone.*/
   sts = osalSysGetStatusAndLockX();
 
-  /* Calendar state lives entirely in BURAM (written from ISR context):
-     ovf_counter from the OF interrupt, comp_cnt from the COMP interrupt.
-     CNT is deliberately NOT read — CNT reads lag the real counter on this
-     part, which would make the calendar drift. Resolution: 1 s. */
-  ovf_counter = rtcp->buram_state->ovf_counter;
-  comp_cnt    = rtcp->buram_state->comp_cnt;
-  tv_sec      = rtcp->buram_state->tv_sec;
-  tv_msec     = rtcp->buram_state->tv_msec;
-  dstflag     = rtcp->buram_state->dstflag;
+  /* Seconds come from BURAM state only (written from ISR context):
+     ovf_counter from the OF interrupt, comp_cnt from the COMP interrupt —
+     never from CNT, whose reads lag the real counter when the LF domain
+     sits idle. Sub-second ms (if EFR32_RTC_HAS_SUBSECONDS) comes from one
+     CNT read — safe here because the 1 Hz COMP tick keeps the LF sync path
+     warm (verified on target: reads then track the real 32768 Hz rate).
+     Re-read if a COMP fired mid-read so seconds and ms stay consistent. */
+  do {
+    ovf_counter = rtcp->buram_state->ovf_counter;
+    comp_cnt    = rtcp->buram_state->comp_cnt;
+#if EFR32_RTC_HAS_SUBSECONDS
+    uint32_t cnt = BURTC->CNT;
+#endif
+    comp_cnt2   = rtcp->buram_state->comp_cnt;
+#if EFR32_RTC_HAS_SUBSECONDS
+    if (comp_cnt2 == comp_cnt) {
+      tv_msec = rtcp->buram_state->tv_msec + (cnt % EFR32_RTCCLK) * 1000U / EFR32_RTCCLK;
+    } else {
+      tv_msec = rtcp->buram_state->tv_msec;
+    }
+#else
+    tv_msec = rtcp->buram_state->tv_msec;
+#endif
+  } while (comp_cnt2 != comp_cnt);
+
+  tv_sec  = rtcp->buram_state->tv_sec;
+  dstflag = rtcp->buram_state->dstflag;
 
   /* Leaving a reentrant critical zone.*/
   osalSysRestoreStatusX(sts);
