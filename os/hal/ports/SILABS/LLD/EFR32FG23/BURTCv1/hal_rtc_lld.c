@@ -269,7 +269,7 @@ void rtc_lld_serve_interrupt(void) {
   if ((isr & _BURTC_IF_OF_MASK) == BURTC_IF_OF) {
     #if EFR32_RTC_USE_RTC1 == TRUE
     /* Increment overflow counter in order of tracking time. */
-    *(RTCD1.ovf_counter) += 1U;
+    RTCD1.buram_state->ovf_counter += 1U;
 
     if (RTCD1.callback != NULL) {
       RTCD1.callback(&RTCD1, RTC_EVENT_TS_OVF);
@@ -307,11 +307,12 @@ void rtc_lld_init(void) {
   /* Callback initially disabled. */
   RTCD1.callback = NULL;
 
-  /* Get data from backup RAM which survives restart. */
-  RTCD1.ovf_counter = buramAllocateAtI(&BURAMD1, 0, 4);
-  RTCD1.tv_sec = buramAllocateAtI(&BURAMD1, 4, 4);
-  RTCD1.tv_msec = buramAllocateAtI(&BURAMD1, 8, 4);
-  RTCD1.dstflag = buramAllocateAtI(&BURAMD1, 12, 4);
+  /* Get the persistent state from backup RAM, which survives restart.
+     One allocation for the whole efr32_rtc_buram_state_t at
+     EFR32_RTC_BURAM_BASE — the BURAM bitmap marks the whole chunk. */
+  RTCD1.buram_state = buramAllocateAtI(&BURAMD1, EFR32_RTC_BURAM_BASE,
+                                       sizeof(efr32_rtc_buram_state_t));
+  osalDbgCheck(RTCD1.buram_state != NULL);
 #endif
 
   /* Enable clock. */
@@ -346,10 +347,10 @@ void rtc_lld_init(void) {
     BURTC->CNT_CLR = _BURTC_CNT_CNT_MASK;
 
     #if EFR32_RTC_USE_RTC1 == TRUE
-    *(RTCD1.ovf_counter) = 0U;
-    *(RTCD1.tv_sec) = 0U;
-    *(RTCD1.tv_msec) = 0U;
-    *(RTCD1.dstflag) = 0U;
+    RTCD1.buram_state->ovf_counter = 0U;
+    RTCD1.buram_state->tv_sec = 0U;
+    RTCD1.buram_state->tv_msec = 0U;
+    RTCD1.buram_state->dstflag = 0U;
     #endif
 
     /* Clear interrupt flags. */
@@ -413,10 +414,10 @@ __STATIC_INLINE void rtc_lld_set_time_slow(RTCDriver* rtcp, const RTCDateTime* t
   /* Clear all counters resetting the overflow counter as well. */
   BURTC->CNT_CLR = _BURTC_CNT_CNT_MASK;
 
-  *(rtcp->ovf_counter) = 0U;
-  *(rtcp->tv_sec) = tv_sec;
-  *(rtcp->tv_msec) = tv_msec;
-  *(rtcp->dstflag) = timespec->dstflag;
+  rtcp->buram_state->ovf_counter = 0U;
+  rtcp->buram_state->tv_sec = tv_sec;
+  rtcp->buram_state->tv_msec = tv_msec;
+  rtcp->buram_state->dstflag = timespec->dstflag;
 
   while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
 
@@ -454,10 +455,10 @@ __STATIC_INLINE void rtc_lld_set_time_approx(RTCDriver *rtcp, const RTCDateTime 
   /* Clear all counters resetting the overflow counter as well. */
   BURTC->CNT_CLR = _BURTC_CNT_CNT_MASK;
 
-  *(rtcp->ovf_counter) = 0U;
-  *(rtcp->tv_sec) = tv_sec;
-  *(rtcp->tv_msec) = tv_msec;
-  *(rtcp->dstflag) = timespec->dstflag;
+  rtcp->buram_state->ovf_counter = 0U;
+  rtcp->buram_state->tv_sec = tv_sec;
+  rtcp->buram_state->tv_msec = tv_msec;
+  rtcp->buram_state->dstflag = timespec->dstflag;
 
   while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
 
@@ -507,13 +508,13 @@ void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec) {
      overflow counter was incremented after we read it — re-read it. */
   do {
     cnt = BURTC->CNT;
-    ovf_counter = *(rtcp->ovf_counter);
+    ovf_counter = rtcp->buram_state->ovf_counter;
     cnt2 = BURTC->CNT;
   } while (cnt2 < cnt);
 
-  tv_sec = *(rtcp->tv_sec);
-  tv_msec = *(rtcp->tv_msec);
-  dstflag = *(rtcp->dstflag);
+  tv_sec = rtcp->buram_state->tv_sec;
+  tv_msec = rtcp->buram_state->tv_msec;
+  dstflag = rtcp->buram_state->dstflag;
 
   /* Leaving a reentrant critical zone.*/
   osalSysRestoreStatusX(sts);

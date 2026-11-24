@@ -104,13 +104,26 @@ typedef struct {
 #endif
 
 /**
+ * @brief   Persistent RTC driver state kept in backup RAM.
+ * @details Allocated as one chunk at EFR32_RTC_BURAM_BASE inside the BURAM1
+ *          block (32 bytes), so the BURAM allocation bitmap marks the whole
+ *          region at once and no magic per-field offsets are needed.
+ */
+typedef struct {
+  volatile uint32_t ovf_counter;  /**< BURTC overflow counter (high word of the 64-bit tick). */
+  volatile uint32_t tv_sec;       /**< Calendar anchor: seconds since RTC_BASE_YEAR. */
+  volatile uint32_t tv_msec;      /**< Calendar anchor: millisecond remainder. */
+  volatile uint32_t dstflag;      /**< DST flag. */
+} efr32_rtc_buram_state_t;
+
+/** Byte offset of the RTC state inside BURAM1. */
+#define EFR32_RTC_BURAM_BASE    0U
+
+/**
  * @brief   Implementation-specific @p RTCDriver fields.
  */
 #define rtc_lld_driver_fields                                                     \
-  volatile uint32_t        *ovf_counter;  /**< BURTC overflow counter. */         \
-  volatile uint32_t        *tv_sec;       /**< Seconds since RTC_BASE_YEAR.. */   \
-  volatile uint32_t        *tv_msec;      /**< .. and additional milliseconds. */ \
-  volatile uint32_t        *dstflag;      /**< Keep DST flag. */                  \
+  volatile efr32_rtc_buram_state_t *buram_state; /**< Persistent state in BURAM. */ \
   rtccb_t                  callback       /**< Callback function. */
 
 /*===========================================================================*/
