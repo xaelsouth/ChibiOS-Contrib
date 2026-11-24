@@ -33,20 +33,13 @@
 /*
  * The FG23 BURAM is the 32 RETx_REG retention registers (RM 17.2): 32 x 32-bit
  * = 128 bytes at BURAM_BASE + 0x000..0x07C (SET/CLR/TGL aliases at +0x1000/
- * +0x2000/+0x3000). The four 32-byte blocks below map to RET word groups:
- * BURAM1 = RET0..7, BURAM2 = RET8..15, BURAM3 = RET16..23, BURAM4 = RET24..31.
+ * +0x2000/+0x3000). There is a single BURAM peripheral with a single bus-clock
+ * gate (CMU_CLKEN0.BURAM), so the driver models it as ONE 128-byte block
+ * (BURAMD1). Users partition it by agreeing on byte offsets; the allocation
+ * bitmap in hal_buram.c prevents overlaps.
  */
 #define BURAM1_ADDRESS          (BURAM_BASE + 0UL)
-#define BURAM1_SIZE             32U
-
-#define BURAM2_ADDRESS          (BURAM1_ADDRESS + BURAM1_SIZE)
-#define BURAM2_SIZE             32U
-
-#define BURAM3_ADDRESS          (BURAM2_ADDRESS + BURAM2_SIZE)
-#define BURAM3_SIZE             32U
-
-#define BURAM4_ADDRESS          (BURAM3_ADDRESS + BURAM3_SIZE)
-#define BURAM4_SIZE             32U
+#define BURAM1_SIZE             128U
 
 /*===========================================================================*/
 /* Driver pre-compile time settings.                                         */
@@ -58,18 +51,6 @@
 
 #if BURAM1_SIZE % 32U != 0U
 #error "BURAM1_SIZE has to be a multiple of 32!"
-#endif
-
-#if BURAM2_SIZE % 32U != 0U
-#error "BURAM2_SIZE has to be a multiple of 32!"
-#endif
-
-#if BURAM3_SIZE % 32U != 0U
-#error "BURAM3_SIZE has to be a multiple of 32!"
-#endif
-
-#if BURAM4_SIZE % 32U != 0U
-#error "BURAM4_SIZE has to be a multiple of 32!"
 #endif
 
 /*===========================================================================*/
@@ -94,18 +75,6 @@ typedef struct BURAMConfig BURAMConfig;
 /*===========================================================================*/
 #if BURAM_USE_BURAM1 && !defined(__DOXYGEN__)
 extern BURAMDriver BURAMD1;
-#endif
-
-#if BURAM_USE_BURAM2 && !defined(__DOXYGEN__)
-extern BURAMDriver BURAMD2;
-#endif
-
-#if BURAM_USE_BURAM3 && !defined(__DOXYGEN__)
-extern BURAMDriver BURAMD3;
-#endif
-
-#if BURAM_USE_BURAM4 && !defined(__DOXYGEN__)
-extern BURAMDriver BURAMD4;
 #endif
 
 #ifdef __cplusplus

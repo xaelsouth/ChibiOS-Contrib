@@ -117,9 +117,6 @@
  * BURAM driver system settings.
  */
 #define BURAM_USE_BURAM1                    TRUE
-#define BURAM_USE_BURAM2                    FALSE
-#define BURAM_USE_BURAM3                    FALSE
-#define BURAM_USE_BURAM4                    FALSE
 
 /*
  * DAC driver system settings.

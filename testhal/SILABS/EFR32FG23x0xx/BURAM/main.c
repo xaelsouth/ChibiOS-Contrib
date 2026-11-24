@@ -3,7 +3,7 @@
     Apache License 2.0 — see repository root.
 
     BURAM test: backup RAM write/read via the HAL BURAM driver.
-    BURAM1 is 32 bytes of battery-backed RAM; allocate a block,
+    BURAM1 is the 128-byte battery-backed RAM (32 RETx_REG words); allocate a block,
     write a pattern, read it back and verify.
 */
 #include "ch.h"
@@ -15,7 +15,7 @@ int main(void) {
   halInit();
   chSysInit();
   console_init();
-  PRINTF("\r\nBURAM test: BURAMD1 (32 bytes backup RAM)\r\n");
+  PRINTF("\r\nBURAM test: BURAMD1 (128 bytes backup RAM = 32 RETx_REG words)\r\n");
 
   buramInit();
 
