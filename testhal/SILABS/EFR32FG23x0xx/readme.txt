@@ -19,10 +19,12 @@ System tick: SYSTICKv2 (SYSRTC0 @ 32768 Hz, LF clock, runs in EM2/EM3/EM4)
 RTC calendar: BURTC (RTCD1, timekeeper only). SYSRTC free counter + compare:
              SYSRTCv1.
 
-Tests: TEMPLATE GPIO SIO RTC SYSRTC GPT-TIMER PWM-TIMER I2C SPI DMA
+Tests: TEMPLATE GPIO SIO RTC BURTC SYSRTC GPT-TIMER PWM-TIMER I2C SPI DMA
        EFL CRYPTO-AES WDG RAIL-TX SYSTICKv1 SYSTICKv2
        (SYSTICKv2 = SYSRTC0 is the platform default;
-        SYSTICKv1 builds with EFR32_USE_SYSTICKV1=yes = core SysTick)
+        SYSTICKv1 builds with EFR32_USE_SYSTICKV1=yes = core SysTick;
+        BURTC = peripheral-level BURTC test: BURAM retention across warm
+        reset + CNT rate/overflow measured via the OF interrupt)
 
 Build:  cd <test> && make -j4
 Flash:  make flash        (writes build/flash.jlink, runs JLinkExe)
@@ -53,6 +55,9 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
   LESENSE     PASS  (periodic scan ch0, SCANDONE IRQs counted over 5 s,
               measured scan rate in range)
   SYSTICKv2   PASS  (SYSRTC0 as system tick, platform default)
+  BURTC       PASS  (BURAM magic retained across warm reset; OF fires after
+              exactly 32768 CNT ticks = 1.0 s @32768 Hz, ovf_counter++ in
+              BURAM; note: raw CNT reads lag the real counter on this part)
   LETIMER-GPT PASS  (LETIMER0 as GPT, overflow IRQ + measured period)
   CRC         PASS  (GPCRC CRC32 of "123456789" = 0xCBF43926, byte/word fed,
               CRC16 smoke 0x6F91)

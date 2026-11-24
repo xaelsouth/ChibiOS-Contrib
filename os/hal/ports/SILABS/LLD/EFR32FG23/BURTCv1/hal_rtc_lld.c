@@ -64,6 +64,31 @@
                                     (EFR32_RTC_OVERFLOW_VALUE % EFR32_RTCCLK)
 
 /*===========================================================================*/
+/* Driver local functions.                                                   */
+/*===========================================================================*/
+
+/**
+ * @brief   Read the BURTC counter with a stable (non-torn) value.
+ * @details CNT lives in the LF (BURTCCLK) domain. A single read right after
+ *          a long idle period can return a stale value (observed on
+ *          hardware: a read after a 1 s sleep was off by hundreds of ticks,
+ *          while back-to-back reads are consistent). Reading until two
+ *          consecutive reads agree yields a coherent snapshot; at 32768 Hz
+ *          the counter changes every ~30 us, so this converges in 1-2
+ *          iterations. Bounded to 1000 iterations as a safety net.
+ */
+__STATIC_INLINE uint32_t burtc_lld_cnt_get(void) {
+
+  uint32_t cnt, cnt2;
+  uint32_t n = 1000U;
+  do {
+    cnt = BURTC->CNT;
+    cnt2 = BURTC->CNT;
+  } while ((cnt != cnt2) && (--n != 0U));
+  return cnt2;
+}
+
+/*===========================================================================*/
 /* Driver exported variables.                                                */
 /*===========================================================================*/
 
@@ -381,6 +406,7 @@ void rtc_lld_init(void) {
     RTCD1.buram_state->tv_sec = 0U;
     RTCD1.buram_state->tv_msec = 0U;
     RTCD1.buram_state->dstflag = 0U;
+    RTCD1.buram_state->magic = EFR32_RTC_BURAM_MAGIC;
     #endif
 
     /* Clear interrupt flags. */
@@ -391,6 +417,20 @@ void rtc_lld_init(void) {
     BURTC->IEN_SET = BURTC_IEN_OF;
   }
   else {
+
+    /* BURTC was already running (warm reset): the backup-domain state in
+       BURAM survives, but it may be garbage after a power-on of the backup
+       domain — validate it with the magic word and re-anchor if invalid.
+       CNT itself keeps counting, only the calendar anchor is reset. */
+    #if EFR32_RTC_USE_RTC1 == TRUE
+    if (RTCD1.buram_state->magic != EFR32_RTC_BURAM_MAGIC) {
+      RTCD1.buram_state->ovf_counter = 0U;
+      RTCD1.buram_state->tv_sec = 0U;
+      RTCD1.buram_state->tv_msec = 0U;
+      RTCD1.buram_state->dstflag = 0U;
+      RTCD1.buram_state->magic = EFR32_RTC_BURAM_MAGIC;
+    }
+    #endif
 
     /* Clear interrupt flags. */
     BURTC->IF_CLR = _BURTC_IF_MASK;
@@ -499,9 +539,9 @@ void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec) {
      If the counter wrapped between the two reads (cnt2 < cnt), the
      overflow counter was incremented after we read it — re-read it. */
   do {
-    cnt = BURTC->CNT;
+    cnt = burtc_lld_cnt_get();
     ovf_counter = rtcp->buram_state->ovf_counter;
-    cnt2 = BURTC->CNT;
+    cnt2 = burtc_lld_cnt_get();
   } while (cnt2 < cnt);
 
   tv_sec = rtcp->buram_state->tv_sec;
@@ -554,7 +594,7 @@ void rtc_lld_set_alarm(RTCDriver* rtcp,
     if (alarmspec != NULL) {
       /* Enable alarm. */
 
-      cnt = BURTC->CNT;
+      cnt = burtc_lld_cnt_get();
 
       /* Can overflow but don't care. */
       cnt += (alarmspec->tv_sec * EFR32_RTCCLK) +
@@ -602,7 +642,7 @@ void rtc_lld_get_alarm(RTCDriver* rtcp,
 
     comp = BURTC->COMP;
 
-    cnt = BURTC->CNT;
+    cnt = burtc_lld_cnt_get();
 
     /* Leaving a reentrant critical zone.*/
     osalSysRestoreStatusX(sts);
