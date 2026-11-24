@@ -110,15 +110,6 @@ typedef enum {
 typedef void (*rtccb_t)(RTCDriver* rtcp, rtcevent_t evt);
 #endif
 
-#if (RTC_ALARMS > 0) || defined(__DOXYGEN__)
-/**
- * @brief   Type of a structure representing an RTC alarm time stamp.
- */
-typedef struct {
-  uint32_t tv_sec;  /**< Seconds. */
-  uint32_t tv_usec; /**< Microseconds. */
-} RTCAlarm;
-#endif
 
 /**
  * @brief   Persistent RTC driver state kept in backup RAM.
@@ -182,14 +173,6 @@ void rtc_lld_init(void);
 void rtc_lld_serve_interrupt(void);
 void rtc_lld_set_time(RTCDriver* rtcp, const RTCDateTime* timespec);
 void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec);
-#if RTC_ALARMS > 0
-void rtc_lld_set_alarm(RTCDriver* rtcp,
-                       rtcalarm_t alarm,
-                       const RTCAlarm* alarmspec);
-void rtc_lld_get_alarm(RTCDriver* rtcp,
-                       rtcalarm_t alarm,
-                       RTCAlarm* alarmspec);
-#endif
 #if RTC_SUPPORTS_CALLBACKS == TRUE
 void rtc_lld_set_callback(RTCDriver* rtcp, rtccb_t callback);
 #endif
