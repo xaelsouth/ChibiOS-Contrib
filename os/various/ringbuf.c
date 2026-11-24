@@ -22,7 +22,7 @@
  * @{
  */
 
-#include "ch.h"
+#include "hal.h"   /* osal.h for osalSysLockFromISR */
 #include "ringbuf.h"
 
 /*===========================================================================*/

@@ -31,6 +31,50 @@
 #ifndef HAL_LETIMER_LLD_H
 #define HAL_LETIMER_LLD_H
 
+#if !defined(EFR32_LETIMER_WIN_USE_LETIMER0) || defined(__DOXYGEN__)
+#define EFR32_LETIMER_WIN_USE_LETIMER0    FALSE
+#endif
+
+#if !defined(EFR32_LETIMER_WIN_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_LETIMER_WIN_IRQ_PRIORITY    4
+#endif
+
+#if defined(EFR32_LETIMER_GPT_USE_LETIMER0) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) && \
+    (EFR32_LETIMER_WIN_USE_LETIMER0 == TRUE)
+#error "LETIMER0 cannot be claimed by both the GPT driver and the window API"
+#endif
+
+/**
+ * @brief   Window-end callback, invoked from the LETIMER0 underflow ISR.
+ */
+typedef void (*letimer_window_cb_t)(void);
+
+#if (EFR32_LETIMER_WIN_USE_LETIMER0 == TRUE) || defined(__DOXYGEN__)
+/*===========================================================================*/
+/* PRS-started one-shot window (independent of HAL_USE_GPT).                 */
+/*===========================================================================*/
+
+/**
+ * @brief   Arm a PRS-started one-shot window on LETIMER0.
+ * @details Configures LETIMER0 in REPMODE_ONESHOT with PRS start enabled on
+ *          the async channel selected by the SIGROUTE consumer route
+ *          (SIGROUTE_CON_LETIMER0_START). Each PRS pulse starts the window;
+ *          while running, further START pulses are ignored (no retrigger).
+ *          On underflow (window end) the UF interrupt fires and @p cb is
+ *          called from ISR context — the natural place to snapshot a pulse
+ *          counter (e.g. PCNT0) plus the system time into a ring buffer.
+ *
+ * @param[in] ticks         window length in EM23GRPACLK ticks (24-bit)
+ * @param[in] cb            window-end callback (ISR context), may be NULL
+ */
+void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb);
+
+/**
+ * @brief   Disarm the LETIMER0 window (stops the timer, frees the vector).
+ */
+void letimer_lld_window_stop(void);
+#endif
+
 #if (HAL_USE_GPT == TRUE) || defined(__DOXYGEN__)
 
 /* Shared GPTDriver / GPTConfig / gpt_lld_driver_fields / macros come from

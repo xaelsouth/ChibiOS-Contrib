@@ -35,6 +35,69 @@
 #include "hal.h"
 #include "hal_letimer_lld.h"
 
+#if (EFR32_LETIMER_WIN_USE_LETIMER0 == TRUE) || defined(__DOXYGEN__)
+
+static letimer_window_cb_t letimer_window_cb;
+
+OSAL_IRQ_HANDLER(EFR32_LETIM1_HANDLER) {
+  OSAL_IRQ_PROLOGUE();
+  if ((LETIMER0->IF & LETIMER_IF_UF) != 0U) {
+    LETIMER0->IF_CLR = LETIMER_IF_UF;
+    if (letimer_window_cb != NULL) {
+      letimer_window_cb();
+    }
+  }
+  OSAL_IRQ_EPILOGUE();
+}
+
+static void letimer_sync_wait(void) {
+  volatile uint32_t sp = 4000000UL;
+  while (((LETIMER0->SYNCBUSY & 0xFFFFFFFFUL) != 0U) && (--sp != 0U)) { }
+}
+
+void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb) {
+  letimer_window_cb = cb;
+
+  CMU->CLKEN0_SET = CMU_CLKEN0_LETIMER0;
+
+  /* Buffered registers (TOP/COMP0/CTRL) are only safe to write while the
+     module is disabled. */
+  LETIMER0->EN_CLR = LETIMER_EN_EN;
+  letimer_sync_wait();
+
+  LETIMER0->IEN = 0U;
+  LETIMER0->IF_CLR = _LETIMER_IF_MASK;
+
+  /* ONESHOT: stops after one underflow; a PRS START pulse (routed via
+     SIGROUTE_CON_LETIMER0_START) (re)starts the window. While running,
+     further START pulses are ignored — no retrigger. */
+  LETIMER0->CTRL = LETIMER_CTRL_REPMODE_ONESHOT;
+  LETIMER0->COMP0 = 0xFFFFFFU - (ticks & 0xFFFFFFU);   /* 24-bit down-counter */
+  LETIMER0->TOP   = 0xFFFFFFU;
+  LETIMER0->PRSMODE = LETIMER_PRSMODE_PRSSTARTMODE_RISING;
+  letimer_sync_wait();
+
+  /* Enable last so TOP is loaded; then arm the UF interrupt. */
+  LETIMER0->EN_SET = LETIMER_EN_EN;
+  letimer_sync_wait();
+  LETIMER0->IEN_SET = LETIMER_IEN_UF;
+
+  nvicEnableVector(EFR32_LETIM1_NUMBER, EFR32_LETIMER_WIN_IRQ_PRIORITY);
+}
+
+void letimer_lld_window_stop(void) {
+  nvicDisableVector(EFR32_LETIM1_NUMBER);
+  LETIMER0->IEN = 0U;
+  LETIMER0->IF_CLR = _LETIMER_IF_MASK;
+  LETIMER0->CMD_CLR = LETIMER_CMD_STOP;
+  letimer_sync_wait();
+  LETIMER0->EN_CLR = LETIMER_EN_EN;
+  letimer_sync_wait();
+  CMU->CLKEN0_CLR = CMU_CLKEN0_LETIMER0;
+  letimer_window_cb = NULL;
+}
+#endif /* EFR32_LETIMER_WIN_USE_LETIMER0 */
+
 #if (HAL_USE_GPT == TRUE) && (EFR32_LETIMER_GPT_USE_LETIMER0 == TRUE) || defined(__DOXYGEN__)
 
 /*===========================================================================*/

@@ -86,9 +86,10 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   LESENSE->CFG = (LESENSE->CFG & ~_LESENSE_CFG_SCANMODE_MASK) |
                 (cfg->scanmode & _LESENSE_CFG_SCANMODE_MASK);
 
-  /* Timing, peripheral control. */
+  /* Timing, peripheral control, PRS outputs. */
   LESENSE->TIMCTRL = cfg->timctrl;
   LESENSE->PERCTRL = cfg->perctrl;
+  LESENSE->PRSCTRL = cfg->prsctrl;
 
   /* Configure each channel. */
   for (uint32_t i = 0; i < cfg->num_channels && i < EFR32_LESENSE_MAX_CHANNELS; i++) {

@@ -108,6 +108,9 @@ typedef struct {
   uint32_t  scanmode;     /**< EFR32_LESENSE_SCAN_*. */
   uint32_t  timctrl;      /**< TIMCTRL value (scan frequency, startup, etc.). */
   uint32_t  perctrl;      /**< PERCTRL value (ACMP modes, warmup, etc.). */
+  uint32_t  prsctrl;      /**< PRSCTRL value (DECOUTx/DECCMP PRS outputs, e.g.
+                               LESENSE_PRSCTRL_DECOUT0? see efr32fg23_lesense.h;
+                               0 = no PRS output). */
   uint8_t   num_channels; /**< Number of active channels (1-16). */
   LESENSEChannelConfig channels[EFR32_LESENSE_MAX_CHANNELS];
   /**
