@@ -2,7 +2,7 @@ SYSTICKv1 — system tick test for the optional SYSTICKv1 driver
 (ARM Cortex-M core SysTick, os/hal/ports/SILABS/LLD/SYSTICKv1).
 
 The Makefile sets EFR32_USE_SYSTICKV1=yes, so the build uses the core
-SysTick instead of the default SYSTICKv3 (LETIMER0).
+SysTick instead of the default SYSTICKv2 (SYSRTC0).
 
 Modes:
   make            -> OSAL_ST_MODE_FREERUNNING (CH_CFG_ST_TIMEDELTA=8,
@@ -20,5 +20,4 @@ every second. Console is SEGGER RTT channel 0 (see runtest.sh).
 Expected: "SYSTICKv1: ALL PASS" followed by one "tick" per second.
 
 Known limitation: the core SysTick stops in EM2/EM3 (it is clocked from
-HCLK) — for low-power use SYSTICKv3 (LETIMER, EM2) or SYSTICKv2
-(SYSRTC, EM4).
+HCLK) — for low-power use the platform default SYSTICKv2 (SYSRTC, EM2/EM4).

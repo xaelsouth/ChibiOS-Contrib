@@ -2,7 +2,7 @@
 # testhal/SILABS/EFR32FG23x0xx/SYSTICKv1
 # System tick test for the optional SYSTICKv1 driver (ARM core SysTick).
 # Builds with EFR32_USE_SYSTICKV1=yes (core SysTick instead of the default
-# SYSTICKv3/LETIMER). Default mode: FREERUNNING; "make ST_PERIODIC=yes"
+# SYSTICKv2/SYSRTC). Default mode: FREERUNNING; "make ST_PERIODIC=yes"
 # builds OSAL_ST_MODE_PERIODIC instead.
 ##############################################################################
 

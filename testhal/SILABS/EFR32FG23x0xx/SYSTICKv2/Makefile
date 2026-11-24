@@ -1,8 +1,8 @@
 ##############################################################################
 # testhal/SILABS/EFR32FG23x0xx/SYSTICKv2
-# System tick test for the optional SYSTICKv2 driver (ARM core SysTick).
-# Builds with EFR32_USE_SYSTICKV2=yes (SYSRTC0-based system tick instead of the default
-# SYSTICKv3/LETIMER0). Default mode: FREERUNNING; "make ST_PERIODIC=yes"
+# System tick test for the SYSTICKv2 driver (SYSRTC0-based system tick,
+# the FG23 platform default — no make variable needed).
+# Default mode: FREERUNNING; "make ST_PERIODIC=yes"
 # builds OSAL_ST_MODE_PERIODIC instead.
 ##############################################################################
 
@@ -58,7 +58,6 @@ include $(CHIBIOS_CONTRIB)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_efr
 include $(CHIBIOS_CONTRIB)/os/hal/hal.mk
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 # Use the optional SYSTICKv2 driver (ARM core SysTick) for this test.
-EFR32_USE_SYSTICKV2 := yes
 
 include $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/EFR32FG23/platform.mk
 include $(CHIBIOS_CONTRIB)/os/hal/boards/SILABS_EFR32FG23_DK2600A/board.mk

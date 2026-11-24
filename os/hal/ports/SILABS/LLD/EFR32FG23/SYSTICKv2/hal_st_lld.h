@@ -19,14 +19,16 @@
  * @brief   EFR32FG23 SYSRTC-based ST driver low level header.
  *
  * @details Uses the SYSRTC 32-bit counter (running from LFXO/LFRCO/ULFRCO)
- *          as the ChibiOS system tick. Compared to SYSTICKv3 (LETIMER0):
- *          - 32-bit counter instead of 24-bit (wraps after ~4 years @ 1 Hz)
- *          - Works in EM4 (deepest sleep) — SYSRTC is in the always-on domain
+ *          as the ChibiOS system tick. Properties:
+ *          - 32-bit counter (no 24-bit LETIMER wrap problem)
+ *          - Works in EM2/EM3/EM4 — SYSRTC is in the always-on domain
  *          - Has overflow interrupt for long-running time tracking
  *          - 2 compare channels (CMP0 for tick, CMP1 for secondary alarm)
  *
- *          Select this driver instead of SYSTICKv3 in platform.mk by
- *          including SYSTICKv2/driver.mk instead of SYSTICKv3/driver.mk.
+ *          This is the default systick selected by the FG23 platform.mk.
+ *          The core SysTick (SYSTICKv1) can be selected instead with
+ *          EFR32_USE_SYSTICKV1=yes. LETIMER0 is not used as a tick and stays
+ *          available for LETIMERv1 (GPT).
  *
  * @addtogroup ST
  * @{

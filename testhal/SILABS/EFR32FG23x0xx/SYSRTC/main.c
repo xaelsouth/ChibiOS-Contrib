@@ -74,7 +74,7 @@ int main(void) {
   halInit();
   chSysInit();
   console_init();
-  PRINTF("\r\nSYSRTC test (SYSRTC0, SYSTICKv3 (LETIMER0) system tick, SYSRTC0 as RTC)\r\n");
+  PRINTF("\r\nSYSRTC test (SYSRTC0 as system tick via SYSTICKv2 and as RTC)\r\n");
 
   sysrtc_lld_start(&SYSRTCD1, sysrtc_cb, NULL);
 

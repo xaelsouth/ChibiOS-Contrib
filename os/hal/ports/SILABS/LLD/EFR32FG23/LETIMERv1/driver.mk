@@ -1,6 +1,7 @@
 # EFR32FG23 LETIMER0 as GPT driver.
 # Enable with EFR32_LETIMER_GPT_USE_LETIMER0=TRUE in mcuconf.h and HAL_USE_GPT=TRUE in halconf.h.
-# NOTE: Do NOT enable simultaneously with SYSTICKv3 using LETIMER0 (EFR32_ST_USE_TIMER=1).
+# NOTE: LETIMER0 is not used as the system tick on FG23 (SYSTICKv2/SYSRTC is
+# the default), so it is free to be claimed by this GPT driver.
 ifeq ($(USE_SMART_BUILD),yes)
 
 ifneq ($(findstring HAL_USE_GPT TRUE,$(HALCONF)),)

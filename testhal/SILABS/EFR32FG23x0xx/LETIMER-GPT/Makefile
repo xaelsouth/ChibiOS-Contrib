@@ -53,8 +53,7 @@ include $(CHIBIOS)/os/license/license.mk
 include $(CHIBIOS_CONTRIB)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_efr32fg23x.mk
 include $(CHIBIOS_CONTRIB)/os/hal/hal.mk
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
-# free LETIMER0 for the GPT test (SYSTICKv3 default uses it)
-EFR32_USE_SYSTICKV2 := yes
+# LETIMER0 is free for the GPT test (the system tick is SYSTICKv2/SYSRTC0)
 include $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/EFR32FG23/platform.mk
 include $(CHIBIOS_CONTRIB)/os/hal/boards/SILABS_EFR32FG23_DK2600A/board.mk
 include $(CHIBIOS)/os/rt/rt.mk

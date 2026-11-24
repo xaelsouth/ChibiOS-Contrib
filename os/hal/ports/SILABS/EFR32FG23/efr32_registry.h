@@ -77,7 +77,7 @@
 /*
  * LETIM driver system settings.
  * NOTE: LETIMER0 on FG23 is a 24-bit counter (_LETIMER_CNT_MASK = 0x00FFFFFF),
- * not 32-bit — SYSTICKv3 models it as 24-bit (ST_INIT_VALUE 0x00FFFFFF).
+ * not 32-bit.
  */
 #define EFR32_LETIM1_IS_32BITS              FALSE
 #define EFR32_LETIM1_IS_24BITS              TRUE
@@ -187,7 +187,7 @@
 
 /*
  * BURTC driver system settings (BURTC_COUNT = 1: 32-bit backup RTC,
- * also usable as system tick — SYSTICKv4).
+ * used as calendar/timekeeper only — the system tick is SYSRTC (SYSTICKv2)).
  */
 #define EFR32_HAS_BURTC                     TRUE
 

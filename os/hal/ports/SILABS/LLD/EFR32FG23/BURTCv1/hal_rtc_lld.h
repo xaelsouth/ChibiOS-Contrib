@@ -157,7 +157,7 @@ extern "C"
 {
 #endif
 void rtc_lld_init(void);
-void rtc_lld_serve_interrupt(void);   /* shared with SYSTICKv4 (BURTC systick) */
+void rtc_lld_serve_interrupt(void);
 void rtc_lld_set_time(RTCDriver* rtcp, const RTCDateTime* timespec);
 void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec);
 #if RTC_ALARMS > 0

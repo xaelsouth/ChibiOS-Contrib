@@ -19,12 +19,10 @@
  * @brief   EFR32FG23 LETIMER low-level driver header (GPT-compatible).
  *
  * @details LETIMER0 is a 24-bit low-energy timer clocked from EM23GRPACLK
- *          (LFXO/LFRCO/ULFRCO). It can be used either as the system tick
- *          (via SYSTICKv3) or as a standalone GPT timer (via this driver).
- *          Use EFR32_LETIMER_GPT_USE_LETIMER0 to claim it for GPT.
- *
- *          Do NOT enable both SYSTICKv3 (EFR32_ST_USE_TIMER=1) and this
- *          GPT driver on LETIMER0 simultaneously — they conflict.
+ *          (LFXO/LFRCO/ULFRCO). On FG23 it is NOT used as the system tick
+ *          (SYSTICKv2/SYSRTC is the default), so this driver can use it as
+ *          a standalone GPT timer. Claim it with
+ *          EFR32_LETIMER_GPT_USE_LETIMER0=TRUE in mcuconf.h.
  *
  * @addtogroup GPT
  * @{

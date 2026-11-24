@@ -22,7 +22,9 @@
  *
  *          Optional driver, NOT included by any platform.mk by default.
  *          Select it by building with EFR32_USE_SYSTICKV1=yes (see the
- *          platform.mk of the MCU) instead of the default SYSTICKv3.
+ *          platform.mk of the MCU) instead of the platform default
+ *          systick (SYSTICKv2/SYSRTC on EFR32FG23, SYSTICKv3/LETIMER on
+ *          EFR32FG14P).
  *
  *          Both OSAL_ST_MODE_PERIODIC and OSAL_ST_MODE_FREERUNNING are
  *          supported:
@@ -35,8 +37,9 @@
  *                          register, so this is how the alarm is emulated).
  *
  *          Note: the core SysTick is clocked from HCLK and stops in
- *          EM2/EM3 — for a low-power system tick use SYSTICKv3 (LETIMER,
- *          runs in EM2) or SYSTICKv2 (SYSRTC, runs in EM4) instead.
+ *          EM2/EM3 — for a low-power system tick use the platform default
+ *          (SYSTICKv2/SYSRTC on EFR32FG23, SYSTICKv3/LETIMER on EFR32FG14P)
+ *          instead.
  *
  * @addtogroup ST
  * @{

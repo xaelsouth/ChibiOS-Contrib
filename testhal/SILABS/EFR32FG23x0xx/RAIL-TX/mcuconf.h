@@ -83,7 +83,6 @@
  * ST driver system settings.
  */
 #define EFR32_ST_IRQ_PRIORITY               4
-#define EFR32_ST_USE_TIMER                  1
 
 /*
  * GPIO driver system settings.

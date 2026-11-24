@@ -14,14 +14,15 @@ Console: SEGGER RTT up-channel 0 (each test embeds a minimal RTT control
            JLinkRTTLoggerExe -Device EFR32FG23B010F512IM48 -If SWD -Speed 4000 -RTTChannel 0 out.log
          or dump the rtt_buf symbol after a run (see /tmp/runtest.sh pattern).
 
-System tick: SYSTICKv3 (LETIMER0 @ 32768 Hz, EM23GRPACLK from LFXO).
-RTC calendar: BURTC (RTCD1). SYSRTC0 free counter + compare: SYSRTCv1.
+System tick: SYSTICKv2 (SYSRTC0 @ 32768 Hz, LF clock, runs in EM2/EM3/EM4)
+             — the platform default.
+RTC calendar: BURTC (RTCD1, timekeeper only). SYSRTC free counter + compare:
+             SYSRTCv1.
 
 Tests: TEMPLATE GPIO SIO RTC SYSRTC GPT-TIMER PWM-TIMER I2C SPI DMA
-       EFL CRYPTO-AES WDG RAIL-TX SYSTICKv1 SYSTICKv2 SYSTICKv3
-       (SYSTICKv1 builds with EFR32_USE_SYSTICKV1=yes = core SysTick;
-        SYSTICKv2 with EFR32_USE_SYSTICKV2=yes = SYSRTC0;
-        SYSTICKv3 is the platform default = LETIMER0, 24-bit + UF ext)
+       EFL CRYPTO-AES WDG RAIL-TX SYSTICKv1 SYSTICKv2
+       (SYSTICKv2 = SYSRTC0 is the platform default;
+        SYSTICKv1 builds with EFR32_USE_SYSTICKV1=yes = core SysTick)
 
 Build:  cd <test> && make -j4
 Flash:  make flash        (writes build/flash.jlink, runs JLinkExe)
@@ -51,10 +52,7 @@ On-target results (2026-11-22, J-Link SWD, RTT console):
               and PERIODIC ("make ST_PERIODIC=yes") modes ALL PASS)
   LESENSE     PASS  (periodic scan ch0, SCANDONE IRQs counted over 5 s,
               measured scan rate in range)
-  SYSTICKv2   PASS  (SYSRTC as system tick)
-  SYSTICKv3   PASS  (LETIMER0 default, 24-bit counter + UF interrupt ext to
-              32 bits, FREERUNNING @ 32768 Hz: sleep 10/100/1000 ms
-              measured 330/3279/32771 ticks — ALL PASS)
+  SYSTICKv2   PASS  (SYSRTC0 as system tick, platform default)
   LETIMER-GPT PASS  (LETIMER0 as GPT, overflow IRQ + measured period)
   CRC         PASS  (GPCRC CRC32 of "123456789" = 0xCBF43926, byte/word fed,
               CRC16 smoke 0x6F91)

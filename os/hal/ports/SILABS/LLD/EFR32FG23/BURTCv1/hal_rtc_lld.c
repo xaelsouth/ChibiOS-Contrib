@@ -236,13 +236,9 @@ __STATIC_INLINE void _rtc_lld_to_timespec(uint32_t tv_sec, uint32_t tv_msec, RTC
 
 /**
  * @brief   Store the calendar anchor for a new time.
- * @details When SYSTICKv4 owns BURTC (EFR32_ST_OWNS_BURTC), BURTC->CNT is
- *          the system tick and must NOT be cleared — clearing it would yank
- *          the systick to 0 and break all pending OSAL timers/sleeps.
- *          Instead the BURAM anchor is rebased so that
- *          anchor + (ovf<<32 | CNT) == desired time; the counter keeps
- *          running undisturbed.  Without SYSTICKv4 the classic path is
- *          used: CNT is cleared and the anchor is the time itself.
+ * @details BURTC is the backup-domain timekeeper only (the systick is
+ *          SYSRTC0/SYSTICKv2), so setting the calendar may freely restart
+ *          CNT: clear it, zero the overflow counter, store the anchor.
  */
 __STATIC_INLINE void _rtc_lld_store_time(RTCDriver *rtcp, uint32_t tv_sec,
                                          uint32_t tv_msec, uint32_t dstflag) {
@@ -251,40 +247,15 @@ __STATIC_INLINE void _rtc_lld_store_time(RTCDriver *rtcp, uint32_t tv_sec,
 
   sts = osalSysGetStatusAndLockX();
 
-#if defined(EFR32_ST_OWNS_BURTC) && (EFR32_ST_OWNS_BURTC == 1) && !defined(__DOXYGEN__)
-  {
-    uint32_t cnt, cnt2, ovf;
-    uint64_t now, want, anchor;
-    uint32_t low;
-
-    /* Race-safe tick read (same pattern as rtc_lld_get_time). */
-    do {
-      cnt = BURTC->CNT;
-      ovf = rtcp->buram_state->ovf_counter;
-      cnt2 = BURTC->CNT;
-    } while (cnt2 < cnt);
-
-    now = ((uint64_t)ovf << 32) | cnt;
-    want = (uint64_t)tv_sec * EFR32_RTCCLK + ((uint64_t)tv_msec * EFR32_RTCCLK) / 1000U;
-    anchor = want - now;   /* mod 2^64; only mod 2^32 ticks matter (32768 | 2^32) */
-
-    low = (uint32_t)anchor;
-    rtcp->buram_state->ovf_counter = (uint32_t)(anchor >> 32);
-    rtcp->buram_state->tv_sec = low / EFR32_RTCCLK;
-    rtcp->buram_state->tv_msec = (low % EFR32_RTCCLK) * 1000U / EFR32_RTCCLK;
-  }
-#else
   /* Clear all counters resetting the overflow counter as well. */
   BURTC->CNT_CLR = _BURTC_CNT_CNT_MASK;
 
   rtcp->buram_state->ovf_counter = 0U;
   rtcp->buram_state->tv_sec = tv_sec;
   rtcp->buram_state->tv_msec = tv_msec;
+  rtcp->buram_state->dstflag = dstflag;
 
   while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
-#endif
-
-  rtcp->buram_state->dstflag = dstflag;
 
   if (rtcp->callback != NULL) {
     rtcp->callback(rtcp, RTC_EVENT_TIME_SET);
@@ -302,7 +273,6 @@ __STATIC_INLINE void _rtc_lld_store_time(RTCDriver *rtcp, uint32_t tv_sec,
  *
  * @isr
  */
-#if !defined(EFR32_ST_OWNS_BURTC) || (EFR32_ST_OWNS_BURTC == 0) || defined(__DOXYGEN__)
 OSAL_IRQ_HANDLER(EFR32_BURTC_HANDLER) {
 
   OSAL_IRQ_PROLOGUE();
@@ -311,10 +281,9 @@ OSAL_IRQ_HANDLER(EFR32_BURTC_HANDLER) {
 
   OSAL_IRQ_EPILOGUE();
 }
-#endif
 
 /**
- * @brief   BURTC interrupt event processing (shared with SYSTICKv4).
+ * @brief   BURTC interrupt event processing.
  *
  * @isr
  */
@@ -378,10 +347,7 @@ void rtc_lld_init(void) {
   CMU->CLKEN0_SET = CMU_CLKEN0_BURTC;
 
   /* After reboot the BURTC must remain enabled.
-     Check this before changing its configuration.
-     NOTE: when SYSTICKv4 owns BURTC (EFR32_ST_OWNS_BURTC), the ST driver
-     has already configured and started it — do not touch CFG/EN here. */
-#if !defined(EFR32_ST_OWNS_BURTC) || (EFR32_ST_OWNS_BURTC == 0) || defined(__DOXYGEN__)
+     Check this before changing its configuration. */
   if ((BURTC->EN & _BURTC_EN_MASK) == BURTC_EN_EN) {
 
     /* Disable BURTC if cfg prescaler is not set as wanted. */
@@ -393,7 +359,6 @@ void rtc_lld_init(void) {
       while ((BURTC->EN & _BURTC_EN_DISABLING_MASK) == BURTC_EN_DISABLING);
     }
   }
-#endif
 
   /* If calendar has not been initialized yet, then proceed with the
      initial setup.*/
@@ -434,16 +399,12 @@ void rtc_lld_init(void) {
        but inactive because BURTC is not started yet. */
   }
 
-  /* Start BURTC (no-op if already running, e.g. when SYSTICKv4 owns it). */
+  /* Start BURTC. */
   BURTC->CMD_SET = BURTC_CMD_START;
   while ((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U);
 
-#if !defined(EFR32_ST_OWNS_BURTC) || (EFR32_ST_OWNS_BURTC == 0) || defined(__DOXYGEN__)
-  /* IRQ vectors permanently assigned to this driver. When SYSTICKv4 owns
-     BURTC it has already enabled the vector (with the ST priority) and
-     forwards RTC events via rtc_lld_serve_interrupt(). */
+  /* IRQ vectors permanently assigned to this driver. */
   nvicEnableVector(EFR32_BURTC_NUMBER, EFR32_BURTC_PRIORITY);
-#endif
 }
 
 __STATIC_INLINE void rtc_lld_set_time_slow(RTCDriver* rtcp, const RTCDateTime* timespec) {

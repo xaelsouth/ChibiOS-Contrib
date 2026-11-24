@@ -38,9 +38,10 @@ Current contract (hal_lld.h), all enforced at compile time:
     EFR32_MSC_READCTRL_MODE if you really know better.
   - EFR32_HFRCOEM23_ENABLED: whether HFRCOEM23 may keep HCLK alive in
     EM2/EM3.
-  - EFR32_ST_USE_TIMER / EFR32_USE_SYSTICKVx: system tick source
-    (SYSTICKv1 = core SysTick, v2 = SYSRTC, v3 = LETIMER0 default;
-    v1/v2 selected per-test in the Makefile, not in mcuconf.h).
+  - System tick source: SYSTICKv2 (SYSRTC0, 32-bit, LF clock, EM2/EM3/EM4)
+    is the platform default; SYSTICKv1 (core SysTick) is selected with
+    EFR32_USE_SYSTICKV1=yes in the Makefile. LETIMER0 is not used as a
+    tick (stays free for LETIMERv1/GPT); BURTC is the calendar only.
 
 How to check all projects at once:
 

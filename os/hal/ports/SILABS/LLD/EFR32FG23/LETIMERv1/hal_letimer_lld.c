@@ -25,9 +25,8 @@
  *          Clock: EM23GRPACLK (LFXO/LFRCO/ULFRCO). The prescaler is set
  *          from the GPTConfig.frequency field.
  *
- *          Conflict guard: if SYSTICKv3 is also using LETIMER0
- *          (EFR32_ST_USE_TIMER==1 with OSAL_ST_MODE==FREERUNNING),
- *          enabling both will cause a compile-time error.
+ *          LETIMER0 is not used as the system tick on FG23 (SYSTICKv2/SYSRTC
+ *          is the default), so this driver can claim it freely.
  *
  * @addtogroup GPT
  * @{
