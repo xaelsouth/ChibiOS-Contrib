@@ -122,6 +122,19 @@ void letimer_lld_window_set_period(uint32_t ticks) {
   }
 }
 
+void letimer_lld_window_restart(uint32_t ticks) {
+  letimer_window_ticks = ticks & 0xFFFFFFU;
+  if ((LETIMER0->EN & LETIMER_EN_EN) == 0U || letimer_window_ticks == 0U) {
+    return;
+  }
+  /* Stop, reprogram COMP0 (safe only while the counter is stopped), start. */
+  LETIMER0->CMD_CLR = LETIMER_CMD_STOP;
+  letimer_sync_wait();
+  LETIMER0->COMP0 = 0xFFFFFFU - letimer_window_ticks;
+  letimer_sync_wait();
+  LETIMER0->CMD_SET = LETIMER_CMD_START;
+}
+
 void letimer_lld_window_stop(void) {
   nvicDisableVector(EFR32_LETIM1_NUMBER);
   LETIMER0->IEN = 0U;

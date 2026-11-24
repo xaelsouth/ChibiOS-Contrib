@@ -143,6 +143,17 @@ typedef struct {
    */
   void (*callback)(uint32_t scanres, void *arg);
   void     *callback_arg;
+  /**
+   * @brief   Callback invoked from ISR when a channel hit flag fires
+   *          (CHx_INTERACT.SETIF, e.g. POSEDGE = once per hit edge).
+   * @param[in] hits    bitmask of hit channels (IF & 0xFFFF).
+   * @note    Independent of callback: with callback == NULL and this set,
+   *          only the channel-hit IEN bits are enabled (no per-scan
+   *          SCANDONE IRQ). Use lesense_lld_set_hit_irq() to mask/unmask
+   *          at runtime (e.g. self-mask on the first hit of a burst).
+   */
+  void (*hit_callback)(uint32_t hits, void *arg);
+  void     *hit_callback_arg;
 } LESENSEConfig;
 
 typedef struct {
@@ -170,6 +181,7 @@ extern "C" {
   void lesense_lld_stop_scan(LESENSEDriver *lp);
   uint32_t lesense_lld_get_scanres(LESENSEDriver *lp);
   void lesense_lld_set_scan_hz(LESENSEDriver *lp, float hz);
+  void lesense_lld_set_hit_irq(LESENSEDriver *lp, bool enable);
   void lesense_lld_start_fifo_dma(LESENSEDriver *lp, uint32_t *buf, size_t n);
   void lesense_lld_stop_fifo_dma(LESENSEDriver *lp);
   void lesense_lld_serve_interrupt(LESENSEDriver *lp);

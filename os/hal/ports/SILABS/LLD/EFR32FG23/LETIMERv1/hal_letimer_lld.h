@@ -87,6 +87,18 @@ void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb);
 void letimer_lld_window_set_period(uint32_t ticks);
 
 /**
+ * @brief   Restart the window immediately with a new period.
+ * @details Stops the (possibly running) one-shot counter, rewrites COMP0 and
+ *          starts again — so the new period applies to the window that is
+ *          about to run, not only from the next re-arm. Call from thread
+ *          context (e.g. when a pulse burst starts and the remaining idle
+ *          window must not delay the first measurement).
+ *
+ * @param[in] ticks         new window length in EM23GRPACLK ticks (24-bit)
+ */
+void letimer_lld_window_restart(uint32_t ticks);
+
+/**
  * @brief   Disarm the LETIMER0 window chain (stops the timer, frees the vector).
  */
 void letimer_lld_window_stop(void);

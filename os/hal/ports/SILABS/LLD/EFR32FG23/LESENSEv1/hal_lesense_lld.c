@@ -114,11 +114,17 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   LESENSE->CMD_SET = LESENSE_CMD_CLEARBUF;
   LESENSE->IF_CLR = _LESENSE_IF_MASK;
 
-  /* Enable interrupts only when a callback is registered. With callback ==
-     NULL the driver runs fully autonomously in EM2 (detection consumed via
-     decoder PRS outputs) — no per-scan SCANDONE wakeup of the CPU. */
+  /* Interrupt policy:
+     - callback set      -> per-scan IRQs (channel hits + SCANDONE + RESWL).
+     - only hit_callback -> channel-hit IRQs only (no per-scan SCANDONE),
+       e.g. SETIF=POSEDGE gives one IRQ per hit edge: a cheap "first pulse"
+       wakeup while the counting itself runs autonomously via DECOUT0/PRS.
+     - both NULL         -> fully autonomous, no IRQ at all. */
   if (cfg->callback != NULL) {
     LESENSE->IEN_SET = chen | LESENSE_IEN_SCANDONE | LESENSE_IEN_RESWL;
+  }
+  else if (cfg->hit_callback != NULL) {
+    LESENSE->IEN_SET = chen;
   }
   else {
     LESENSE->IEN_CLR = _LESENSE_IEN_MASK;
@@ -134,7 +140,7 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
     while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
   }
 
-  if (cfg->callback != NULL) {
+  if (cfg->callback != NULL || cfg->hit_callback != NULL) {
     nvicEnableVector(EFR32_LESENSE_NUMBER, EFR32_LESENSE_IRQ_PRIORITY);
   }
 
@@ -288,9 +294,29 @@ void lesense_lld_serve_interrupt(LESENSEDriver *lp) {
     }
   }
 
-  /* Individual channel hits (bits 0-15) are also captured in SCANRES. */
-  if (isr & 0xFFFFU) {
+  /* Channel hit flags (bits 0-15) — with SETIF=POSEDGE in CHx_INTERACT these
+     fire once per hit edge, usable as a first-pulse wakeup in autonomous
+     mode (callback == NULL). */
+  if ((isr & 0xFFFFU) != 0U) {
     lp->scanres = LESENSE->SCANRES;
+    if (lp->config && lp->config->hit_callback) {
+      lp->config->hit_callback(isr & 0xFFFFU, lp->config->hit_callback_arg);
+    }
+  }
+}
+
+void lesense_lld_set_hit_irq(LESENSEDriver *lp, bool enable) {
+  uint32_t chen = 0U;
+  if (lp->config != NULL) {
+    for (uint32_t i = 0; i < lp->config->num_channels && i < EFR32_LESENSE_MAX_CHANNELS; i++) {
+      chen |= (1UL << i);
+    }
+  }
+  if (enable) {
+    LESENSE->IEN_SET = chen;
+  }
+  else {
+    LESENSE->IEN_CLR = chen;
   }
 }
 
