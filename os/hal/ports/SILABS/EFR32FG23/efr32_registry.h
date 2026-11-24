@@ -72,9 +72,10 @@
  */
 #define EFR32_HAS_RTC                       TRUE
 #define EFR32_RTC_HAS_SUBSECONDS            TRUE
-/* No alarm channel: BURTC has a single COMP, owned by the calendar tick
-   (see BURTCv1). */
-#define EFR32_RTC_NUM_ALARMS                0
+/* One alarm. Hardware-wise it lives on SYSRTC CMP1 (BURTC's single COMP
+   is owned by the calendar tick) — see BURTCv1. Requires
+   EFR32_SYSRTC_USE_SYSRTC=TRUE. */
+#define EFR32_RTC_NUM_ALARMS                1
 
 /*
  * LETIM driver system settings.

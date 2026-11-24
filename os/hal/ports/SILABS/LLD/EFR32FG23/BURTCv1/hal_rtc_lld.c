@@ -23,6 +23,11 @@
  */
 
 #include "hal.h"
+#include "hal_sysrtc_lld.h"
+
+#if (RTC_ALARMS > 0) || defined(__DOXYGEN__)
+static void rtc_lld_sysrtc_cb(efr32_sysrtc_evt_t evt, uint32_t value, void *arg);
+#endif
 
 #if (HAL_USE_RTC == TRUE) || defined(__DOXYGEN__)
 
@@ -353,6 +358,13 @@ void rtc_lld_init(void) {
   RTCD1.buram_state = buramAllocateAtI(&BURAMD1, EFR32_RTC_BURAM_BASE,
                                        sizeof(efr32_rtc_buram_state_t));
   osalDbgCheck(RTCD1.buram_state != NULL);
+
+  #if (RTC_ALARMS > 0) && !defined(__DOXYGEN__)
+  /* Alarm channel lives on SYSRTC CMP1. sysrtc_lld_start() is a no-op for
+     the counter when SYSTICKv2 already started it; it only registers the
+     callback (CMP1/CAP0 channels are left alone). */
+  sysrtc_lld_start(&SYSRTCD1, rtc_lld_sysrtc_cb, NULL);
+  #endif
 #endif
 
   /* Enable clock. */
@@ -565,6 +577,100 @@ void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec) {
  *
  * @notapi
  */
+
+#if (RTC_ALARMS > 0) || defined(__DOXYGEN__)
+#if !defined(EFR32_SYSRTC_USE_SYSRTC) || (EFR32_SYSRTC_USE_SYSRTC == 0)
+#error "BURTCv1 alarms are implemented on SYSRTC CMP1 — define EFR32_SYSRTC_USE_SYSRTC TRUE"
+#endif
+
+/**
+ * @brief   SYSRTC CMP1 event -> RTC alarm callback.
+ * @details CMP0/OVF of SYSRTC group 0 belong to SYSTICKv2; CMP1 is the RTC
+ *          alarm. The SEQ vector is shared: SYSTICKv2 forwards to
+ *          sysrtc_lld_serve_interrupt(), which calls this.
+ *
+ * @isr
+ */
+static void rtc_lld_sysrtc_cb(efr32_sysrtc_evt_t evt, uint32_t value, void *arg) {
+  (void)value;
+  (void)arg;
+
+  if (evt == EFR32_SYSRTC_EVT_CMP1) {
+    /* One-shot: disable the compare channel. */
+    sysrtc_lld_disable_compare(&SYSRTCD1, 1U);
+
+    #if EFR32_RTC_USE_RTC1 == TRUE
+    if (RTCD1.callback != NULL) {
+      RTCD1.callback(&RTCD1, RTC_EVENT_ALARM);
+    }
+    #endif
+  }
+}
+
+/**
+ * @brief   Set alarm time (relative offset from now).
+ * @details Implemented on SYSRTC CMP1: the compare value is
+ *          CNT + offset, where CNT ticks at CH_CFG_ST_FREQUENCY (the
+ *          SYSTICKv2/SYSRTC tick rate).
+ *
+ * @param[in] rtcp       pointer to RTC driver structure
+ * @param[in] alarm      alarm number, must be 0
+ * @param[in] alarmspec  pointer to an @p RTCAlarm structure, NULL to disable
+ *
+ * @notapi
+ */
+void rtc_lld_set_alarm(RTCDriver* rtcp, rtcalarm_t alarm,
+                       const RTCAlarm* alarmspec) {
+  syssts_t sts;
+
+  (void)rtcp;
+  osalDbgAssert(alarm == 0, "unknown alarm");
+
+  /* Entering a reentrant critical zone.*/
+  sts = osalSysGetStatusAndLockX();
+
+  if (alarmspec != NULL) {
+    uint32_t cnt = sysrtc_lld_get_counter();
+    uint32_t delta = alarmspec->tv_sec * CH_CFG_ST_FREQUENCY +
+                     (uint32_t)(((uint64_t)alarmspec->tv_usec * CH_CFG_ST_FREQUENCY) / 1000000ULL);
+    sysrtc_lld_set_compare(&SYSRTCD1, 1U, cnt + delta);   /* wraps naturally */
+    sysrtc_lld_enable_compare(&SYSRTCD1, 1U);
+  }
+  else {
+    sysrtc_lld_disable_compare(&SYSRTCD1, 1U);
+  }
+
+  /* Leaving a reentrant critical zone.*/
+  osalSysRestoreStatusX(sts);
+}
+
+/**
+ * @brief   Get alarm time (remaining offset from now).
+ *
+ * @notapi
+ */
+void rtc_lld_get_alarm(RTCDriver* rtcp, rtcalarm_t alarm,
+                       RTCAlarm* alarmspec) {
+  syssts_t sts;
+  uint32_t cnt, comp;
+
+  (void)rtcp;
+  osalDbgAssert(alarm == 0, "unknown alarm");
+
+  sts = osalSysGetStatusAndLockX();
+
+  comp = sysrtc_lld_get_compare(&SYSRTCD1, 1U);
+  cnt  = sysrtc_lld_get_counter();
+
+  osalSysRestoreStatusX(sts);
+
+  uint32_t diff = comp - cnt;   /* wraps naturally */
+
+  alarmspec->tv_sec  = diff / CH_CFG_ST_FREQUENCY;
+  alarmspec->tv_usec = (uint32_t)(((uint64_t)(diff % CH_CFG_ST_FREQUENCY) * 1000000ULL) / CH_CFG_ST_FREQUENCY);
+}
+#endif /* RTC_ALARMS > 0 */
+
 void rtc_lld_set_callback(RTCDriver* rtcp, rtccb_t callback) {
 
   syssts_t sts;

@@ -24,9 +24,11 @@
  *          EFR32_RTC_COMP_PERIOD ticks (1 s at 32768 Hz) and increments
  *          comp_cnt in BURAM; OF fires on the 2^32 wrap and increments
  *          ovf_counter (64-bit extension). rtcGetTime() only reads BURAM
- *          words — resolution is 1 s. There is no alarm channel
- *          (EFR32_RTC_NUM_ALARMS = 0): BURTC has a single COMP, which is
- *          owned by the calendar.
+ *          words — resolution is 1 s. The single alarm channel
+ *          (EFR32_RTC_NUM_ALARMS = 1) is implemented on SYSRTC CMP1,
+ *          because BURTC's only COMP is owned by the calendar tick; CMP0
+ *          of SYSRTC is the system tick (SYSTICKv2). Requires
+ *          EFR32_SYSRTC_USE_SYSRTC=TRUE.
  *
  *          Rationale: on EFR32FG23B010, reads of BURTC->CNT can return a
  *          stale value that lags the real counter (observed: reads advance
@@ -108,6 +110,16 @@ typedef enum {
  * @brief   Type of a generic RTC callback.
  */
 typedef void (*rtccb_t)(RTCDriver* rtcp, rtcevent_t evt);
+
+#if (RTC_ALARMS > 0) || defined(__DOXYGEN__)
+/**
+ * @brief   Type of a structure representing an RTC alarm time stamp.
+ */
+typedef struct {
+  uint32_t tv_sec;  /**< Seconds. */
+  uint32_t tv_usec; /**< Microseconds. */
+} RTCAlarm;
+#endif
 #endif
 
 
@@ -173,6 +185,14 @@ void rtc_lld_init(void);
 void rtc_lld_serve_interrupt(void);
 void rtc_lld_set_time(RTCDriver* rtcp, const RTCDateTime* timespec);
 void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec);
+#if RTC_ALARMS > 0
+void rtc_lld_set_alarm(RTCDriver* rtcp,
+                       rtcalarm_t alarm,
+                       const RTCAlarm* alarmspec);
+void rtc_lld_get_alarm(RTCDriver* rtcp,
+                       rtcalarm_t alarm,
+                       RTCAlarm* alarmspec);
+#endif
 #if RTC_SUPPORTS_CALLBACKS == TRUE
 void rtc_lld_set_callback(RTCDriver* rtcp, rtccb_t callback);
 #endif

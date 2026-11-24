@@ -62,6 +62,15 @@ static void rtt_write(const char *s, size_t n) {
 
 #define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
 
+static volatile uint32_t alarm_fired;
+
+static void rtc_alarm_cb(RTCDriver *rtcp, rtcevent_t evt) {
+  (void)rtcp;
+  if (evt == RTC_EVENT_ALARM) {
+    alarm_fired = 1U;
+  }
+}
+
 int main(void) {
   halInit();
   chSysInit();
@@ -86,6 +95,29 @@ int main(void) {
          (ts.millisecond / 1000) % 60, ts.millisecond % 1000);
   PRINTF("set/get round-trip: %s\r\n",
          (ts.year == 46 && ts.month == 11 && ts.day == 22) ? "PASS" : "FAIL");
+
+  /* Alarm test: alarm lives on SYSRTC CMP1. Set +2 s, wait for the
+     callback, measure the elapsed system time. */
+  {
+    alarm_fired = 0;
+    rtcSetCallback(&RTCD1, rtc_alarm_cb);
+    RTCAlarm al = { .tv_sec = 2, .tv_usec = 0 };
+    systime_t t0 = chVTGetSystemTimeX();
+    rtcSetAlarm(&RTCD1, 0, &al);
+    RTCAlarm al_back;
+    rtcGetAlarm(&RTCD1, 0, &al_back);
+    PRINTF("alarm readback: %lu s %lu us (expect ~2 s)\r\n",
+           (unsigned long)al_back.tv_sec, (unsigned long)al_back.tv_usec);
+    while (alarm_fired == 0U) {
+      chThdSleepMilliseconds(10);
+    }
+    systime_t dt = chVTGetSystemTimeX() - t0;
+    uint32_t ms = (uint32_t)(dt * 1000U / CH_CFG_ST_FREQUENCY);
+    PRINTF("alarm fired after %lu ms (expect ~2000): %s\r\n",
+           (unsigned long)ms,
+           (ms >= 1900U && ms <= 2100U) ? "PASS" : "FAIL");
+    rtcSetCallback(&RTCD1, NULL);
+  }
 
   /* Print the time every second. */
   while (true) {

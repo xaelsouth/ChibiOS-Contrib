@@ -200,6 +200,10 @@
  */
 #define EEPROM_USE_EE25XX FALSE
 
+/* RTC alarm lives on SYSRTC CMP1 (BURTC COMP is the calendar tick). */
+#define EFR32_SYSRTC_USE_SYSRTC    TRUE
+#define EFR32_ST_USE_SYSRTC        TRUE   /* pull in SYSRTCv1 LLD (CMP1 alarm) */
+
 #endif /* HALCONF_COMMUNITY_H */
 
 /** @} */
