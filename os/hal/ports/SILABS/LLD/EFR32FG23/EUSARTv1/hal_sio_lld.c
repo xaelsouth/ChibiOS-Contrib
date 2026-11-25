@@ -222,7 +222,7 @@ __STATIC_INLINE void _sio_lld_dma_alloc(SIODriver* siop) {
   siop->dma_tx_busy = false;
 
   if (efr32_sio_tx_dma_stream[idx] >= 0) {
-    siop->dma_tx = dmaStreamAllocI((uint32_t)efr32_sio_tx_dma_stream[idx],
+    siop->dma_tx = dmaStreamAlloc((uint32_t)efr32_sio_tx_dma_stream[idx],
                                    EFR32_SIO_DMA_IRQ_PRIORITY,
                                    sio_lld_dma_tx_isr, siop);
   }
@@ -238,7 +238,7 @@ __STATIC_INLINE void _sio_lld_dma_free(SIODriver* siop) {
       dmaStreamDisable(siop->dma_tx);
       siop->dma_tx_busy = false;
     }
-    dmaStreamFreeI(siop->dma_tx);
+    dmaStreamFree(siop->dma_tx);
     siop->dma_tx = NULL;
   }
 }

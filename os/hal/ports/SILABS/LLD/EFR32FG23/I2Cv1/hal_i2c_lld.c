@@ -168,12 +168,12 @@ void i2c_lld_start(I2CDriver *i2cp) {
     /* Allocate DMA streams if configured. */
 #if defined(EFR32_DMA_REQUIRED)
     if (efr32_i2c_tx_dma_stream[index] >= 0 && i2cp->dma_tx == NULL) {
-      i2cp->dma_tx = dmaStreamAllocI(
+      i2cp->dma_tx = dmaStreamAlloc(
           (uint32_t)efr32_i2c_tx_dma_stream[index],
           efr32_i2c_dma_prio[index], NULL, NULL);
     }
     if (efr32_i2c_rx_dma_stream[index] >= 0 && i2cp->dma_rx == NULL) {
-      i2cp->dma_rx = dmaStreamAllocI(
+      i2cp->dma_rx = dmaStreamAlloc(
           (uint32_t)efr32_i2c_rx_dma_stream[index],
           efr32_i2c_dma_prio[index], NULL, NULL);
     }
@@ -187,11 +187,11 @@ void i2c_lld_stop(I2CDriver *i2cp) {
   if (i2cp->state == I2C_READY) {
 #if defined(EFR32_DMA_REQUIRED)
     if (i2cp->dma_tx != NULL) {
-      dmaStreamFreeI(i2cp->dma_tx);
+      dmaStreamFree(i2cp->dma_tx);
       i2cp->dma_tx = NULL;
     }
     if (i2cp->dma_rx != NULL) {
-      dmaStreamFreeI(i2cp->dma_rx);
+      dmaStreamFree(i2cp->dma_rx);
       i2cp->dma_rx = NULL;
     }
 #endif

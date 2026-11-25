@@ -152,11 +152,11 @@ void spi_lld_start(SPIDriver *spip) {
     /* Allocate DMA streams if configured. */
 #if defined(EFR32_DMA_REQUIRED)
     if (efr32_spi_tx_dma_stream[idx] >= 0 && spip->dma_tx == NULL) {
-      spip->dma_tx = dmaStreamAllocI((uint32_t)efr32_spi_tx_dma_stream[idx],
+      spip->dma_tx = dmaStreamAlloc((uint32_t)efr32_spi_tx_dma_stream[idx],
                                      efr32_spi_dma_prio[idx], NULL, NULL);
     }
     if (efr32_spi_rx_dma_stream[idx] >= 0 && spip->dma_rx == NULL) {
-      spip->dma_rx = dmaStreamAllocI((uint32_t)efr32_spi_rx_dma_stream[idx],
+      spip->dma_rx = dmaStreamAlloc((uint32_t)efr32_spi_rx_dma_stream[idx],
                                      efr32_spi_dma_prio[idx], NULL, NULL);
     }
 #endif
@@ -170,11 +170,11 @@ void spi_lld_stop(SPIDriver *spip) {
   if (spip->state == SPI_READY) {
 #if defined(EFR32_DMA_REQUIRED)
     if (spip->dma_tx != NULL) {
-      dmaStreamFreeI(spip->dma_tx);
+      dmaStreamFree(spip->dma_tx);
       spip->dma_tx = NULL;
     }
     if (spip->dma_rx != NULL) {
-      dmaStreamFreeI(spip->dma_rx);
+      dmaStreamFree(spip->dma_rx);
       spip->dma_rx = NULL;
     }
 #endif

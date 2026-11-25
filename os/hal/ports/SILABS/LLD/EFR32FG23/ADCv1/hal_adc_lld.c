@@ -117,7 +117,7 @@ msg_t adc_lld_start(ADCDriver *adcp) {
     /* Allocate DMA stream for scan FIFO. */
 #if defined(EFR32_DMA_REQUIRED)
     if (adcp->dma == NULL) {
-      adcp->dma = dmaStreamAllocI(EFR32_ADC_IADC0_DMA_STREAM,
+      adcp->dma = dmaStreamAlloc(EFR32_ADC_IADC0_DMA_STREAM,
                                  EFR32_ADC_IADC0_DMA_PRIORITY, NULL, NULL);
     }
 #endif
@@ -137,7 +137,7 @@ void adc_lld_stop(ADCDriver *adcp) {
     nvicDisableVector(EFR32_IADC_NUMBER);
 
     if (adcp->dma != NULL) {
-      dmaStreamFreeI(adcp->dma);
+      dmaStreamFree(adcp->dma);
       adcp->dma = NULL;
     }
 

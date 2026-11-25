@@ -100,18 +100,33 @@ void lcd_lld_start(LCDDriver *lcdp, const LCDConfig *cfg) {
   if (lcdp->state != LCD_READY) {
     CMU->CLKEN1_SET = CMU_CLKEN1_LCD;
 
-    /* LCD clock: LFRCO selected by default in LCDCLKCTRL, but the LFRCO
-       itself must be enabled or the display gets no clock (blank screen). */
+    /* LCD clock: prefer LFXO (usually enabled for EM23GRPACLK); fall back to
+       LFRCO/ULFRCO only if those are enabled in mcuconf — selecting a clock
+       whose oscillator is off leaves the LCD LF domain dead (EN.DISABLING
+       never clears) and the display blank. */
+#if EFR32_LFXO_ENABLED
+    CMU->CLKEN0_SET = CMU_CLKEN0_LFXO;
+    CMU->LCDCLKCTRL = CMU_LCDCLKCTRL_CLKSEL_LFXO;
+#elif EFR32_LFRCO_ENABLED
     CMU->CLKEN0_SET = CMU_CLKEN0_LFRCO;
     CMU->LCDCLKCTRL = CMU_LCDCLKCTRL_CLKSEL_LFRCO;
+#else
+    CMU->CLKEN0_SET = CMU_CLKEN0_ULFRCO;
+    CMU->LCDCLKCTRL = CMU_LCDCLKCTRL_CLKSEL_ULFRCO;
+#endif
 
     /* Allocate segment/common outputs (fixed pin mapping on xG23). */
     GPIO->LCDSEG = cfg->seg_enable & _GPIO_LCDSEG_MASK;
     GPIO->LCDCOM = cfg->com_enable & _GPIO_LCDCOM_MASK;
 
     LCD->EN_CLR = LCD_EN_EN;
-    /* Wait until the disable has propagated (WSTATIC fields need EN=0). */
-    while ((LCD->EN & LCD_EN_DISABLING) != 0U) {}
+    /* Wait until the disable has propagated (WSTATIC fields need EN=0).
+       Bounded: if the LCD clock is dead this bit never clears, and an
+       unbounded spin here would hang the caller forever. */
+    {
+      volatile uint32_t sp = 4000000UL;
+      while (((LCD->EN & LCD_EN_DISABLING) != 0U) && (--sp != 0U)) {}
+    }
 
     /* LCDCLK prescaler (CTRL PRESCALE). */
     LCD->CTRL = (LCD->CTRL & ~_LCD_CTRL_PRESCALE_MASK)
@@ -163,7 +178,7 @@ void lcd_lld_start(LCDDriver *lcdp, const LCDConfig *cfg) {
     /* Allocate DMA stream for SEGD updates. */
 #if defined(EFR32_DMA_REQUIRED)
     if (EFR32_LCD_DMA_STREAM >= 0 && lcdp->dma == NULL) {
-      lcdp->dma = dmaStreamAllocI(EFR32_LCD_DMA_STREAM,
+      lcdp->dma = dmaStreamAlloc(EFR32_LCD_DMA_STREAM,
                                   EFR32_LCD_DMA_IRQ_PRIORITY, NULL, NULL);
     }
 #endif
@@ -178,7 +193,7 @@ void lcd_lld_stop(LCDDriver *lcdp) {
   if (lcdp->state == LCD_READY) {
 #if defined(EFR32_DMA_REQUIRED)
     if (lcdp->dma != NULL) {
-      dmaStreamFreeI(lcdp->dma);
+      dmaStreamFree(lcdp->dma);
       lcdp->dma = NULL;
     }
 #endif

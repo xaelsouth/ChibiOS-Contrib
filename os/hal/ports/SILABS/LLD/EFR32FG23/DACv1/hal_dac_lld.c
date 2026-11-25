@@ -134,7 +134,7 @@ msg_t dac_lld_start(DACDriver *dacp) {
 
 #if defined(EFR32_DMA_REQUIRED)
       if (dac.dma_ch1 == NULL) {
-        dac.dma_ch1 = dmaStreamAllocI(EFR32_DAC_DAC1_CH1_DMA_STREAM,
+        dac.dma_ch1 = dmaStreamAlloc(EFR32_DAC_DAC1_CH1_DMA_STREAM,
                                      EFR32_DAC_DAC1_IRQ_PRIORITY, NULL, NULL);
       }
 #endif
@@ -151,7 +151,7 @@ msg_t dac_lld_start(DACDriver *dacp) {
 
 #if defined(EFR32_DMA_REQUIRED)
       if (dac.dma_ch2 == NULL) {
-        dac.dma_ch2 = dmaStreamAllocI(EFR32_DAC_DAC1_CH2_DMA_STREAM,
+        dac.dma_ch2 = dmaStreamAlloc(EFR32_DAC_DAC1_CH2_DMA_STREAM,
                                      EFR32_DAC_DAC1_IRQ_PRIORITY, NULL, NULL);
       }
 #endif
@@ -185,7 +185,7 @@ void dac_lld_stop(DACDriver *dacp) {
       VDAC0->OUTCTRL_CLR = VDAC_OUTCTRL_MAINOUTENCH0;
       dac.clk_en_mask &= ~EFR32_DAC1_CLK_EN_SHIFT(0);
       if (dac.dma_ch1 != NULL) {
-        dmaStreamFreeI(dac.dma_ch1);
+        dmaStreamFree(dac.dma_ch1);
         dac.dma_ch1 = NULL;
       }
     }
@@ -196,7 +196,7 @@ void dac_lld_stop(DACDriver *dacp) {
       VDAC0->OUTCTRL_CLR = VDAC_OUTCTRL_MAINOUTENCH1;
       dac.clk_en_mask &= ~EFR32_DAC1_CLK_EN_SHIFT(1);
       if (dac.dma_ch2 != NULL) {
-        dmaStreamFreeI(dac.dma_ch2);
+        dmaStreamFree(dac.dma_ch2);
         dac.dma_ch2 = NULL;
       }
     }
