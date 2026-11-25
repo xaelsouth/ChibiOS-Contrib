@@ -55,7 +55,7 @@ include $(CHIBIOS_CONTRIB)/os/hal/hal.mk
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 # LETIMER0 is free for the GPT test (the system tick is SYSTICKv2/SYSRTC0)
 include $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/EFR32FG23/platform.mk
-include $(CHIBIOS_CONTRIB)/os/hal/boards/SILABS_EFR32FG23_DK2600A/board.mk
+include $(CHIBIOS_CONTRIB)/os/hal/boards/SILABS_EFR32FG23_BRD2600A_REVA03/board.mk
 include $(CHIBIOS)/os/rt/rt.mk
 include $(CHIBIOS)/os/common/ports/ARMv8-M-ML/compilers/GCC/mk/port.mk
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
