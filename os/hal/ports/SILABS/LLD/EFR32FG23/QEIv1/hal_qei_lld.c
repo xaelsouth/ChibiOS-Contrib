@@ -35,14 +35,26 @@ void qei_lld_init(void) {
 }
 
 /* Wait for PCNT SYNCBUSY to clear. In external-clock mode (CLKSEL=PCNTS0)
-   the LF register sync runs on the S0 clock, so we must feed S0 pulses via
-   PRS SWPULSE on the configured channel, otherwise SYNCBUSY never clears and
-   writes to PCNT registers would stall the bus (per the xG23 PCNT example). */
+   the LF register sync runs on the S0 clock, so we must feed S0 edges on the
+   configured PRS channel, otherwise SYNCBUSY never clears and writes to PCNT
+   registers would stall the bus.
+   NOTE: ASYNC_SWPULSE alone is a one-EM01GRPACLK-cycle (~50 ns) pulse — too
+   narrow for the CMU PCNTS0 glitch-free mux synchronizer, so switching
+   CLKSEL to PCNTS0 while S0 is idle never completes and the domain stays
+   dead (verified on BRD2600A). Toggle ASYNC_SWLEVEL with a wide high/low
+   instead: those edges reliably clock both the CMU switch and the PCNT LF
+   sync domain. SWPULSE pulses still count in CNT once the domain is alive. */
 static void pcnt_sync_wait(uint32_t s0prs) {
-  volatile uint32_t guard = 4000000UL;
+  /* ~1 ms per level at 19 MHz HCLK: wide enough for the CMU PCNTS0 mux
+     synchronizer (narrow SWPULSE pulses get swallowed — verified on
+     BRD2600A). Bounded: worst case ~0.4 s when the domain is dead. */
+  volatile uint32_t guard = 200U;
   while (((PCNT0->SYNCBUSY & _PCNT_SYNCBUSY_MASK) != 0U) && (--guard != 0U)) {
     if (s0prs < 12U) {
-      PRS->ASYNC_SWPULSE = (1U << s0prs);
+      PRS->ASYNC_SWLEVEL = (1U << s0prs);
+      for (volatile uint32_t d = 0U; d < 20000U; d++) {}
+      PRS->ASYNC_SWLEVEL = 0U;
+      for (volatile uint32_t d = 0U; d < 20000U; d++) {}
     }
   }
 }
@@ -78,8 +90,21 @@ void qei_lld_start(QEIDriver *qp) {
       PRS->CONSUMER_PCNT0_S1IN = cfg->s1prs;
     }
     pcnt_sync_wait(12U);   /* CFG write syncs on EM23GRPACLK */
+    /* The CMU glitch-free mux needs edges on the NEW clock around the switch:
+       if S0 is idle when CLKSEL is set to PCNTS0, the switch never completes
+       and the PCNT LF domain stays dead (SYNCBUSY stuck — verified on
+       BRD2600A). Feed a few wide S0 edges (SWLEVEL toggles) before and after
+       the switch. */
+    if (cfg->s0prs < 12U) {
+      for (int i = 0; i < 8; i++) {
+        PRS->ASYNC_SWLEVEL = (1U << cfg->s0prs);
+        for (volatile uint32_t d = 0U; d < 20000U; d++) {}
+        PRS->ASYNC_SWLEVEL = 0U;
+        for (volatile uint32_t d = 0U; d < 20000U; d++) {}
+      }
+    }
     CMU->PCNT0CLKCTRL = CMU_PCNT0CLKCTRL_CLKSEL_PCNTS0;
-    /* now the LF domain is clocked from S0: pump pulses to let it sync */
+    /* now the LF domain is clocked from S0: pump edges to let it sync */
     pcnt_sync_wait(cfg->s0prs);
   }
   else {
