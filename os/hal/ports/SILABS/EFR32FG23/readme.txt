@@ -52,7 +52,7 @@ How to check all projects at once:
     done
 
 (Latest audit: 35/35 build OK. Previously broken demos fixed:
-RT-EFR32FG23B010F512-DK2600A — chconf.h CH_CFG_SAFETY_CHECK_HOOK, halconf.h
+RT-EFR32FG23B010F512-BRD2600A — chconf.h CH_CFG_SAFETY_CHECK_HOOK, halconf.h
 bumped to VER_9_1, Makefile uses contrib hal.mk + streams.mk;
 RT-EFR32FG14P-SLWSTK6061B — startup mk gecko SDK paths, halconf VER_9_1,
 chconf hook, FG14P port de-emlib'ed (raw CMU registers, escape hatch).)
