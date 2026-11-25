@@ -234,9 +234,11 @@
      not have to stay valid until the transfer ends). */                    \
   uint8_t dma_tx_buf[EFR32_SIO_DMA_TX_BUFSIZE];                             \
   /* True while a DMA TX transfer is in flight. */                         \
-  volatile bool dma_tx_busy
+  volatile bool dma_tx_busy;
+
 #else
 #define sio_lld_dma_fields
+
 #endif
 
 /**
@@ -247,7 +249,8 @@
   void *usart;                                                              \
 /* Clock frequency for the associated USART/UART.*/                         \
   uint32_t clock;                                                           \
-  sio_lld_dma_fields
+  sio_lld_dma_fields;
+
 
 /**
  * @brief   Low level fields of the SIO configuration structure.
@@ -359,7 +362,8 @@
   uint32_t baud;    /**< Desired baud rate. */                              \
   uint32_t cfg0;    /**< EUSART_CFG _or_ USART_CTRL. */                     \
   uint32_t framecfg; /**< EUSART_FRAMECFG _or_ USART_FRAME. */             \
-  efr32_irda_config_fields
+  efr32_irda_config_fields;
+
 
 /**
  * @brief   Determines the state of the RX FIFO.

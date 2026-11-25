@@ -69,10 +69,12 @@
 
 #define efl_lld_driver_fields                                               \
   /* Pointer to MSC registers (always MSC). */                             \
-  void                     *msc
+  void                     *msc;
+
 
 #define efl_lld_config_fields                                               \
-  uint32_t                  dummy
+  uint32_t                  dummy;
+
 
 /*===========================================================================*/
 /* External declarations.                                                    */

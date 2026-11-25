@@ -166,7 +166,7 @@ typedef struct {
  */
 #define rtc_lld_driver_fields                                                     \
   volatile efr32_rtc_buram_state_t *buram_state; /**< Persistent state in BURAM. */ \
-  rtccb_t                  callback       /**< Callback function. */
+  rtccb_t                  callback;       /**< Callback function. */
 
 /*===========================================================================*/
 /* Driver macros.                                                            */

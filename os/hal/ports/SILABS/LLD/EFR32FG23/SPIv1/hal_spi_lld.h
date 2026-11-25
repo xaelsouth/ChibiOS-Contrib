@@ -31,6 +31,12 @@
 /* Driver pre-compile time settings.                                         */
 /*===========================================================================*/
 
+/* This driver does not support circular (DMA loopback) transfers. The core
+   hal_spi_v1.h tests this macro with #if, so it must always be defined. */
+#if !defined(SPI_SUPPORTS_CIRCULAR) || defined(__DOXYGEN__)
+#define SPI_SUPPORTS_CIRCULAR   FALSE
+#endif
+
 #if !defined(EFR32_SPI_USE_EUSART1) || defined(__DOXYGEN__)
 #define EFR32_SPI_USE_EUSART1   FALSE
 #endif
@@ -102,7 +108,8 @@
   /* EUSART CFG0 register value (clock mode, oversampling). */             \
   uint32_t                  cfg0;                                          \
   /* EUSART FRAMECFG register value (frame format). */                     \
-  uint32_t                  framecfg
+  uint32_t                  framecfg;
+
 
 /**
  * @brief   Low level fields of the SPI driver structure.
@@ -115,7 +122,8 @@
   /* DMA TX stream (NULL if not allocated). */                             \
   const void               *dma_tx;                                        \
   /* DMA RX stream (NULL if not allocated). */                             \
-  const void               *dma_rx
+  const void               *dma_rx;
+
 
 /*===========================================================================*/
 /* External declarations.                                                    */

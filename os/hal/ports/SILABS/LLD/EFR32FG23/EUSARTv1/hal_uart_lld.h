@@ -122,7 +122,8 @@ typedef struct {
   /* UART instance index (0=EUSART0, 1=EUSART1, 2=EUSART2, 3=USART0). */   \
   uint32_t                  index;                                         \
   /* Clock frequency for baud rate calculation. */                          \
-  uint32_t                  clock
+  uint32_t                  clock;
+
 
 /*===========================================================================*/
 /* External declarations.                                                    */

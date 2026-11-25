@@ -86,13 +86,15 @@ typedef enum {
   /* Reference selection (0=VBGR, 1=VREF, 3=VDDX). */                      \
   uint8_t                   refsel;                                       \
   /* Oversampling (0=HISPD2 ... 6=HISPD128). */                             \
-  uint8_t                   osrhs
+  uint8_t                   osrhs;
+
 
 /**
  * @brief   ADC driver-level config fields.
  */
 #define adc_lld_config_fields                                               \
-  uint32_t                  dummy
+  uint32_t                  dummy;
+
 
 /**
  * @brief   ADC driver structure fields.
@@ -103,7 +105,8 @@ typedef enum {
   /* Associated DMA stream. */                                              \
   const efr32_dma_stream_t  *dma;                                           \
   /* Error flags. */                                                        \
-  adcerror_t                errors
+  adcerror_t                errors;
+
 
 /*===========================================================================*/
 /* External declarations.                                                    */

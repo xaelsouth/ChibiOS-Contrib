@@ -101,7 +101,8 @@ typedef uint32_t gptfreq_t;
   TIMER_TypeDef             *timer;      /* TIMERv1, NULL for LETIMER */   \
   LETIMER_TypeDef           *letimer;    /* LETIMERv1, NULL for TIMER */   \
   uint32_t                  index;                                         \
-  uint32_t                  clock
+  uint32_t                  clock;
+
 
 /**
  * @brief   Driver configuration structure.
