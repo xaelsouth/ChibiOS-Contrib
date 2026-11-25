@@ -601,7 +601,7 @@ void sio_lld_set_baud(SIODriver *siop, uint32_t baud, uint32_t irda_mode) {
     return;
 
 #if EFR32_SIO_USE_EUSART1 == TRUE || EFR32_SIO_USE_EUSART2 == TRUE || EFR32_SIO_USE_EUSART3 == TRUE
-  if (siop->usart != NULL) {
+  if (!_sio_lld_is_usart(siop)) {
     EUSART_TypeDef *usart = (EUSART_TypeDef *)siop->usart;
     uint32_t ovs = _sio_lld_get_ovs(
         (usart->CFG0 & _EUSART_CFG0_OVS_MASK) >> _EUSART_CFG0_OVS_SHIFT);
@@ -634,7 +634,7 @@ void sio_lld_set_baud(SIODriver *siop, uint32_t baud, uint32_t irda_mode) {
   }
 #endif
 #if EFR32_SIO_USE_USART1 == TRUE
-  if (siop->usart != NULL) {
+  if (_sio_lld_is_usart(siop)) {
     USART_TypeDef *usart = (USART_TypeDef *)siop->usart;
     uint32_t ovs = _sio_lld_get_ovs(
         (usart->CTRL & _USART_CTRL_OVS_MASK) >> _USART_CTRL_OVS_SHIFT);
