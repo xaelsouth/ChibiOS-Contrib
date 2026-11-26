@@ -144,6 +144,42 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
                        ACMP_INPUTCTRL_NEGSEL_VREFDIVAVDD;
   }
 
+  /* VDAC0 setup for DACOUT (LC) excitation: when any used channel has
+     EXMODE=DACOUT, LESENSE triggers VDAC0 CH0 conversions (PERCTRL
+     DACCONVTRIG) and switches the DAC output onto the channel's excite pin.
+     The DAC output itself must be routed to a GPIO over ABUS: route CH0
+     main output to cfg->dac_port/dac_pin (xG23 RM 29.3.1 VDAC interface,
+     e.g. BRD2600A LC sensor: PB0 = VDAC0.CH0_MAIN_OUT). */
+  bool need_dac = (cfg->dac_port != 0xFFU);
+  if (need_dac) {
+    bool any_dacout = false;
+    for (uint32_t i = 0; i < cfg->num_channels && i < EFR32_LESENSE_MAX_CHANNELS; i++) {
+      if (cfg->channels[i].port != 0xFFU &&
+          ((cfg->channels[i].interact & _LESENSE_CH_INTERACT_EXMODE_MASK) ==
+           LESENSE_CH_INTERACT_EXMODE_DACOUT)) {
+        any_dacout = true;
+        break;
+      }
+    }
+    need_dac = any_dacout;
+  }
+  if (need_dac) {
+    CMU->CLKEN1_SET = CMU_CLKEN1_VDAC0;
+    /* VDAC0 needs a running clock source (reset default is DISABLED, which
+       bus-faults register writes) — use HFRCOEM23, always available. */
+    CMU->VDAC0CLKCTRL = (CMU->VDAC0CLKCTRL & ~_CMU_VDAC0CLKCTRL_CLKSEL_MASK) |
+                        CMU_VDAC0CLKCTRL_CLKSEL_HFRCOEM23;
+    VDAC0_S->CH0CFG = VDAC_CH0CFG_CONVMODE_CONTINUOUS |
+                      VDAC_CH0CFG_TRIGMODE_LESENSE |
+                      VDAC_CH0CFG_POWERMODE_HIGHPOWER;
+    /* emlib order: EN first, OUTCTRL after (OUTCTRL faults while EN=0). */
+    VDAC0_S->EN_SET = VDAC_EN_EN;
+    VDAC0_S->OUTCTRL = VDAC_OUTCTRL_MAINOUTENCH0 |
+                       ((uint32_t)cfg->dac_port << _VDAC_OUTCTRL_ABUSPORTSELCH0_SHIFT) |
+                       ((uint32_t)cfg->dac_pin  << _VDAC_OUTCTRL_ABUSPINSELCH0_SHIFT);
+    VDAC0_S->CMD_SET = VDAC_CMD_CH0EN;   /* enable channel 0 (LESENSE-triggered) */
+  }
+
   /* Clear result buffer and flags. */
   LESENSE->CMD_SET = LESENSE_CMD_CLEARBUF;
   LESENSE->IF_CLR = _LESENSE_IF_MASK;

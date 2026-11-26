@@ -141,6 +141,15 @@ typedef struct {
   uint8_t   num_channels; /**< Number of active channels (1-16). */
   LESENSEChannelConfig channels[EFR32_LESENSE_MAX_CHANNELS];
   /**
+   * @brief   VDAC0 CH0 ABUS route for DACOUT excitation (LC sensors).
+   * @details When any used channel has EXMODE=DACOUT, the LLD clocks VDAC0,
+   *          sets CH0 trigger mode = LESENSE and routes CH0 main output to
+   *          this port/pin (VDAC0->OUTCTRL ABUSPORTSELCH0/ABUSPINSELCH0 +
+   *          MAINOUTENCH0). 0xFF/0xFF disables the VDAC setup.
+   */
+  uint8_t   dac_port;
+  uint8_t   dac_pin;
+  /**
    * @brief   Callback invoked on scan complete (channel hit or buffer full).
    * @param[in] result  SCANRES register value (bitmask of hit channels).
    * @note    If NULL, no interrupt is enabled at all: the driver runs fully
