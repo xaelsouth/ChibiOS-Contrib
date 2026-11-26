@@ -222,9 +222,13 @@ msg_t i2c_lld_master_transmit_timeout(I2CDriver *i2cp, i2caddr_t addr,
   i2cp->rxidx = 0;
   i2cp->errors = 0;
 
-  /* Enable interrupts for the transfer. */
+  /* Enable interrupts for the transfer. TXBL is deliberately NOT enabled:
+     it is a level flag that stays asserted while TXBUF is empty, so on a
+     NACK/error path (thread cannot run to clear IEN) it would re-fire
+     forever and starve the kernel (verified on BRD2600A). TX bytes are
+     fed on ACK, RX bytes on RXDATAV — TXBL is not needed. */
   i2c->IEN_SET = I2C_IEN_ACK | I2C_IEN_NACK | I2C_IEN_MSTOP |
-                  I2C_IEN_ARBLOST | I2C_IEN_RXDATAV | I2C_IEN_TXBL;
+                  I2C_IEN_ARBLOST | I2C_IEN_RXDATAV;
 
   /* Send START + address (write). */
   i2c->TXDATA = (addr << 1);
@@ -254,6 +258,14 @@ msg_t i2c_lld_master_receive_timeout(I2CDriver *i2cp, i2caddr_t addr,
 void i2c_lld_serve_interrupt(I2CDriver *i2cp) {
   I2C_TypeDef *i2c = i2cp->i2c;
   uint32_t isr = i2c->IF;
+
+  /* TXBL is a level interrupt: while TXBUF is empty it stays asserted and
+     re-fires forever, and since the I2C IRQ outranks PendSV/SysTick the
+     kernel starves (verified on BRD2600A). This ISR never sends on TXBL
+     (TX bytes go out on ACK), so mask it whenever it shows up. */
+  if ((isr & I2C_IF_TXBL) != 0U) {
+    i2c->IEN_CLR = I2C_IEN_TXBL;
+  }
 
   /* NACK or arbitration lost → error. */
   if ((isr & I2C_IF_NACK) != 0U) {
