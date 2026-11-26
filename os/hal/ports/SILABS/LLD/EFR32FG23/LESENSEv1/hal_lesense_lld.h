@@ -106,10 +106,17 @@ typedef enum {
  * @brief   LESENSE channel configuration.
  */
 typedef struct {
-  uint8_t   pin;          /**< GPIO pin for this channel (0-15 maps to ch0-15). */
-  uint32_t  interact;     /**< CHx_INTERACT value (threshold, exmode, altex...). */
+  uint8_t   port;         /**< GPIO port index of the sense pad (0=A, 1=B, ...);
+                               used for the ACMP POSSEL port base (EXTPx) when
+                               PERCTRL.ACMPxMODE is MUX/MUXTHRES. */
+  uint8_t   pin;          /**< GPIO pad number of the sense pin (0-15); goes to
+                               CHx_INTERACT.OFFSET (pin within the port). */
+  uint32_t  timing;       /**< CHx_TIMING value (EXTIME/SAMPLEDLY/MEASUREDLY),
+                               0 = reset default. */
+  uint32_t  interact;     /**< CHx_INTERACT value (threshold, exmode, altex...);
+                               OFFSET is OR-ed in from pin. */
   uint32_t  evalcfg;      /**< CHx_EVALCFG value (mode, etc.). */
-  uint32_t  evalthres;   /**< CHx_EVALTHRES value. */
+  uint32_t  evalthres;    /**< CHx_EVALTHRES value. */
 } LESENSEChannelConfig;
 
 /**

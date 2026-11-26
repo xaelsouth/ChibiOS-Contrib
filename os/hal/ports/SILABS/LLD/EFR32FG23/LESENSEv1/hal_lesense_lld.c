@@ -101,14 +101,48 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
     }
   }
 
-  /* Configure each channel. */
+  /* Configure each channel. channels[] is indexed by channel number; an
+     entry with port == 0xFF is unused (config not written, CHEN bit not
+     set). */
+  int8_t acmp0port = -1, acmp1port = -1;
   for (uint32_t i = 0; i < cfg->num_channels && i < EFR32_LESENSE_MAX_CHANNELS; i++) {
-    LESENSE->CH[i].INTERACT  = cfg->channels[i].interact;
+    if (cfg->channels[i].port == 0xFFU) {
+      continue;
+    }
+    LESENSE->CH[i].TIMING    = cfg->channels[i].timing;
+    /* OFFSET = pad number within the port; the ACMP positive mux is driven
+       by LESENSE from POSSEL port base + this offset (xG23 RM 29.3.1). */
+    LESENSE->CH[i].INTERACT  = cfg->channels[i].interact |
+                               (((uint32_t)cfg->channels[i].pin & 0xFU) <<
+                                _LESENSE_CH_INTERACT_OFFSET_SHIFT);
     LESENSE->CH[i].EVALCFG   = cfg->channels[i].evalcfg;
     LESENSE->CH[i].EVALTHRES = cfg->channels[i].evalthres;
     chen |= (1UL << i);
+    if (i < 8U) {
+      acmp0port = (int8_t)cfg->channels[i].port;
+    } else {
+      acmp1port = (int8_t)cfg->channels[i].port;
+    }
   }
   LESENSE->CHEN = chen;
+
+  /* ACMP setup for LESENSE: channels 0-7 are measured by ACMP0, 8-15 by
+     ACMP1. With ACMPxMODE = MUX/MUXTHRES in PERCTRL, LESENSE drives the
+     positive mux and (MUXTHRES) the VREFDIV level; the ACMP itself must be
+     clocked, enabled and pointed at the right port base (EXTPx) with the
+     negative input on the VREFDIV divider. */
+  if ((cfg->perctrl & _LESENSE_PERCTRL_ACMP0MODE_MASK) != 0U && acmp0port >= 0) {
+    CMU->CLKEN1_SET = CMU_CLKEN1_ACMP0;
+    ACMP0->EN_SET = ACMP_EN_EN;
+    ACMP0->INPUTCTRL = (0x50UL + (uint32_t)acmp0port) |  /* EXTPx */
+                       ACMP_INPUTCTRL_NEGSEL_VREFDIVAVDD;
+  }
+  if ((cfg->perctrl & _LESENSE_PERCTRL_ACMP1MODE_MASK) != 0U && acmp1port >= 0) {
+    CMU->CLKEN1_SET = CMU_CLKEN1_ACMP1;
+    ACMP1->EN_SET = ACMP_EN_EN;
+    ACMP1->INPUTCTRL = (0x50UL + (uint32_t)acmp1port) |
+                       ACMP_INPUTCTRL_NEGSEL_VREFDIVAVDD;
+  }
 
   /* Clear result buffer and flags. */
   LESENSE->CMD_SET = LESENSE_CMD_CLEARBUF;
