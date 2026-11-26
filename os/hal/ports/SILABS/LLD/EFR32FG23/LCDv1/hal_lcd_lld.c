@@ -79,6 +79,15 @@ static void lcd_lld_write_segd_regs(LCDDriver *lcdp) {
   LCD->SEGD1 = lcdp->segd_shadow[1];
   LCD->SEGD2 = lcdp->segd_shadow[2];
   LCD->SEGD3 = lcdp->segd_shadow[3];
+  /* Push the shadow into the display pipeline: with UPDATECTRL.AUTOLOAD
+     MANUAL the panel only loads SEGD on an explicit LOAD command — without
+     this, updates after the first one never reach the glass. */
+  LCD->CMD = LCD_CMD_LOAD;
+  /* Bounded wait for the load sync to finish. */
+  {
+    volatile uint32_t sp = 100000UL;
+    while (((LCD->STATUS & LCD_STATUS_LOADBUSY) != 0U) && (--sp != 0U)) {}
+  }
 }
 
 /*===========================================================================*/
@@ -216,10 +225,12 @@ void lcd_lld_stop(LCDDriver *lcdp) {
 }
 
 void lcd_lld_clear(LCDDriver *lcdp) {
+  /* Shadow only — per the hal_lcd.h contract lcdClear() does not write HW;
+     a direct SEGD write here, immediately followed by the update write,
+     leaves the panel blank on FG23. */
   for (int i = 0; i < EFR32_LCD_NUM_SEGD; i++) {
     lcdp->segd_shadow[i] = 0U;
   }
-  lcd_lld_write_segd_regs(lcdp);
 }
 
 void lcd_lld_update(LCDDriver *lcdp) {
