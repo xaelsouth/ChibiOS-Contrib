@@ -114,11 +114,12 @@ msg_t adc_lld_start(ADCDriver *adcp) {
     IADC0->IF_CLR = _IADC_IF_MASK;
     IADC0->IEN_CLR = _IADC_IEN_MASK;
 
-    /* Allocate DMA stream for scan FIFO. */
+    /* Allocate DMA stream for scan FIFO. I-class: adc_lld_start runs
+       under adcStart()'s osalSysLock(). */
 #if defined(EFR32_DMA_REQUIRED)
     if (adcp->dma == NULL) {
-      adcp->dma = dmaStreamAlloc(EFR32_ADC_IADC0_DMA_STREAM,
-                                 EFR32_ADC_IADC0_DMA_PRIORITY, NULL, NULL);
+      adcp->dma = dmaStreamAllocI(EFR32_ADC_IADC0_DMA_STREAM,
+                                  EFR32_ADC_IADC0_DMA_PRIORITY, NULL, NULL);
     }
 #endif
 
@@ -137,7 +138,7 @@ void adc_lld_stop(ADCDriver *adcp) {
     nvicDisableVector(EFR32_IADC_NUMBER);
 
     if (adcp->dma != NULL) {
-      dmaStreamFree(adcp->dma);
+      dmaStreamFreeI(adcp->dma);   /* under adcStop()'s lock */
       adcp->dma = NULL;
     }
 
