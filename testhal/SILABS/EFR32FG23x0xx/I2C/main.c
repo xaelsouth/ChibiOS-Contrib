@@ -85,6 +85,7 @@ int main(void) {
 
   int found = 0;
   uint8_t dummy = 0;
+  i2cAcquireBus(&I2CD1);
   for (uint8_t addr = 0; addr < 0x80; addr++) {
     msg_t msg = i2cMasterTransmitTimeout(&I2CD1, addr, &dummy, 1, NULL, 0, TIME_MS2I(10));
     if (msg == MSG_OK) {
@@ -92,6 +93,40 @@ int main(void) {
       found++;
     }
   }
+  i2cReleaseBus(&I2CD1);
   PRINTF("scan done, %d device(s)\r\n", found);
+
+  /* Si7021 probes at 0x40: pure TX, pure RX, combined TX+RX. After each,
+     dump the I2C0 state machine and reset the driver. */
+  {
+    static const uint8_t idcmd[] = { 0xFC, 0xC9 };
+    uint8_t rx[6];
+    msg_t msg;
+
+    i2cAcquireBus(&I2CD1);
+    msg = i2cMasterTransmitTimeout(&I2CD1, 0x40, idcmd, sizeof(idcmd),
+                                   NULL, 0, TIME_MS2I(200));
+    i2cReleaseBus(&I2CD1);
+    PRINTF("tx-only: msg=%d STATE=%08lX IF=%08lX STATUS=%08lX\r\n", (int)msg,
+           (unsigned long)I2C0->STATE, (unsigned long)I2C0->IF,
+           (unsigned long)I2C0->STATUS);
+    i2cStop(&I2CD1); i2cStart(&I2CD1, &i2c_cfg);
+
+    i2cAcquireBus(&I2CD1);
+    msg = i2cMasterReceiveTimeout(&I2CD1, 0x40, rx, sizeof(rx), TIME_MS2I(200));
+    i2cReleaseBus(&I2CD1);
+    PRINTF("rx-only: msg=%d rx=%02X %02X %02X STATE=%08lX IF=%08lX\r\n",
+           (int)msg, rx[0], rx[1], rx[2],
+           (unsigned long)I2C0->STATE, (unsigned long)I2C0->IF);
+    i2cStop(&I2CD1); i2cStart(&I2CD1, &i2c_cfg);
+
+    i2cAcquireBus(&I2CD1);
+    msg = i2cMasterTransmitTimeout(&I2CD1, 0x40, idcmd, sizeof(idcmd),
+                                   rx, sizeof(rx), TIME_MS2I(200));
+    i2cReleaseBus(&I2CD1);
+    PRINTF("tx+rx: msg=%d rx=%02X %02X %02X %02X %02X %02X STATE=%08lX IF=%08lX\r\n",
+           (int)msg, rx[0], rx[1], rx[2], rx[3], rx[4], rx[5],
+           (unsigned long)I2C0->STATE, (unsigned long)I2C0->IF);
+  }
   while (true) chThdSleepMilliseconds(1000);
 }

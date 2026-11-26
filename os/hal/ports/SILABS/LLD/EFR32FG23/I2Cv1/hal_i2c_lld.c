@@ -165,15 +165,17 @@ void i2c_lld_start(I2CDriver *i2cp) {
 
     nvicEnableVector(efr32_i2c_irqn[index], efr32_i2c_irqprio[index]);
 
-    /* Allocate DMA streams if configured. */
+    /* Allocate DMA streams if configured. I-class variants: i2c_lld_start
+       runs under i2cStart()'s osalSysLock(), dmaStreamAlloc() would
+       double-lock (SV#4 panic). */
 #if defined(EFR32_DMA_REQUIRED)
     if (efr32_i2c_tx_dma_stream[index] >= 0 && i2cp->dma_tx == NULL) {
-      i2cp->dma_tx = dmaStreamAlloc(
+      i2cp->dma_tx = dmaStreamAllocI(
           (uint32_t)efr32_i2c_tx_dma_stream[index],
           efr32_i2c_dma_prio[index], NULL, NULL);
     }
     if (efr32_i2c_rx_dma_stream[index] >= 0 && i2cp->dma_rx == NULL) {
-      i2cp->dma_rx = dmaStreamAlloc(
+      i2cp->dma_rx = dmaStreamAllocI(
           (uint32_t)efr32_i2c_rx_dma_stream[index],
           efr32_i2c_dma_prio[index], NULL, NULL);
     }
@@ -187,11 +189,11 @@ void i2c_lld_stop(I2CDriver *i2cp) {
   if (i2cp->state == I2C_READY) {
 #if defined(EFR32_DMA_REQUIRED)
     if (i2cp->dma_tx != NULL) {
-      dmaStreamFree(i2cp->dma_tx);
+      dmaStreamFreeI(i2cp->dma_tx);   /* runs under i2cStop()'s lock */
       i2cp->dma_tx = NULL;
     }
     if (i2cp->dma_rx != NULL) {
-      dmaStreamFree(i2cp->dma_rx);
+      dmaStreamFreeI(i2cp->dma_rx);
       i2cp->dma_rx = NULL;
     }
 #endif
@@ -221,6 +223,9 @@ msg_t i2c_lld_master_transmit_timeout(I2CDriver *i2cp, i2caddr_t addr,
   i2cp->rxlen = rxbytes;
   i2cp->rxidx = 0;
   i2cp->errors = 0;
+  /* Pure read (no TX phase): send the address with the R bit straight away.
+     Combined TX+RX: start with the W bit, repeated START with R bit later. */
+  i2cp->rxstarted = (txbytes == 0U && rxbytes > 0U) ? 1U : 0U;
 
   /* Enable interrupts for the transfer. TXBL is deliberately NOT enabled:
      it is a level flag that stays asserted while TXBUF is empty, so on a
@@ -230,15 +235,18 @@ msg_t i2c_lld_master_transmit_timeout(I2CDriver *i2cp, i2caddr_t addr,
   i2c->IEN_SET = I2C_IEN_ACK | I2C_IEN_NACK | I2C_IEN_MSTOP |
                   I2C_IEN_ARBLOST | I2C_IEN_RXDATAV;
 
-  /* Send START + address (write). */
-  i2c->TXDATA = (addr << 1);
+  /* Send START + address (R bit set for a pure read). */
+  i2c->TXDATA = (uint32_t)(addr << 1) |
+               ((txbytes == 0U && rxbytes > 0U) ? 1U : 0U);
   i2c->CMD = I2C_CMD_START;
 
   /* Wait for completion. */
   msg = osalThreadSuspendTimeoutS(&i2cp->thread, timeout);
 
   i2c->IEN = 0;
-  i2c->CMD = I2C_CMD_ABORT;
+  if (msg == MSG_TIMEOUT || i2cp->errors != 0U) {
+    i2c->CMD = I2C_CMD_ABORT;   /* clean up a stuck transaction */
+  }
 
   if (msg == MSG_TIMEOUT) {
     return MSG_TIMEOUT;
@@ -253,6 +261,19 @@ msg_t i2c_lld_master_receive_timeout(I2CDriver *i2cp, i2caddr_t addr,
                                       uint8_t *rxbuf, size_t rxbytes,
                                       systime_t timeout) {
   return i2c_lld_master_transmit_timeout(i2cp, addr, NULL, 0, rxbuf, rxbytes, timeout);
+}
+
+/* Issue the command for the next received byte: ACK it, or NACK the last
+   one and then STOP. Called with rxidx = number of bytes already stored. */
+static void i2c_lld_read_cmd(I2CDriver *i2cp) {
+  I2C_TypeDef *i2c = i2cp->i2c;
+  if (i2cp->rxidx >= i2cp->rxlen) {
+    i2c->CMD = I2C_CMD_STOP;
+  } else if (i2cp->rxidx == i2cp->rxlen - 1U) {
+    i2c->CMD = I2C_CMD_NACK;   /* next (last) byte is NACKed */
+  } else {
+    i2c->CMD = I2C_CMD_ACK;
+  }
 }
 
 void i2c_lld_serve_interrupt(I2CDriver *i2cp) {
@@ -281,29 +302,32 @@ void i2c_lld_serve_interrupt(I2CDriver *i2cp) {
     return;
   }
 
-  /* ACK received. */
+  /* ACK received (end of an address/byte ACK phase). */
   if ((isr & I2C_IF_ACK) != 0U) {
     i2c->IF_CLR = I2C_IF_ACK;
 
     if (i2cp->dma_active != 0U) {
-      /* DMA is handling data bytes. Just ACK and continue. */
+      /* DMA is handling data bytes. Just continue. */
       i2c->CMD = I2C_CMD_CONT;
     }
-    /* If we have TX data, send next byte. */
+    /* Write phase: send next TX byte. */
     else if (i2cp->txidx < i2cp->txlen) {
       i2c->TXDATA = i2cp->txbuf[i2cp->txidx++];
       i2c->CMD = I2C_CMD_CONT;
     }
-    /* If we have RX data to receive, switch to read. */
-    else if (i2cp->rxidx < i2cp->rxlen) {
-      if (i2cp->rxidx == i2cp->rxlen - 1U) {
-        /* Last byte: NACK + STOP. */
-        i2c->CMD = I2C_CMD_NACK;
-      } else {
-        i2c->CMD = I2C_CMD_ACK;
-      }
+    /* Write phase done, read phase pending: repeated START + address|R.
+       On Series 2 the START command must be written BEFORE TXDATA for a
+       repeated start, otherwise the address byte would go out first. */
+    else if (i2cp->rxlen > 0U && i2cp->rxstarted == 0U) {
+      i2c->CMD = I2C_CMD_START;
+      i2c->TXDATA = (uint32_t)((i2cp->addr << 1) | 1U);
+      i2cp->rxstarted = 1U;
     }
-    /* All done. */
+    /* Read address ACKed: arm the command for the first received byte. */
+    else if (i2cp->rxlen > 0U) {
+      i2c_lld_read_cmd(i2cp);
+    }
+    /* Pure write done. */
     else {
       i2c->CMD = I2C_CMD_STOP;
     }
@@ -311,14 +335,10 @@ void i2c_lld_serve_interrupt(I2CDriver *i2cp) {
 
   /* RX data available (only when not in DMA mode). */
   if ((isr & I2C_IF_RXDATAV) != 0U) {
-    if (i2cp->dma_active == 0U) {
-      if (i2cp->rxidx < i2cp->rxlen) {
-        i2cp->rxbuf[i2cp->rxidx++] = (uint8_t)i2c->RXDATA;
-      }
-      if (i2cp->rxidx >= i2cp->rxlen && i2cp->txidx >= i2cp->txlen) {
-        i2c->IF_CLR = I2C_IF_RXDATAV;
-        i2c_lld_wakeup_done(i2cp);
-      }
+    if (i2cp->dma_active == 0U && i2cp->rxidx < i2cp->rxlen) {
+      i2cp->rxbuf[i2cp->rxidx++] = (uint8_t)i2c->RXDATA;
+      i2c->IF_CLR = I2C_IF_RXDATAV;   /* Series 2: SW must clear it */
+      i2c_lld_read_cmd(i2cp);
     }
   }
 

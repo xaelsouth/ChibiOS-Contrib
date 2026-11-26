@@ -182,6 +182,11 @@ struct I2CDriver {
    * @brief   Non-zero when DMA is handling data phase.
    */
   uint32_t                  dma_active;
+  /**
+   * @brief   Non-zero once the read address (repeated START with R bit)
+   *          has been sent.
+   */
+  uint32_t                  rxstarted;
 };
 
 /*===========================================================================*/
