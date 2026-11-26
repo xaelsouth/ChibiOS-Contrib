@@ -93,19 +93,21 @@ void boardInit(void) {
  * Linear segment index = COM * 20 + segment line.
  *
  * Digit map from SL_SEGMENT_LCD_EFM_DISPLAY_DEF (ce322_1002 config),
- * segment order a..g; digit pos 0 = rightmost (#1) .. pos 4 = leftmost (#5).
+ * segment order a..g; map index 0 = leftmost (#5) .. index 4 = rightmost (#1).
  */
+/* Order: index 0 = leftmost digit (#5) .. index 4 = rightmost (#1), matching
+   the SDK EFM_DISPLAY_DEF layout and lcd_write_number() (pos 0 = leftmost). */
 static const uint8_t board_lcd_digit_map[5][8] = {
-  /* #1: com={3,2,0,0,1,2,1} bit={S00,S01,S01,S00,S00,S00,S01} */
-  { 60, 41,  1,  0, 20, 40, 21, 0xFF },
-  /* #2: com={3,3,1,0,1,2,2} bit={S02,S03,S03,S02,S02,S02,S03} */
-  { 64, 65, 25,  4, 24, 44, 45, 0xFF },
-  /* #3: com={3,3,1,0,1,2,2} bit={S04,S05,S05,S04,S04,S04,S05} */
-  { 66, 67, 27,  6, 26, 46, 47, 0xFF },
-  /* #4: com={3,2,0,0,1,2,1} bit={S06,S07,S07,S06,S06,S06,S07} */
-  { 78, 59, 19, 18, 38, 58, 39, 0xFF },
   /* #5: com={3,2,1,0,1,3,2} bit={S09,S09,S09,S09,S08,S08,S08} */
   { 70, 50, 30, 10, 28, 68, 48, 0xFF },
+  /* #4: com={3,2,0,0,1,2,1} bit={S06,S07,S07,S06,S06,S06,S07} */
+  { 78, 59, 19, 18, 38, 58, 39, 0xFF },
+  /* #3: com={3,3,1,0,1,2,2} bit={S04,S05,S05,S04,S04,S04,S05} */
+  { 66, 67, 27,  6, 26, 46, 47, 0xFF },
+  /* #2: com={3,3,1,0,1,2,2} bit={S02,S03,S03,S02,S02,S02,S03} */
+  { 64, 65, 25,  4, 24, 44, 45, 0xFF },
+  /* #1: com={3,2,0,0,1,2,1} bit={S00,S01,S01,S00,S00,S00,S01} */
+  { 60, 41,  1,  0, 20, 40, 21, 0xFF },
 };
 
 /* Icons: P2=C0/S03, P3=C0/S05, P4=C0/S08, P5=C3/S07, P6=C3/S01, DEGC=C3/S07. */
