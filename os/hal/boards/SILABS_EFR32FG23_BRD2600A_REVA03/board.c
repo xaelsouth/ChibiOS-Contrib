@@ -110,7 +110,10 @@ static const uint8_t board_lcd_digit_map[5][8] = {
   { 60, 41,  1,  0, 20, 40, 21, 0xFF },
 };
 
-/* Icons: P2=C0/S03, P3=C0/S05, P4=C0/S08, P5=C3/S07, P6=C3/S01, DEGC=C3/S07. */
+/* Icons (logical seg -> physical line via the pin map above, index = COM*20+line):
+   P2=C0/S03->5, P3=C0/S05->7, P4=C0/S08->8, P5=C3/S07->79, P6=C3/S01->61,
+   DEGC=C3/S07->79.  NOTE: P5 and DEGC are the SAME physical segment on the
+   CE322-1002 glass (verified on BRD2600A: lighting P2..P6 also lights °C). */
 static const uint8_t board_lcd_icon_map[BOARD_LCD_NUM_ICONS] = {
   5, 7, 8, 79, 61, 79
 };
