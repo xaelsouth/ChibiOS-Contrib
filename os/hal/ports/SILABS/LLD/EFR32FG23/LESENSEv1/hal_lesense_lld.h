@@ -154,7 +154,7 @@ typedef struct {
   /**
    * @brief   Callback invoked on scan complete.
    * @param[in] result  SCANRES register value (bitmask of hit channels).
-   * @note    If both callbacks are NULL, no interrupt is enabled: per-scan
+   * @note    If all callbacks are NULL, no interrupt is enabled: per-scan
    *          detection can be consumed via decoder PRS outputs, e.g.
    *          DECOUT0 -> PRS -> PCNT.
    */
@@ -165,12 +165,15 @@ typedef struct {
    *          (CHx_INTERACT.SETIF, e.g. POSEDGE = once per hit edge).
    * @param[in] hits    bitmask of hit channels (IF & 0xFFFF).
    * @note    Independent of callback: with callback == NULL and this set,
-   *          only the channel-hit IEN bits are enabled (no per-scan
+   *          channel-hit IEN bits are enabled (no per-scan
    *          SCANDONE IRQ). Use lesense_lld_set_hit_irq() to mask/unmask
    *          at runtime (e.g. self-mask on the first hit of a burst).
    */
   void (*hit_callback)(uint32_t hits, void *arg);
   void     *hit_callback_arg;
+  /** Callback invoked from ISR when a decoder arc with SETIF transitions. */
+  void (*decoder_callback)(void *arg);
+  void     *decoder_callback_arg;
 } LESENSEConfig;
 
 typedef struct {
@@ -199,6 +202,7 @@ extern "C" {
   uint32_t lesense_lld_get_scanres(LESENSEDriver *lp);
   void lesense_lld_set_scan_hz(LESENSEDriver *lp, float hz);
   void lesense_lld_set_hit_irq(LESENSEDriver *lp, bool enable);
+  void lesense_lld_set_decoder_irq(LESENSEDriver *lp, bool enable);
   void lesense_lld_start_fifo_dma(LESENSEDriver *lp, uint32_t *buf, size_t n);
   void lesense_lld_stop_fifo_dma(LESENSEDriver *lp);
   void lesense_lld_serve_interrupt(LESENSEDriver *lp);

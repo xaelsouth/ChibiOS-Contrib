@@ -229,6 +229,9 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   if (cfg->hit_callback != NULL) {
     LESENSE->IEN_SET = chen;
   }
+  if (cfg->decoder_callback != NULL) {
+    LESENSE->IEN_SET = LESENSE_IEN_DEC;
+  }
 
   /* Enable LESENSE last, after all configuration. */
   LESENSE->EN_SET = LESENSE_EN_EN;
@@ -237,7 +240,8 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
      writing CMD while SYNCBUSY is set bus-faults. */
   lesense_wait_sync();
 
-  if (cfg->callback != NULL || cfg->hit_callback != NULL) {
+  if (cfg->callback != NULL || cfg->hit_callback != NULL ||
+      cfg->decoder_callback != NULL) {
     nvicEnableVector(EFR32_LESENSE_NUMBER, EFR32_LESENSE_IRQ_PRIORITY);
   }
 
@@ -419,6 +423,20 @@ void lesense_lld_serve_interrupt(LESENSEDriver *lp) {
     if (lp->config && lp->config->hit_callback) {
       lp->config->hit_callback(isr & 0xFFFFU, lp->config->hit_callback_arg);
     }
+  }
+  if ((isr & LESENSE_IF_DEC) != 0U && lp->config &&
+      lp->config->decoder_callback) {
+    lp->config->decoder_callback(lp->config->decoder_callback_arg);
+  }
+}
+
+void lesense_lld_set_decoder_irq(LESENSEDriver *lp, bool enable) {
+  (void)lp;
+  if (enable) {
+    LESENSE->IEN_SET = LESENSE_IEN_DEC;
+  }
+  else {
+    LESENSE->IEN_CLR = LESENSE_IEN_DEC;
   }
 }
 
