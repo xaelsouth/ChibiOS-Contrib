@@ -63,8 +63,8 @@ static void rtt_write(const char *s, size_t n) {
 #define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
 
 static const PWMConfig pwm_cfg = {
-  .frequency = 10000U,          /* 10 kHz PWM */
-  .period    = 1000U,           /* 1000 ticks -> 10 Hz frame, 1 tick = 1% */
+  .frequency = 40000U,          /* LLD selects /512: about 37.1 kHz */
+  .period    = 1000U,           /* about 37 Hz PWM */
   .callback  = NULL,
   .channels  = {
     {PWM_OUTPUT_DISABLED, NULL},
@@ -73,26 +73,67 @@ static const PWMConfig pwm_cfg = {
   },
 };
 
+static const PWMConfig pwm_inverted_cfg = {
+  .frequency = 40000U,
+  .period = 1000U,
+  .channels = {
+    {PWM_OUTPUT_DISABLED, NULL},
+    {PWM_OUTPUT_DISABLED, NULL},
+    {PWM_OUTPUT_ACTIVE_LOW, NULL},
+  },
+};
+
+static bool check_level(const char *label, unsigned min_percent,
+                        unsigned max_percent) {
+  chThdSleepMilliseconds(150);
+  uint32_t high = 0U, samples = 0U;
+  systime_t start = chVTGetSystemTimeX();
+  while (chVTTimeElapsedSinceX(start) < TIME_MS2I(1000)) {
+    high += palReadPad(GPIOB, 2) == PAL_HIGH;
+    samples++;
+  }
+  unsigned percent = samples != 0U ? (unsigned)((100ULL * high) / samples) : 0U;
+  bool ok = samples != 0U && percent >= min_percent && percent <= max_percent;
+  PRINTF("%s: sampled high=%u%% %s\r\n",
+         label, percent, ok ? "PASS" : "FAIL");
+  return ok;
+}
+
 int main(void) {
   halInit();
   chSysInit();
 
-  palSetPadMode(GPIOB, 2, PAL_MODE_OUTPUT_PUSHPULL); /* TIMER3 CC0 routed below */
+  palSetPadMode(GPIOB, 2, PAL_MODE_OUTPUT_PUSHPULL);
   console_init();
-  PRINTF("\r\nPWM-TIMER test: TIMER3 CC0 -> PB2 (LED0), duty sweep\r\n");
+  PRINTF("\r\nPWM-TIMER test: TIMER2 CC2 -> PB2 (LED0), duty sweep\r\n");
 
-  /* Route TIMER0 CC0 to PB2. */
-  GPIO->TIMERROUTE[3].ROUTEEN = GPIO_TIMER_ROUTEEN_CC0PEN;
-  GPIO->TIMERROUTE[3].CC0ROUTE = (0U << _GPIO_TIMER_CC0ROUTE_PORT_SHIFT) |
-                                 (2U << _GPIO_TIMER_CC0ROUTE_PIN_SHIFT);
+  GPIO->TIMERROUTE[2].ROUTEEN = GPIO_TIMER_ROUTEEN_CC2PEN;
+  GPIO->TIMERROUTE[2].CC2ROUTE = (1U << _GPIO_TIMER_CC2ROUTE_PORT_SHIFT) |
+                                 (2U << _GPIO_TIMER_CC2ROUTE_PIN_SHIFT);
 
-  pwmStart(&PWMD4, &pwm_cfg);
-  pwmEnableChannel(&PWMD4, 2, 100U);
+  pwmStart(&PWMD3, &pwm_cfg);
+  pwmEnableChannel(&PWMD3, 2, 250U);
+  bool ok = check_level("width=250", 15U, 35U);
+  pwmEnableChannel(&PWMD3, 2, 750U);
+  ok &= check_level("width=750", 65U, 85U);
+  pwmDisableChannel(&PWMD3, 2);
+  ok &= check_level("disabled active-high", 0U, 1U);
+  pwmEnableChannel(&PWMD3, 2, 250U);
+  ok &= check_level("re-enabled", 15U, 35U);
+  pwmStop(&PWMD3);
+  pwmStart(&PWMD3, &pwm_inverted_cfg);
+  pwmEnableChannel(&PWMD3, 2, 250U);
+  ok &= check_level("active-low width=250", 65U, 85U);
+  pwmDisableChannel(&PWMD3, 2);
+  ok &= check_level("disabled active-low", 99U, 100U);
+  PRINTF("PWM pin sampling: %s\r\n", ok ? "PASS" : "FAIL");
+  pwmStop(&PWMD3);
+  pwmStart(&PWMD3, &pwm_cfg);
 
   uint32_t duty = 100;
   int dir = 1;
   while (true) {
-    pwmEnableChannel(&PWMD4, 2, duty);  /* width in ticks (period=1000) */
+    pwmEnableChannel(&PWMD3, 2, duty);  /* width in ticks (period=1000) */
     PRINTF("duty=%u%%\r\n", (unsigned)(duty / 10));
     duty += dir * 50;
     if (duty > 900) { duty = 900; dir = -1; }

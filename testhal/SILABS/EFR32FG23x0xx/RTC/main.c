@@ -95,6 +95,13 @@ int main(void) {
          (ts.millisecond / 1000) % 60, ts.millisecond % 1000);
   PRINTF("set/get round-trip: %s\r\n",
          (ts.year == 46 && ts.month == 11 && ts.day == 22) ? "PASS" : "FAIL");
+  uint32_t before_ms = ts.millisecond;
+  chThdSleepMilliseconds(2500);
+  rtcGetTime(&RTCD1, &ts);
+  uint32_t elapsed_ms = ts.millisecond - before_ms;
+  PRINTF("calendar advance over 2500 ms: %lu ms %s\r\n",
+         (unsigned long)elapsed_ms,
+         elapsed_ms >= 2300U && elapsed_ms <= 2700U ? "PASS" : "FAIL");
 
   /* Alarm test: alarm lives on SYSRTC CMP1. Set +2 s, wait for the
      callback, measure the elapsed system time. */
@@ -108,14 +115,15 @@ int main(void) {
     rtcGetAlarm(&RTCD1, 0, &al_back);
     PRINTF("alarm readback: %lu s %lu us (expect ~2 s)\r\n",
            (unsigned long)al_back.tv_sec, (unsigned long)al_back.tv_usec);
-    while (alarm_fired == 0U) {
+    while (alarm_fired == 0U &&
+           chVTTimeElapsedSinceX(t0) < TIME_MS2I(3000)) {
       chThdSleepMilliseconds(10);
     }
     systime_t dt = chVTGetSystemTimeX() - t0;
     uint32_t ms = (uint32_t)(dt * 1000U / CH_CFG_ST_FREQUENCY);
     PRINTF("alarm fired after %lu ms (expect ~2000): %s\r\n",
            (unsigned long)ms,
-           (ms >= 1900U && ms <= 2100U) ? "PASS" : "FAIL");
+           (alarm_fired != 0U && ms >= 1900U && ms <= 2100U) ? "PASS" : "FAIL");
     rtcSetCallback(&RTCD1, NULL);
   }
 

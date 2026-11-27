@@ -68,7 +68,8 @@
 #define PLATFORM_CRY_USE_CRY1               TRUE
 
 #define CRY_LLD_SUPPORTS_AES                TRUE
-#define CRY_LLD_SUPPORTS_AES_X              TRUE
+/* RADIOAES uses a DMA fetcher/pusher even when completion is polled. */
+#define CRY_LLD_SUPPORTS_AES_X              FALSE
 #define CRY_LLD_SUPPORTS_AES_ECB            TRUE
 #define CRY_LLD_SUPPORTS_AES_CBC            TRUE
 #define CRY_LLD_SUPPORTS_AES_CFB            FALSE

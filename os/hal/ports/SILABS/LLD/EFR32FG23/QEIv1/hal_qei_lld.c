@@ -49,13 +49,18 @@ static void pcnt_sync_wait(uint32_t s0prs) {
      synchronizer (narrow SWPULSE pulses get swallowed — verified on
      BRD2600A). Bounded: worst case ~0.4 s when the domain is dead. */
   volatile uint32_t guard = 200U;
+  uint32_t mask = s0prs < 12U ? (1U << s0prs) : 0U;
+  uint32_t original_level = mask != 0U ? PRS->ASYNC_SWLEVEL & mask : 0U;
   while (((PCNT0->SYNCBUSY & _PCNT_SYNCBUSY_MASK) != 0U) && (--guard != 0U)) {
-    if (s0prs < 12U) {
-      PRS->ASYNC_SWLEVEL = (1U << s0prs);
+    if (mask != 0U) {
+      PRS->ASYNC_SWLEVEL_SET = mask;
       for (volatile uint32_t d = 0U; d < 20000U; d++) {}
-      PRS->ASYNC_SWLEVEL = 0U;
+      PRS->ASYNC_SWLEVEL_CLR = mask;
       for (volatile uint32_t d = 0U; d < 20000U; d++) {}
     }
+  }
+  if (original_level != 0U) {
+    PRS->ASYNC_SWLEVEL_SET = mask;
   }
 }
 
@@ -96,11 +101,16 @@ void qei_lld_start(QEIDriver *qp) {
        BRD2600A). Feed a few wide S0 edges (SWLEVEL toggles) before and after
        the switch. */
     if (cfg->s0prs < 12U) {
+      uint32_t mask = 1U << cfg->s0prs;
+      uint32_t original_level = PRS->ASYNC_SWLEVEL & mask;
       for (int i = 0; i < 8; i++) {
-        PRS->ASYNC_SWLEVEL = (1U << cfg->s0prs);
+        PRS->ASYNC_SWLEVEL_SET = mask;
         for (volatile uint32_t d = 0U; d < 20000U; d++) {}
-        PRS->ASYNC_SWLEVEL = 0U;
+        PRS->ASYNC_SWLEVEL_CLR = mask;
         for (volatile uint32_t d = 0U; d < 20000U; d++) {}
+      }
+      if (original_level != 0U) {
+        PRS->ASYNC_SWLEVEL_SET = mask;
       }
     }
     CMU->PCNT0CLKCTRL = CMU_PCNT0CLKCTRL_CLKSEL_PCNTS0;

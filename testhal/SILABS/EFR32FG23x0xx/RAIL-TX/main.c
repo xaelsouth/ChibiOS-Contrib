@@ -28,11 +28,14 @@ extern const RAIL_ChannelConfig_t *channelConfigs[];
 
 static RAIL_Handle_t rail_handle;
 static semaphore_t tx_done_sem;
+static volatile RAIL_Events_t tx_events;
+static uint16_t tx_channel;
 
 static void rail_event_cb(RAIL_Handle_t handle, RAIL_Events_t events) {
   (void)handle;
-  if (events & RAIL_EVENT_TX_PACKET_SENT) {
+  if ((events & RAIL_EVENTS_TX_COMPLETION) != 0U) {
     osalSysLockFromISR();
+    tx_events = events;
     chSemSignalI(&tx_done_sem);
     osalSysUnlockFromISR();
   }
@@ -83,9 +86,15 @@ static void rtt_write(const char *s, size_t n) {
 
 #define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
 
-static void radio_init(void) {
+static bool radio_init(void) {
   RAIL_Config_t rail_config = { .eventsCallback = rail_event_cb };
+  chSemObjectInit(&tx_done_sem, 0);
+  PRINTF("RAIL_Init...\r\n");
   rail_handle = RAIL_Init(&rail_config, &sl_rail_util_on_rf_ready);
+  PRINTF("RAIL_Init returned %p\r\n", (void *)rail_handle);
+  if (rail_handle == NULL) {
+    return false;
+  }
 
   RAIL_DataConfig_t data_config = {
     .txSource = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST0_TX_SOURCE,
@@ -93,25 +102,47 @@ static void radio_init(void) {
     .txMethod = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST0_TX_MODE,
     .rxMethod = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST0_RX_MODE,
   };
-  (void)RAIL_ConfigData(rail_handle, &data_config);
-  (void)RAIL_ConfigChannels(rail_handle, channelConfigs[1],
-                            &sli_rail_util_on_channel_config_change);
-  (void)sl_rail_util_protocol_config(rail_handle,
-                                     SL_RAIL_UTIL_INIT_PROTOCOL_INST0_DEFAULT);
-  (void)RAIL_ConfigCal(rail_handle, RAIL_CAL_TEMP | RAIL_CAL_ONETIME);
-  (void)RAIL_ConfigEvents(rail_handle, RAIL_EVENTS_ALL, RAIL_EVENTS_TX_COMPLETION);
+  RAIL_Status_t status = RAIL_ConfigData(rail_handle, &data_config);
+  PRINTF("RAIL_ConfigData=%d\r\n", (int)status);
+  if (status != RAIL_STATUS_NO_ERROR) {
+    return false;
+  }
+  PRINTF("RAIL_ConfigChannels...\r\n");
+  tx_channel = RAIL_ConfigChannels(rail_handle, channelConfigs[1],
+                                   &sli_rail_util_on_channel_config_change);
+  status = sl_rail_util_protocol_config(rail_handle,
+                                       SL_RAIL_UTIL_INIT_PROTOCOL_INST0_DEFAULT);
+  if (status != RAIL_STATUS_NO_ERROR) {
+    PRINTF("protocol configuration failed: %d\r\n", (int)status);
+    return false;
+  }
+  status = RAIL_ConfigCal(rail_handle, RAIL_CAL_TEMP | RAIL_CAL_ONETIME);
+  if (status != RAIL_STATUS_NO_ERROR) {
+    PRINTF("calibration configuration failed: %d\r\n", (int)status);
+    return false;
+  }
+  status = RAIL_ConfigEvents(rail_handle, RAIL_EVENTS_ALL, RAIL_EVENTS_TX_COMPLETION);
+  if (status != RAIL_STATUS_NO_ERROR) {
+    PRINTF("event configuration failed: %d\r\n", (int)status);
+    return false;
+  }
 
   RAIL_StateTransitions_t tx_tr = {
     .success = SL_RAIL_UTIL_INIT_TRANSITION_INST0_TX_SUCCESS,
     .error   = SL_RAIL_UTIL_INIT_TRANSITION_INST0_TX_ERROR,
   };
-  (void)RAIL_SetTxTransitions(rail_handle, &tx_tr);
-  chSemObjectInit(&tx_done_sem, 0);
+  status = RAIL_SetTxTransitions(rail_handle, &tx_tr);
+  if (status != RAIL_STATUS_NO_ERROR) {
+    PRINTF("transition configuration failed: %d\r\n", (int)status);
+    return false;
+  }
+  PRINTF("radio configuration complete\r\n");
+  return true;
 }
 
 /* Test datagram, 868.95 MHz. */
 static const uint8_t radio_datagram[] = {
-  0x2A, 0x44, 0x34, 0x12, 0x78, 0x56, 0x00, 0x00,
+  0x0F, 0x44, 0x34, 0x12, 0x78, 0x56, 0x00, 0x00,
   0x72, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
@@ -123,16 +154,30 @@ int main(void) {
   console_init();
   PRINTF("\r\nRAIL-TX test: test datagram every 3 s\r\n");
 
-  radio_init();
+  if (!radio_init()) {
+    PRINTF("radio configuration: FAIL\r\n");
+    while (true) chThdSleepMilliseconds(1000);
+  }
 
   unsigned n = 0;
   while (true) {
-    RAIL_SetTxFifo(rail_handle, rail_tx_fifo, 0, sizeof(rail_tx_fifo));
     memcpy(rail_tx_fifo, radio_datagram, sizeof(radio_datagram));
-    RAIL_SetTxFifo(rail_handle, rail_tx_fifo, sizeof(radio_datagram), sizeof(rail_tx_fifo));
-    RAIL_StartTx(rail_handle, 0, RAIL_TX_OPTIONS_DEFAULT, NULL);
-    (void)chSemWaitTimeout(&tx_done_sem, TIME_MS2I(1000));
-    PRINTF("sent #%u (%u bytes)\r\n", ++n, (unsigned)sizeof(radio_datagram));
+    uint16_t fifo_size = RAIL_SetTxFifo(rail_handle, rail_tx_fifo,
+                                       sizeof(radio_datagram), sizeof(rail_tx_fifo));
+    tx_events = 0U;
+    RAIL_Status_t status = fifo_size >= sizeof(radio_datagram)
+                         ? RAIL_StartTx(rail_handle, tx_channel, RAIL_TX_OPTIONS_DEFAULT, NULL)
+                         : RAIL_STATUS_INVALID_PARAMETER;
+    msg_t done = status == RAIL_STATUS_NO_ERROR
+               ? chSemWaitTimeout(&tx_done_sem, TIME_MS2I(1000)) : MSG_RESET;
+    bool sent = done == MSG_OK && (tx_events & RAIL_EVENT_TX_PACKET_SENT) != 0U;
+    PRINTF("TX #%u: fifo=%u status=%d completion=%d events=%08lx:%08lx %s\r\n",
+           ++n, (unsigned)fifo_size, (int)status, (int)done,
+           (unsigned long)(tx_events >> 32), (unsigned long)tx_events,
+           sent ? "PASS" : "FAIL");
+    if (!sent) {
+      while (true) chThdSleepMilliseconds(1000);
+    }
     chThdSleepMilliseconds(3000);
   }
 }

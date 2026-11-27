@@ -16,19 +16,16 @@
 
 /**
  * @file    ringbuf.h
- * @brief   Generic single-producer/single-consumer ring buffer.
+ * @brief   Generic ring buffer.
  *
- * @details Typed ring buffer over caller-provided storage. Designed for
- *          ISR/thread or DMA/thread communication:
- *          - ringbufWrite()/ringbufWriteI() are called by the single
- *            producer (thread or ISR, e.g. an LDMA completion handler);
- *          - ringbufRead() is called by the single consumer (thread).
- *          head is written only by the producer, tail only by the
- *          consumer, so no locking is needed for SPSC operation.
+ * @details Typed ring buffer over caller-provided storage. Normal operations
+ *          acquire the system lock; I-class operations require the caller to
+ *          hold it. Initialize the object before it is shared and do not
+ *          access its storage directly while it is in use. Data is copied
+ *          while locked, so element size affects interrupt latency.
  *
- *          A DMA engine can append directly into the storage: build a
- *          descriptor chain over ringbufSlotPtr() slots and let a
- *          completion IRQ advance the producer side (see ringbufCommitI()).
+ *          DMA writers must use separate storage and publish completed data
+ *          through ringbufWriteI() under the system lock.
  *
  *          If overwrite is enabled, writing to a full buffer drops the
  *          oldest element; otherwise the write fails (returns 0).
@@ -54,7 +51,7 @@ extern "C" {
 typedef struct {
   uint8_t         *storage;    /**< Element storage (capacity * elem_size bytes). */
   size_t           elem_size;  /**< Size of one element in bytes. */
-  size_t           capacity;   /**< Number of elements. */
+  size_t           capacity;   /**< Storage slots; one remains unused. */
   volatile size_t  head;       /**< Producer: index of next slot to write. */
   volatile size_t  tail;       /**< Consumer: index of next slot to read. */
   bool             overwrite;  /**< true: overwrite oldest when full. */
@@ -72,17 +69,16 @@ typedef struct {
   size_t ringbufCount(const ringbuf_t *rb);
   bool   ringbufEmpty(const ringbuf_t *rb);
   bool   ringbufFull(const ringbuf_t *rb);
-  void  *ringbufSlotPtr(const ringbuf_t *rb, size_t index);
   size_t ringbufPeek(const ringbuf_t *rb, void *elem);
 
-  /* ISR-context variants (use interrupt save/restore internally). */
+  /* I-class variants: caller must hold the system lock. */
+  void   ringbufResetI(ringbuf_t *rb);
   size_t ringbufWriteI(ringbuf_t *rb, const void *elem);
   size_t ringbufReadI(ringbuf_t *rb, void *elem);
-
-  /* Producer-side commit for DMA writers: after the DMA engine wrote
-     directly into slot (head % capacity), call ringbufCommitI() from the
-     DMA completion ISR to publish the element. */
-  void   ringbufCommitI(ringbuf_t *rb);
+  size_t ringbufCountI(const ringbuf_t *rb);
+  bool   ringbufEmptyI(const ringbuf_t *rb);
+  bool   ringbufFullI(const ringbuf_t *rb);
+  size_t ringbufPeekI(const ringbuf_t *rb, void *elem);
 
 #ifdef __cplusplus
 }

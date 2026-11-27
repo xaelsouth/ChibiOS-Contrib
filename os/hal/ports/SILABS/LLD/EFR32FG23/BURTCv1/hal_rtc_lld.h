@@ -20,10 +20,10 @@
  *
  * @details BURTC is used as the backup-domain calendar/timekeeper (the
  *          system tick is SYSRTC, see SYSTICKv2). The calendar is driven
- *          driven by interrupts: COMP fires every EFR32_RTC_COMP_PERIOD
+ *          by interrupts: COMP fires every EFR32_RTC_COMP_PERIOD
  *          ticks (1 s at 32768 Hz) and increments comp_cnt in BURAM; OF
- *          fires on the 2^32 wrap and increments ovf_counter (64-bit
- *          extension). Seconds come from BURAM only. If
+ *          fires on the 2^32 wrap and increments ovf_counter. Calendar
+ *          seconds come from the cumulative comp_cnt. If
  *          EFR32_RTC_HAS_SUBSECONDS is TRUE, the millisecond field is taken
  *          from one CNT read (safe because the 1 Hz COMP tick keeps the
  *          LF sync path warm); otherwise resolution is 1 s.

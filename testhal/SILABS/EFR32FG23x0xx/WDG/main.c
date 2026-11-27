@@ -83,6 +83,7 @@ int main(void) {
   PRINTF("\r\nWDG test: kicking watchdog 10x (~1s timeout, kick every 100ms)\r\n");
 
   wdgStart(&WDGD1, &wdg_cfg);
+  bool enabled = (WDOG0->EN & WDOG_EN_EN) != 0U;
   for (int i = 0; i < 10; i++) {
     palTogglePad(GPIOB, 2);
     PRINTF("kick %d\r\n", i + 1);
@@ -91,6 +92,12 @@ int main(void) {
   }
   PRINTF("stopping watchdog - no reset expected\r\n");
   wdgStop(&WDGD1);
-  PRINTF("PASS: survived\r\n");
+  CMU->CLKEN0_SET = CMU_CLKEN0_WDOG0;
+  bool stopped = (WDOG0->EN & WDOG_EN_EN) == 0U;
+  CMU->CLKEN0_CLR = CMU_CLKEN0_WDOG0;
+  chThdSleepMilliseconds(2000);
+  PRINTF("enabled=%u stopped=%u survived after stop: %s\r\n",
+         (unsigned)enabled, (unsigned)stopped,
+         enabled && stopped ? "PASS" : "FAIL");
   while (true) { palTogglePad(GPIOB, 2); chThdSleepMilliseconds(500); }
 }

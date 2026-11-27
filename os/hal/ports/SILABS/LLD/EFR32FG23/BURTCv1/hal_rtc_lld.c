@@ -66,13 +66,6 @@ static void rtc_lld_sysrtc_cb(efr32_sysrtc_evt_t evt, uint32_t value, void *arg)
    wraps; 32768 = 2^15 does, 1000 (ULFRCO) does not — use LFXO/LFRCO. */
 #define EFR32_RTC_COMP_PERIOD       EFR32_RTCCLK
 
-#define EFR32_RTC_OVERFLOW_VALUE    ((_BURTC_CNT_CNT_MASK >> _BURTC_CNT_CNT_SHIFT) + 1UL)
-
-#define EFR32_RTC_OVERFLOW_INTERVAL (EFR32_RTC_OVERFLOW_VALUE / EFR32_RTCCLK)
-
-#define EFR32_RTC_OVERFLOW_INTERVAL_REMAINDER \
-                                    (EFR32_RTC_OVERFLOW_VALUE % EFR32_RTCCLK)
-
 /*===========================================================================*/
 /* Driver exported variables.                                                */
 /*===========================================================================*/
@@ -325,11 +318,10 @@ void rtc_lld_serve_interrupt(void) {
     /* Calendar tick: one COMP period (EFR32_RTC_COMP_PERIOD = 1 s at 32768 Hz)
        elapsed. Re-arm COMP from the BURAM software counter only — CNT reads
        lag the real counter on this part, so the calendar never reads CNT.
-       With period = 2^15 the mod-2^32 relation COMP = comp_cnt*period stays
-       aligned across OF wraps. */
+       With period = 2^15 the next compare stays aligned across OF wraps. */
     RTCD1.buram_state->comp_cnt += 1U;
     while ((BURTC->SYNCBUSY & BURTC_SYNCBUSY_COMP) != 0U) { }
-    BURTC->COMP = RTCD1.buram_state->comp_cnt * EFR32_RTC_COMP_PERIOD;
+    BURTC->COMP = (RTCD1.buram_state->comp_cnt + 1U) * EFR32_RTC_COMP_PERIOD;
     #endif
   }
 }
@@ -536,21 +528,19 @@ void rtc_lld_set_time(RTCDriver *rtcp, const RTCDateTime *timespec) {
 void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec) {
 
   syssts_t sts;
-  uint32_t ovf_counter, comp_cnt, comp_cnt2;
+  uint32_t comp_cnt, comp_cnt2;
   uint32_t tv_sec, tv_msec, dstflag;
 
   /* Entering a reentrant critical zone.*/
   sts = osalSysGetStatusAndLockX();
 
-  /* Seconds come from BURAM state only (written from ISR context):
-     ovf_counter from the OF interrupt, comp_cnt from the COMP interrupt —
+  /* Seconds come from the cumulative COMP count in BURAM —
      never from CNT, whose reads lag the real counter when the LF domain
      sits idle. Sub-second ms (if EFR32_RTC_HAS_SUBSECONDS) comes from one
      CNT read — safe here because the 1 Hz COMP tick keeps the LF sync path
      warm (verified on target: reads then track the real 32768 Hz rate).
      Re-read if a COMP fired mid-read so seconds and ms stay consistent. */
   do {
-    ovf_counter = rtcp->buram_state->ovf_counter;
     comp_cnt    = rtcp->buram_state->comp_cnt;
 #if EFR32_RTC_HAS_SUBSECONDS
     uint32_t cnt = BURTC->CNT;
@@ -573,9 +563,7 @@ void rtc_lld_get_time(RTCDriver* rtcp, RTCDateTime* timespec) {
   /* Leaving a reentrant critical zone.*/
   osalSysRestoreStatusX(sts);
 
-  tv_sec += (ovf_counter * EFR32_RTC_OVERFLOW_INTERVAL) +
-            (ovf_counter * EFR32_RTC_OVERFLOW_INTERVAL_REMAINDER) / EFR32_RTCCLK +
-            comp_cnt;
+  tv_sec += comp_cnt;
 
   tv_sec += tv_msec / 1000U;
   tv_msec = tv_msec % 1000U;

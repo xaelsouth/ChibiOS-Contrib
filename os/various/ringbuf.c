@@ -16,13 +16,13 @@
 
 /**
  * @file    ringbuf.c
- * @brief   Generic single-producer/single-consumer ring buffer.
+ * @brief   Generic ring buffer.
  *
  * @addtogroup RINGBUF
  * @{
  */
 
-#include "hal.h"   /* osal.h for osalSysLockFromISR */
+#include "hal.h"
 #include "ringbuf.h"
 
 /*===========================================================================*/
@@ -31,39 +31,92 @@
 
 void ringbufObjectInit(ringbuf_t *rb, void *storage, size_t elem_size,
                        size_t capacity, bool overwrite) {
+  osalDbgCheck(rb != NULL && storage != NULL && elem_size > 0U &&
+               capacity >= 2U);
   rb->storage   = (uint8_t *)storage;
   rb->elem_size = elem_size;
   rb->capacity  = capacity;
   rb->overwrite = overwrite;
-  ringbufReset(rb);
-}
-
-void ringbufReset(ringbuf_t *rb) {
   rb->head = 0U;
   rb->tail = 0U;
 }
 
+void ringbufReset(ringbuf_t *rb) {
+  osalSysLock();
+  ringbufResetI(rb);
+  osalSysUnlock();
+}
+
 size_t ringbufCount(const ringbuf_t *rb) {
-  size_t head = rb->head;
-  size_t tail = rb->tail;
-  /* One slot is kept empty to distinguish full from empty. */
-  return (head + rb->capacity - tail) % rb->capacity;
+  osalSysLock();
+  size_t count = ringbufCountI(rb);
+  osalSysUnlock();
+  return count;
 }
 
 bool ringbufEmpty(const ringbuf_t *rb) {
-  return rb->head == rb->tail;
+  osalSysLock();
+  bool empty = ringbufEmptyI(rb);
+  osalSysUnlock();
+  return empty;
 }
 
 bool ringbufFull(const ringbuf_t *rb) {
-  size_t next = (rb->head + 1U) % rb->capacity;
-  return next == rb->tail;
-}
-
-void *ringbufSlotPtr(const ringbuf_t *rb, size_t index) {
-  return rb->storage + (index % rb->capacity) * rb->elem_size;
+  osalSysLock();
+  bool full = ringbufFullI(rb);
+  osalSysUnlock();
+  return full;
 }
 
 size_t ringbufWrite(ringbuf_t *rb, const void *elem) {
+  osalSysLock();
+  size_t written = ringbufWriteI(rb, elem);
+  osalSysUnlock();
+  return written;
+}
+
+size_t ringbufRead(ringbuf_t *rb, void *elem) {
+  osalSysLock();
+  size_t read = ringbufReadI(rb, elem);
+  osalSysUnlock();
+  return read;
+}
+
+size_t ringbufPeek(const ringbuf_t *rb, void *elem) {
+  osalSysLock();
+  size_t read = ringbufPeekI(rb, elem);
+  osalSysUnlock();
+  return read;
+}
+
+/*===========================================================================*/
+/* I-class variants.                                                         */
+/*===========================================================================*/
+
+void ringbufResetI(ringbuf_t *rb) {
+  osalDbgCheckClassI();
+  rb->head = 0U;
+  rb->tail = 0U;
+}
+
+size_t ringbufCountI(const ringbuf_t *rb) {
+  osalDbgCheckClassI();
+  /* One slot is kept empty to distinguish full from empty. */
+  return (rb->head + rb->capacity - rb->tail) % rb->capacity;
+}
+
+bool ringbufEmptyI(const ringbuf_t *rb) {
+  osalDbgCheckClassI();
+  return rb->head == rb->tail;
+}
+
+bool ringbufFullI(const ringbuf_t *rb) {
+  osalDbgCheckClassI();
+  return (rb->head + 1U) % rb->capacity == rb->tail;
+}
+
+size_t ringbufWriteI(ringbuf_t *rb, const void *elem) {
+  osalDbgCheckClassI();
   size_t head = rb->head;
   size_t next = (head + 1U) % rb->capacity;
   if (next == rb->tail) {
@@ -81,7 +134,8 @@ size_t ringbufWrite(ringbuf_t *rb, const void *elem) {
   return 1U;
 }
 
-size_t ringbufRead(ringbuf_t *rb, void *elem) {
+size_t ringbufReadI(ringbuf_t *rb, void *elem) {
+  osalDbgCheckClassI();
   if (rb->head == rb->tail) {
     return 0U;
   }
@@ -93,7 +147,8 @@ size_t ringbufRead(ringbuf_t *rb, void *elem) {
   return 1U;
 }
 
-size_t ringbufPeek(const ringbuf_t *rb, void *elem) {
+size_t ringbufPeekI(const ringbuf_t *rb, void *elem) {
+  osalDbgCheckClassI();
   if (rb->head == rb->tail) {
     return 0U;
   }
@@ -102,30 +157,6 @@ size_t ringbufPeek(const ringbuf_t *rb, void *elem) {
     ((uint8_t *)elem)[i] = slot[i];
   }
   return 1U;
-}
-
-/*===========================================================================*/
-/* ISR-context variants.                                                     */
-/*===========================================================================*/
-
-size_t ringbufWriteI(ringbuf_t *rb, const void *elem) {
-  osalSysLockFromISR();
-  size_t r = ringbufWrite(rb, elem);
-  osalSysUnlockFromISR();
-  return r;
-}
-
-size_t ringbufReadI(ringbuf_t *rb, void *elem) {
-  osalSysLockFromISR();
-  size_t r = ringbufRead(rb, elem);
-  osalSysUnlockFromISR();
-  return r;
-}
-
-void ringbufCommitI(ringbuf_t *rb) {
-  osalSysLockFromISR();
-  rb->head = (rb->head + 1U) % rb->capacity;
-  osalSysUnlockFromISR();
 }
 
 /** @} */

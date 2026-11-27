@@ -72,7 +72,9 @@ int main(void) {
   console_init();
   PRINTF("\r\nEFL test: USERDATA page (last sector)\r\n");
 
-  static uint8_t wbuf[TEST_LEN], rbuf[TEST_LEN];
+  static uint8_t wbuf[TEST_LEN] __attribute__((aligned(4)));
+  static uint8_t rbuf[EFR32_USERDATA_SIZE];
+  static uint8_t original[EFR32_USERDATA_SIZE] __attribute__((aligned(4)));
   for (unsigned i = 0; i < TEST_LEN; i++) wbuf[i] = (uint8_t)(i * 7 + 1);
 
   eflStart(&EFLD1, NULL);
@@ -82,6 +84,13 @@ int main(void) {
   flash_offset_t TEST_ADDR = flashGetSectorOffset((BaseFlash *)&EFLD1, sec);
   PRINTF("sector %u @ offset 0x%08lX covers the USERDATA page\r\n",
          (unsigned)sec, (unsigned long)TEST_ADDR);
+
+  if (flashGetSectorSize((BaseFlash *)&EFLD1, sec) != sizeof(original) ||
+      flashRead((BaseFlash *)&EFLD1, TEST_ADDR, sizeof(original), original)
+        != FLASH_NO_ERROR) {
+    PRINTF("USERDATA backup: FAIL; no erase attempted\r\n");
+    while (true) chThdSleepMilliseconds(1000);
+  }
 
   bool ok = true;
   flash_error_t fe = flashStartEraseSector((BaseFlash *)&EFLD1, sec);
@@ -97,6 +106,25 @@ int main(void) {
   ok &= (memcmp(wbuf, rbuf, TEST_LEN) == 0);
 
   PRINTF("erase+program+read+verify: %s\r\n", ok ? "PASS" : "FAIL");
+
+  fe = flashStartEraseSector((BaseFlash *)&EFLD1, sec);
+  while (fe == FLASH_BUSY_ERASING) {
+    uint32_t ms = 1;
+    fe = flashQueryErase((BaseFlash *)&EFLD1, &ms);
+    chThdSleepMilliseconds(ms != 0U ? ms : 1U);
+  }
+  bool restored = (fe == FLASH_NO_ERROR);
+  if (restored) {
+    restored = flashProgram((BaseFlash *)&EFLD1, TEST_ADDR, sizeof(original),
+                            original) == FLASH_NO_ERROR;
+  }
+  if (restored) {
+    restored = flashRead((BaseFlash *)&EFLD1, TEST_ADDR, sizeof(rbuf), rbuf)
+                 == FLASH_NO_ERROR && memcmp(original, rbuf, sizeof(rbuf)) == 0;
+  }
+  PRINTF("USERDATA restored and verified: %s\r\n", restored ? "PASS" : "FAIL");
+  ok = ok && restored;
+  PRINTF("result: %s\r\n", ok ? "PASS" : "FAIL");
   eflStop(&EFLD1);
   while (true) chThdSleepMilliseconds(1000);
 }

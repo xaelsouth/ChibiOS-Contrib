@@ -25,6 +25,12 @@ int main(void) {
          (int)BURAMD1.state, (unsigned long)BURAMD1.start,
          (unsigned long)BURAMD1.end);
 
+  volatile uint32_t *w = (volatile uint32_t *)BURAM1_ADDRESS;
+  uint32_t original[4];
+  for (size_t i = 0; i < 4U; i++) {
+    original[i] = w[i];
+  }
+
   volatile uint8_t *p = (volatile uint8_t *)buramAllocateAt(&BURAMD1, 0, 16);
   bool ok = (p != NULL);
   PRINTF("allocate 16 bytes at offset 0: %s (0x%08lX)\r\n",
@@ -51,11 +57,20 @@ int main(void) {
   }
 
   /* raw register access smoke test: BURAM is plain memory */
-  volatile uint32_t *w = (volatile uint32_t *)BURAM1_ADDRESS;
   w[0] = 0xDEADBEEFUL;
   bool ok4 = (w[0] == 0xDEADBEEFUL);
   PRINTF("raw word write/read 0xDEADBEEF: %s\r\n", ok4 ? "PASS" : "FAIL");
   ok = ok && ok4;
+
+  for (size_t i = 0; i < 4U; i++) {
+    w[i] = original[i];
+  }
+  bool restored = true;
+  for (size_t i = 0; i < 4U; i++) {
+    restored = restored && w[i] == original[i];
+  }
+  PRINTF("original contents restored: %s\r\n", restored ? "PASS" : "FAIL");
+  ok = ok && restored;
 
   buramStop(&BURAMD1);
 

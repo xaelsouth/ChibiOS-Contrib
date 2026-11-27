@@ -21,6 +21,8 @@
  * @details LESENSE autonomously scans up to 16 sensor channels in EM2.
  *          Ideal for inductive sensing (e.g. water meter rotating disc with
  *          metal element over an LC coil), capacitive buttons, etc.
+ * @note    The ACMP and VDAC resources configured here are not arbitrated
+ *          with the COMP or DAC drivers; they must not be used concurrently.
  *
  * @addtogroup LESENSE
  * @{
@@ -150,12 +152,11 @@ typedef struct {
   uint8_t   dac_port;
   uint8_t   dac_pin;
   /**
-   * @brief   Callback invoked on scan complete (channel hit or buffer full).
+   * @brief   Callback invoked on scan complete.
    * @param[in] result  SCANRES register value (bitmask of hit channels).
-   * @note    If NULL, no interrupt is enabled at all: the driver runs fully
-   *          autonomously in EM2 and per-scan detection is meant to be
-   *          consumed via the decoder PRS outputs (arcs[]/decctrl), e.g.
-   *          DECOUT0 -> PRS -> PCNT. This avoids one CPU wakeup per scan.
+   * @note    If both callbacks are NULL, no interrupt is enabled: per-scan
+   *          detection can be consumed via decoder PRS outputs, e.g.
+   *          DECOUT0 -> PRS -> PCNT.
    */
   void (*callback)(uint32_t scanres, void *arg);
   void     *callback_arg;
@@ -175,7 +176,7 @@ typedef struct {
 typedef struct {
   lesense_state_t  state;
   const LESENSEConfig *config;
-  uint32_t         scanres;  /**< Last scan result. */
+  volatile uint32_t scanres; /**< Last scan result, updated from the ISR. */
   const void      *dma;      /**< DMA stream for result FIFO (NULL if none). */
 } LESENSEDriver;
 

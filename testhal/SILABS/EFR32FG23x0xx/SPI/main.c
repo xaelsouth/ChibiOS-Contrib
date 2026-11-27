@@ -21,7 +21,6 @@
 
 /* Console via SEGGER RTT (up channel 0) — works over J-Link SWD.
    View with: JLinkRTTLoggerExe -Device EFR32FG23B010F512IM48 -If SWD -Speed 4000 -RTTChannel 0 out.log */
-#include <string.h>
 #include <stdio.h>
 
 typedef struct {
@@ -70,7 +69,7 @@ static const SPIConfig spi_cfg = {
   .sspad    = 8,
 #endif
   .bitrate  = 1000000U,
-  .cfg0     = (0U << 0) | (0U << 5),
+  .cfg0     = EUSART_CFG0_LOOPBK,
   .framecfg = EFR32_SIO_LLD_EUSART_8N1,
 };
 
@@ -78,13 +77,17 @@ int main(void) {
   halInit();
   chSysInit();
   console_init();
-  PRINTF("\r\nSPI test: EUSART0 (SPID1) loopback PA9/PA10 @1MHz\r\n");
+  PRINTF("\r\nSPI test: EUSART0 loopback, PA9 TX and PA10 SCLK @1MHz\r\n");
 
   palSetPadMode(GPIOA, 8,  PAL_MODE_OUTPUT_PUSHPULL);
   palSetPadMode(GPIOA, 9,  PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_ALTERNATE(EUSART0_TX));
-  palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP  | PAL_MODE_ALTERNATE(EUSART0_RX));
-
-  spiStart(&SPID1, &spi_cfg);
+  palSetPadMode(GPIOA, 10, PAL_MODE_OUTPUT_PUSHPULL);
+  GPIO->EUSARTROUTE[0].SCLKROUTE = 10U << _GPIO_EUSART_SCLKROUTE_PIN_SHIFT;
+  GPIO->EUSARTROUTE[0].ROUTEEN |= GPIO_EUSART_ROUTEEN_SCLKPEN;
+  if (spiStart(&SPID1, &spi_cfg) != HAL_RET_SUCCESS) {
+    PRINTF("spiStart: FAIL\r\n");
+    while (true) chThdSleepMilliseconds(1000);
+  }
 
   /* Small transfer (4 bytes < EFR32_SPI_DMA_MIN_TRANSFER): polled path. */
   uint8_t tx[100], rx[100];
@@ -96,20 +99,62 @@ int main(void) {
   spiUnselectI(&SPID1);
   osalSysUnlock();
   int ok4 = memcmp(tx, rx, 4) == 0;
-  PRINTF("polled 4B exchange: %s\r\n", ok4 ? "match: PASS" : "MISMATCH: FAIL (loopback wire?)");
+  PRINTF("polled 4B exchange: %s\r\n", ok4 ? "PASS" : "FAIL");
+  if (!ok4) {
+    PRINTF("  rx=%02X %02X %02X %02X\r\n", rx[0], rx[1], rx[2], rx[3]);
+  }
 
   /* Large transfer (100 bytes >= EFR32_SPI_DMA_MIN_TRANSFER): DMA path
      (TX mem->TXDATA + RX RXDATA->mem via the LDMA streams). */
+  int ok100 = 0;
+  if (SPID1.dma_tx != NULL && SPID1.dma_rx != NULL) {
+    ok100 = 1;
+    for (unsigned int pass = 0; pass < 3; pass++) {
+      for (size_t i = 0; i < sizeof(tx); i++) {
+        tx[i] = (uint8_t)(i + 17U * pass);
+      }
+      memset(rx, 0, sizeof(rx));
+      osalSysLock();
+      spiSelectI(&SPID1);
+      spiStartExchangeI(&SPID1, 100, tx, rx);
+      spiUnselectI(&SPID1);
+      osalSysUnlock();
+      if (memcmp(tx, rx, sizeof(tx)) != 0) {
+        ok100 = 0;
+        break;
+      }
+    }
+  }
+  PRINTF("DMA 100B exchange x3: %s\r\n", ok100 ? "PASS" : "FAIL");
+  if (!ok100) {
+    PRINTF("  streams=%d/%d rx=%02X %02X %02X %02X\r\n",
+           SPID1.dma_tx != NULL, SPID1.dma_rx != NULL,
+           rx[0], rx[1], rx[2], rx[3]);
+  }
+
+  osalSysLock();
+  spiSelectI(&SPID1);
+  spiStartSendI(&SPID1, sizeof(tx), tx);
+  spiUnselectI(&SPID1);
+  osalSysUnlock();
+  PRINTF("DMA send completed\r\n");
+
   memset(rx, 0, sizeof(rx));
   osalSysLock();
   spiSelectI(&SPID1);
-  spiStartExchangeI(&SPID1, 100, tx, rx);
+  spiStartReceiveI(&SPID1, sizeof(rx), rx);
   spiUnselectI(&SPID1);
   osalSysUnlock();
-  int ok100 = memcmp(tx, rx, 100) == 0;
-  PRINTF("DMA 100B exchange: %s\r\n", ok100 ? "match: PASS" : "MISMATCH: FAIL (loopback wire?)");
+  bool receive_ok = true;
+  for (size_t i = 0; i < sizeof(rx); i++) {
+    if (rx[i] != 0xFFU) {
+      receive_ok = false;
+      break;
+    }
+  }
+  PRINTF("DMA receive after send: %s\r\n", receive_ok ? "PASS" : "FAIL");
 
   spiStop(&SPID1);
-  PRINTF("result: %s\r\n", (ok4 && ok100) ? "PASS" : "FAIL");
+  PRINTF("result: %s\r\n", (ok4 && ok100 && receive_ok) ? "PASS" : "FAIL");
   while (true) chThdSleepMilliseconds(1000);
 }

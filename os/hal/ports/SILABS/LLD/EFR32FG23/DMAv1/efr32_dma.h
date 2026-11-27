@@ -267,6 +267,7 @@ typedef struct {
  */
 #define dmaStreamEnable(dmastp) {                                           \
   dmaStreamClearInterrupt(dmastp);                                          \
+  LDMA->CHDONE_CLR = (1U << (dmastp)->selfindex);                           \
   LDMA->IEN_SET = (1U << (dmastp)->selfindex);                              \
   LDMA->CHEN_SET = (1U << (dmastp)->selfindex);                             \
 }
@@ -291,14 +292,13 @@ typedef struct {
 }
 
 /**
- * @brief   Polled wait for DMA transfer end.
+ * @brief   Polled wait for a single or final linked DMA transfer.
+ * @note    The transfer must have been started with @p dmaStreamEnable or
+ *          @p dmaStartLinkedList so that an old CHDONE flag is cleared.
  */
 #define dmaWaitCompletion(dmastp) {                                         \
   LDMA->IEN_CLR = (1U << (dmastp)->selfindex);                              \
-  /* Poll both IF.DONE and CHBUSY: the shared LDMA ISR clears IF, so IF    \
-     alone may never be observed even though the transfer completed. */     \
-  while (((LDMA->IF & (1U << (dmastp)->selfindex)) == 0U) &&                \
-         ((LDMA->CHBUSY & (1U << (dmastp)->selfindex)) != 0U)) {}           \
+  while ((LDMA->CHDONE & (1U << (dmastp)->selfindex)) == 0U) {}             \
   dmaStreamClearInterrupt(dmastp);                                          \
 }
 
@@ -354,7 +354,7 @@ typedef struct {
                    EFR32_DMA_CH_CTRL_DSTINC_NONE      |                     \
                    EFR32_DMA_CH_CTRL_SRCINC_ONE      |                     \
                    EFR32_DMA_CH_CTRL_REQMODE_BLOCK    |                     \
-                   EFR32_DMA_CH_CTRL_BLOCKSIZE(1U)    |                     \
+                   LDMA_CH_CTRL_BLOCKSIZE_UNIT1      |                     \
                    EFR32_DMA_CH_CTRL_XFERCNT(n)       |                     \
                    EFR32_DMA_CH_CTRL_DONEIEN);                              \
   dmaStreamEnable(dmastp);                                                  \
@@ -381,7 +381,7 @@ typedef struct {
                    EFR32_DMA_CH_CTRL_DSTINC_ONE      |                     \
                    EFR32_DMA_CH_CTRL_SRCINC_NONE     |                     \
                    EFR32_DMA_CH_CTRL_REQMODE_BLOCK    |                     \
-                   EFR32_DMA_CH_CTRL_BLOCKSIZE(1U)    |                     \
+                   LDMA_CH_CTRL_BLOCKSIZE_UNIT1      |                     \
                    EFR32_DMA_CH_CTRL_XFERCNT(n)       |                     \
                    EFR32_DMA_CH_CTRL_DONEIEN);                              \
   dmaStreamEnable(dmastp);                                                  \
@@ -430,8 +430,11 @@ typedef struct {
      Descriptors must be 16-byte aligned (LINKADDR ignores bits 3:0).     */\
   (dmastp)->stream->LINK = EFR32_DMA_CH_LINK_LINKADDR(&(desc)[0]) |         \
                            EFR32_DMA_CH_LINK_LINKMODE_ABSOLUTE;            \
+  dmaStreamClearInterrupt(dmastp);                                          \
+  LDMA->CHDONE_CLR = (1U << (dmastp)->selfindex);                          \
+  LDMA->IEN_SET = (1U << (dmastp)->selfindex);                             \
   LDMA->LINKLOAD = (1U << (dmastp)->selfindex);                             \
-  dmaStreamEnable(dmastp);                                                  \
+  LDMA->CHEN_SET = (1U << (dmastp)->selfindex);                            \
 }
 
 /*===========================================================================*/

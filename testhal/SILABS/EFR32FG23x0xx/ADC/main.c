@@ -3,8 +3,8 @@
     Apache License 2.0 — see repository root.
 
     ADC test: IADC0 single conversion.
-      1) portpos=GND, portneg=GND  -> result must be ~0
-      2) portpos=VDDX via refsel    -> sanity: just runs and returns a value
+      1) portpos=GND, portneg=GND  -> signed result must be ~0
+      2) portpos=PA0                -> completion smoke test only
     Uses the synchronous adcConvert() API (waits on SINGLEFIFODVL IRQ).
 */
 #include "ch.h"
@@ -41,10 +41,17 @@ int main(void) {
     .osrhs        = 0,
   };
   r = adcConvert(&ADCD1, &grp_gnd, sample_buf, 1);
-  PRINTF("GND vs GND: ret=%d code=%u %s\r\n", (int)r,
-         (unsigned)sample_buf[0],
-         (r == HAL_RET_SUCCESS && sample_buf[0] < 64U) ? "PASS" : "FAIL");
-  ok = ok && (r == HAL_RET_SUCCESS) && (sample_buf[0] < 64U);
+  int32_t gnd = sample_buf[0] <= INT16_MAX ? (int32_t)sample_buf[0]
+                                           : (int32_t)sample_buf[0] - 65536;
+  bool gnd_ok = (r == HAL_RET_SUCCESS) && (gnd > -64) && (gnd < 64);
+  PRINTF("GND vs GND: ret=%d signed code=%ld %s\r\n", (int)r,
+         (long)gnd, gnd_ok ? "PASS" : "FAIL");
+  if (!gnd_ok) {
+    PRINTF("IADC SINGLE=0x%08lX CFG=0x%08lX DATA=0x%08lX IF=0x%08lX\r\n",
+           (unsigned long)IADC0->SINGLE, (unsigned long)IADC0->CFG[0].CFG,
+           (unsigned long)IADC0->SINGLEDATA, (unsigned long)IADC0->IF);
+  }
+  ok = ok && gnd_ok;
 
   /* Case 2: port A pin 0 (floating/board-dependent) — just must complete */
   static const ADCConversionGroup grp_pa0 = {
@@ -56,13 +63,16 @@ int main(void) {
     .portneg      = EFR32_ADC_PORT_GND,
     .pin          = 0,
     .refsel       = 3,   /* VDDX */
-    .osrhs        = 0,
+    .osrhs        = 1,   /* HiSpeed4x */
   };
   r = adcConvert(&ADCD1, &grp_pa0, sample_buf, 1);
-  PRINTF("PA0 vs GND (VDDX ref): ret=%d code=%u %s\r\n", (int)r,
+  bool cfg_ok = (IADC0->CFG[0].CFG & (_IADC_CFG_REFSEL_MASK |
+                                     _IADC_CFG_OSRHS_MASK)) ==
+                (IADC_CFG_REFSEL_VDDX | IADC_CFG_OSRHS_HISPD4);
+  PRINTF("PA0 vs GND (VDDX ref): ret=%d code=%u %s; group config %s\r\n", (int)r,
          (unsigned)sample_buf[0],
-         (r == HAL_RET_SUCCESS) ? "PASS" : "FAIL");
-  ok = ok && (r == HAL_RET_SUCCESS);
+         (r == HAL_RET_SUCCESS) ? "PASS" : "FAIL", cfg_ok ? "PASS" : "FAIL");
+  ok = ok && (r == HAL_RET_SUCCESS) && cfg_ok;
 
   adcStop(&ADCD1);
   uint32_t clk = CMU->CLKEN0 & CMU_CLKEN0_IADC0;

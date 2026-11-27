@@ -50,29 +50,20 @@ static void letimer_sync_wait(void) {
 
 OSAL_IRQ_HANDLER(EFR32_LETIM1_HANDLER) {
   OSAL_IRQ_PROLOGUE();
-  if ((LETIMER0->IF & LETIMER_IF_UF) != 0U) {
-    LETIMER0->IF_CLR = LETIMER_IF_UF;
+  if ((LETIMER0->IF & LETIMER_IF_COMP0) != 0U) {
+    LETIMER0->IF_CLR = LETIMER_IF_COMP0;
+    LETIMER0->COMP0 = (LETIMER0->CNT - letimer_window_ticks) & _LETIMER_COMP0_MASK;
     if (letimer_window_cb != NULL) {
       letimer_window_cb();
-    }
-    /* Re-arm the next one-shot window with the current period. In ONESHOT
-       mode the counter is stopped right after UF, and COMP0 must only be
-       written while stopped — so this is glitch-free. SYNCBUSY is pumped
-       because CMD writes while busy bus-fault on xG23. */
-    uint32_t ticks = letimer_window_ticks;
-    if (ticks != 0U) {
-      letimer_sync_wait();
-      LETIMER0->COMP0 = 0xFFFFFFU - (ticks & 0xFFFFFFU);
-      letimer_sync_wait();
-      LETIMER0->CMD_SET = LETIMER_CMD_START;
     }
   }
   OSAL_IRQ_EPILOGUE();
 }
 
 void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb) {
+  osalDbgAssert(ticks > 0U && ticks <= _LETIMER_COMP0_MASK, "invalid window");
   letimer_window_cb = cb;
-  letimer_window_ticks = ticks & 0xFFFFFFU;
+  letimer_window_ticks = ticks;
 
   CMU->CLKEN0_SET = CMU_CLKEN0_LETIMER0;
 
@@ -84,19 +75,16 @@ void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb) {
   LETIMER0->IEN = 0U;
   LETIMER0->IF_CLR = _LETIMER_IF_MASK;
 
-  /* ONESHOT: stops after one underflow; a PRS START pulse (routed via
-     SIGROUTE_CON_LETIMER0_START) (re)starts the window. While running,
-     further START pulses are ignored — no retrigger. */
-  LETIMER0->CTRL = LETIMER_CTRL_REPMODE_ONESHOT;
-  LETIMER0->COMP0 = 0xFFFFFFU - (ticks & 0xFFFFFFU);   /* 24-bit down-counter */
-  LETIMER0->TOP   = 0xFFFFFFU;
-  LETIMER0->PRSMODE = LETIMER_PRSMODE_PRSSTARTMODE_RISING;
+  LETIMER0->CTRL = LETIMER_CTRL_REPMODE_FREE;
   letimer_sync_wait();
 
-  /* Enable last so TOP is loaded; then arm the UF interrupt. */
   LETIMER0->EN_SET = LETIMER_EN_EN;
   letimer_sync_wait();
-  LETIMER0->IEN_SET = LETIMER_IEN_UF;
+  LETIMER0->CMD = LETIMER_CMD_START;
+  letimer_sync_wait();
+  LETIMER0->COMP0 = (LETIMER0->CNT - ticks) & _LETIMER_COMP0_MASK;
+  LETIMER0->IF_CLR = LETIMER_IF_COMP0;
+  LETIMER0->IEN_SET = LETIMER_IEN_COMP0;
 
   nvicEnableVector(EFR32_LETIM1_NUMBER, EFR32_LETIMER_WIN_IRQ_PRIORITY);
 }
@@ -108,38 +96,24 @@ void letimer_lld_window_kick(void) {
 }
 
 void letimer_lld_window_set_period(uint32_t ticks) {
-  letimer_window_ticks = ticks & 0xFFFFFFU;
-  /* If the window chain is enabled but currently stopped, start it now with
-     the new period; otherwise the UF ISR picks the new period up at the next
-     re-arm. COMP0 is only written while the counter is stopped. */
-  if (((LETIMER0->EN & LETIMER_EN_EN) != 0U) &&
-      ((LETIMER0->STATUS & LETIMER_STATUS_RUNNING) == 0U) &&
-      (letimer_window_ticks != 0U)) {
-    letimer_sync_wait();
-    LETIMER0->COMP0 = 0xFFFFFFU - letimer_window_ticks;
-    letimer_sync_wait();
-    LETIMER0->CMD_SET = LETIMER_CMD_START;
-  }
+  osalDbgAssert(ticks > 0U && ticks <= _LETIMER_COMP0_MASK, "invalid window");
+  letimer_window_ticks = ticks;
 }
 
 void letimer_lld_window_restart(uint32_t ticks) {
-  letimer_window_ticks = ticks & 0xFFFFFFU;
-  if ((LETIMER0->EN & LETIMER_EN_EN) == 0U || letimer_window_ticks == 0U) {
-    return;
-  }
-  /* Stop, reprogram COMP0 (safe only while the counter is stopped), start. */
-  LETIMER0->CMD_CLR = LETIMER_CMD_STOP;
-  letimer_sync_wait();
-  LETIMER0->COMP0 = 0xFFFFFFU - letimer_window_ticks;
-  letimer_sync_wait();
-  LETIMER0->CMD_SET = LETIMER_CMD_START;
+  osalDbgAssert(ticks > 0U && ticks <= _LETIMER_COMP0_MASK, "invalid window");
+  osalSysLock();
+  letimer_window_ticks = ticks;
+  LETIMER0->COMP0 = (LETIMER0->CNT - ticks) & _LETIMER_COMP0_MASK;
+  LETIMER0->IF_CLR = LETIMER_IF_COMP0;
+  osalSysUnlock();
 }
 
 void letimer_lld_window_stop(void) {
   nvicDisableVector(EFR32_LETIM1_NUMBER);
   LETIMER0->IEN = 0U;
   LETIMER0->IF_CLR = _LETIMER_IF_MASK;
-  LETIMER0->CMD_CLR = LETIMER_CMD_STOP;
+  LETIMER0->CMD = LETIMER_CMD_STOP;
   letimer_sync_wait();
   LETIMER0->EN_CLR = LETIMER_EN_EN;
   letimer_sync_wait();

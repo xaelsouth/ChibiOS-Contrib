@@ -20,6 +20,21 @@ int main(void) {
   console_init();
   PRINTF("\r\nLCD pattern: DEGC 1s, blank, dots 1s, blank, walking 8 5s, blank, all on 1s, blank\r\n");
   lcdStart(&LCDD1, &board_lcd_config);
+
+  lcdClear(&LCDD1);
+  for (uint32_t seg = 0; seg < EFR32_LCD_MAX_SEGMENTS; seg++)
+    lcdSetSegment(&LCDD1, seg, true);
+  lcdUpdate(&LCDD1);
+  PRINTF("All segments: TDI enabled for 6s, then disabled for 10s\r\n");
+  chThdSleepMilliseconds(6000);
+  GPIO->DBGROUTEPEN_CLR = GPIO_DBGROUTEPEN_TDIPEN;
+  uint32_t debug_route = GPIO->DBGROUTEPEN;
+  PRINTF("DBGROUTEPEN=0x%lX TDI release: %s\r\n",
+         (unsigned long)debug_route,
+         (debug_route & GPIO_DBGROUTEPEN_TDIPEN) == 0U ? "PASS" :
+         "FAIL (disconnect debugger and reset)");
+  chThdSleepMilliseconds(10000);
+
   while (true) {
     /* 1) DEGC icon (symbol 5), 1 s + blank */
     lcdClear(&LCDD1);

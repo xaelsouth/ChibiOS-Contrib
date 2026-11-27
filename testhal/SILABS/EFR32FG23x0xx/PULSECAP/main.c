@@ -57,18 +57,26 @@
 
 static uint32_t          ring_storage[PCAP_RING_CAP];
 static ringbuf_t         ring;
+static volatile uint32_t dma_sample;
 static efr32_dma_desc_t  desc[PCAP_RING_CAP] __attribute__((aligned(16)));
 static thread_t         *main_tp;
 static volatile uint32_t ldma_done_cnt;
+static volatile uint32_t ldma_error_cnt;
+static volatile uint32_t ring_dropped_cnt;
 
-/* LDMA per-descriptor DONE ISR: the engine already wrote CNT into the
-   slot; commit it to the ring and wake the app. Runs under the lock held
-   by the DMAv1 LLD ISR — do not lock again here. */
+/* The LDMA callback runs under the system lock held by the DMAv1 ISR. */
 static const efr32_dma_stream_t *pcap_stream;
 
 static void dma_isr(void *p, uint32_t flags) {
-  (void)p; (void)flags;
-  ring.head = (ring.head + 1U) % ring.capacity;   /* = ringbufCommitI() */
+  (void)p;
+  if ((flags & EFR32_DMA_ISR_ERROR_MASK) != 0U) {
+    ldma_error_cnt++;
+    return;
+  }
+  uint32_t sample = dma_sample;
+  if (ringbufWriteI(&ring, &sample) == 0U) {
+    ring_dropped_cnt++;
+  }
   ldma_done_cnt++;
   /* xG23: the channel auto-disables after each descriptor DONE; re-enable
      so the circular linked list keeps accepting PRS requests. */
@@ -99,6 +107,46 @@ static void burtc_sync_wait(void) {
   while (((BURTC->SYNCBUSY & _BURTC_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
 }
 
+static bool test_ringbuf(void) {
+  ringbuf_t rb;
+  uint32_t storage[4], value;
+  uint32_t one = 1U, two = 2U, three = 3U, four = 4U;
+  bool ok = true;
+
+  ringbufObjectInit(&rb, storage, sizeof(storage[0]), 4U, false);
+  ok = ringbufWrite(&rb, &one) == 1U && ok;
+  ok = ringbufWrite(&rb, &two) == 1U && ok;
+  ok = ringbufWrite(&rb, &three) == 1U && ok;
+  ok = ringbufFull(&rb) && ringbufCount(&rb) == 3U && ok;
+  ok = ringbufWrite(&rb, &four) == 0U && ok;
+  ok = ringbufPeek(&rb, &value) == 1U && value == one && ok;
+  ok = ringbufRead(&rb, &value) == 1U && value == one && ok;
+  ok = ringbufWrite(&rb, &four) == 1U && ok;
+  ok = ringbufRead(&rb, &value) == 1U && value == two && ok;
+  ok = ringbufRead(&rb, &value) == 1U && value == three && ok;
+  ok = ringbufRead(&rb, &value) == 1U && value == four && ok;
+  ok = ringbufEmpty(&rb) && ringbufRead(&rb, &value) == 0U && ok;
+
+  osalSysLock();
+  ok = ringbufWriteI(&rb, &one) == 1U && ok;
+  ok = ringbufPeekI(&rb, &value) == 1U && value == one && ok;
+  ok = ringbufCountI(&rb) == 1U && !ringbufFullI(&rb) && ok;
+  ok = ringbufReadI(&rb, &value) == 1U && value == one && ok;
+  ringbufResetI(&rb);
+  ok = ringbufEmptyI(&rb) && ok;
+  osalSysUnlock();
+
+  ringbufObjectInit(&rb, storage, sizeof(storage[0]), 4U, true);
+  ok = ringbufWrite(&rb, &one) == 1U && ok;
+  ok = ringbufWrite(&rb, &two) == 1U && ok;
+  ok = ringbufWrite(&rb, &three) == 1U && ok;
+  ok = ringbufWrite(&rb, &four) == 1U && ok;
+  ok = ringbufRead(&rb, &value) == 1U && value == two && ok;
+  ringbufReset(&rb);
+  ok = ringbufEmpty(&rb) && ok;
+  return ok;
+}
+
 int main(void) {
   halInit();
   chSysInit();
@@ -107,9 +155,10 @@ int main(void) {
 
   PRINTF("\r\nPULSECAP test: PRS->PCNT, BURTC window, LDMA->ringbuf\r\n");
 
-  bool ok = true;
+  bool ok = test_ringbuf();
+  PRINTF("ring buffer: %s\r\n", ok ? "PASS" : "FAIL");
 
-  /* 1) Ring buffer + circular LDMA descriptor chain over its slots. */
+  /* 1) LDMA samples into staging storage, then the ISR publishes to the ring. */
   ringbufObjectInit(&ring, ring_storage, sizeof(uint32_t), PCAP_RING_CAP, false);
   for (uint32_t i = 0; i < PCAP_RING_CAP; i++) {
     desc[i].CTRL = EFR32_DMA_CH_CTRL_SIZE_WORD        |
@@ -120,7 +169,7 @@ int main(void) {
                    EFR32_DMA_CH_CTRL_XFERCNT(1U)      |  /* 1 word per descriptor */
                    EFR32_DMA_CH_CTRL_DONEIEN;
     desc[i].SRC  = (uint32_t)&PCNT0->CNT;
-    desc[i].DST  = (uint32_t)&ring_storage[i];
+    desc[i].DST  = (uint32_t)&dma_sample;
     desc[i].LINK = EFR32_DMA_CH_LINK_LINKADDR(&desc[(i + 1U) % PCAP_RING_CAP]) |
                    EFR32_DMA_CH_LINK_LINKMODE_ABSOLUTE;
   }
@@ -178,7 +227,12 @@ int main(void) {
     .overflow_cb = NULL,
     .callback = NULL,
   };
+  sigrouteSwLevelSet(&SIGROUTED1, 1U << 3);
   qeiStart(&QEID1, &qei_cfg);
+  bool other_level = (PRS->ASYNC_SWLEVEL & (1U << 3)) != 0U;
+  PRINTF("unrelated PRS software level preserved: %s\r\n",
+         other_level ? "PASS" : "FAIL");
+  ok = ok && other_level;
   /* baseline: the LLD's SYNCBUSY pump already fired some counting pulses */
   chThdSleepMilliseconds(10);
   uint32_t cnt_base = (uint32_t)qeiGetCount(&QEID1) & 0xFFFFU;
@@ -229,12 +283,11 @@ int main(void) {
   burtc_sync_wait();
   BURTC->CMD_SET = BURTC_CMD_START;
   burtc_sync_wait();
-  bool burtc_running = ((BURTC->CNT != 0U) || true); /* CNT may still read 0 */
   chThdSleepMilliseconds(50);
   uint32_t bc0 = BURTC->CNT;
   chThdSleepMilliseconds(50);
   uint32_t bc1 = BURTC->CNT;
-  burtc_running = (bc1 > bc0);
+  bool burtc_running = (bc1 > bc0);
   PRINTF("BURTC running (CNT %lu->%lu) COMP=%lu %s\r\n",
          (unsigned long)bc0, (unsigned long)bc1, (unsigned long)BURTC->COMP,
          burtc_running ? "PASS" : "FAIL");
@@ -259,10 +312,10 @@ int main(void) {
   ok = ok && (pulses_seen == 7U) && no_restart;
 
   /* 6) Sleep until the BURTC window expires; LDMA must sample CNT into the
-        ring while the CPU is idle (kernel sleep / WFI in idle thread). */
+        staging storage while the CPU is idle; the ISR publishes the sample. */
   PRINTF("waiting for BURTC window (1 s)...\r\n");
   for (int i = 0; (i < 250) && (ringbufCount(&ring) == 0U); i++) {
-    chThdSleepMilliseconds(10);   /* 2.5 s timeout; DONE irq commits slot */
+    chThdSleepMilliseconds(10);   /* 2.5 s timeout */
   }
   uint32_t n1 = ringbufCount(&ring);
   uint32_t v1 = 0;
@@ -277,8 +330,7 @@ int main(void) {
         double-counted together with the next window sample). Restart PCNT
         with TOP=2, inject 3 pulses -> wrap (OF irq fires, CNT wraps), but
         no ring entry may appear. Then re-arm a short BURTC window and check
-        that the next window sample spans the wrap with the correct 16-bit
-        monotonic delta. */
+        that the next window sample matches the reconfigured counter. */
   qeiStop(&QEID1);
   static const QEIConfig qei_cfg_of = {
     .cfg  = PCNT_CFG_MODE_EXTCLKSINGLE,
@@ -293,6 +345,10 @@ int main(void) {
     .callback = pcnt_irq_cb,
   };
   qeiStart(&QEID1, &qei_cfg_of);
+  other_level = (PRS->ASYNC_SWLEVEL & (1U << 3)) != 0U;
+  PRINTF("PRS software level preserved after restart: %s\r\n",
+         other_level ? "PASS" : "FAIL");
+  ok = ok && other_level;
   chThdSleepMilliseconds(10);
   uint32_t c0 = (uint32_t)qeiGetCount(&QEID1) & 0xFFFFU;
   uint32_t irq0 = pcnt_irq_cnt;
@@ -319,16 +375,20 @@ int main(void) {
   uint32_t v2 = 0xFFFFFFFFU;
   bool got2 = (ringbufRead(&ring, &v2) != 0U);
   uint32_t c2 = (uint32_t)qeiGetCount(&QEID1) & 0xFFFFU;  /* CNT at/after sample */
-  uint32_t delta = (v2 - cnt7) & 0xFFFFU;          /* monotonic 16-bit delta */
   /* PCNT CNT is LF-domain: an LDMA read right at a wrap can lag the CPU
      readback by one sync tick, so accept v2 == c2 or c2-1 (mod 2^16). */
   bool near = (v2 == c2) || (v2 == ((c2 - 1U) & 0xFFFFU));
-  bool of_ok = got2 && near && (delta == ((v2 - cnt7) & 0xFFFFU));
-  PRINTF("wrap sample: ring v2=%lu (CNT now %lu) delta=%lu %s\r\n",
-         (unsigned long)v2, (unsigned long)c2, (unsigned long)delta,
+  bool of_ok = got2 && near;
+  PRINTF("wrap sample: ring v2=%lu (CNT now %lu) %s\r\n",
+         (unsigned long)v2, (unsigned long)c2,
          of_ok ? "PASS" : "FAIL");
   ok = ok && of_ok;
 
+  if (ldma_error_cnt != 0U || ring_dropped_cnt != 0U) {
+    PRINTF("LDMA errors=%lu ring drops=%lu\r\n",
+           (unsigned long)ldma_error_cnt, (unsigned long)ring_dropped_cnt);
+    ok = false;
+  }
   PRINTF("result: %s\r\n", ok ? "PASS" : "FAIL");
 
   while (true) { chThdSleepMilliseconds(1000); }

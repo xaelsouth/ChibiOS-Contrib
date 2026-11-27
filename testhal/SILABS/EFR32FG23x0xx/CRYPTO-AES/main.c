@@ -92,6 +92,16 @@ int main(void) {
   hex2bin("000102030405060708090a0b0c0d0e0f", key, 16);
   hex2bin("00112233445566778899aabbccddeeff", in, 16);
   cryLoadAESTransientKey(&CRYD1, 16, key);
+
+  chSysLock();
+  cryerror_t enc_x = cryEncryptAESX(&CRYD1, 0, in, out);
+  cryerror_t dec_x = cryDecryptAESX(&CRYD1, 0, in, out);
+  chSysUnlock();
+  bool x_unsupported = (enc_x == CRY_ERR_INV_ALGO) &&
+                       (dec_x == CRY_ERR_INV_ALGO);
+  if (!x_unsupported) fails++;
+  PRINTF("AES X-class unsupported  %s\r\n", x_unsupported ? "PASS" : "FAIL");
+
   cryEncryptAES_ECB(&CRYD1, 0, 16, in, out);
   check("ECB-128 enc", out, "69c4e0d86a7b0430d8cdb78070b4c55a", 16);
 

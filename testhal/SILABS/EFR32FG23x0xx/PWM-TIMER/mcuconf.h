@@ -187,6 +187,6 @@
 #define EFR32_WDG_WDOG0_IRQ_PRIORITY        2
 #define EFR32_WDG_WDOG1_IRQ_PRIORITY        2
 
-#define EFR32_PWM_USE_TIMER3    TRUE
+#define EFR32_PWM_USE_TIMER2    TRUE
 
 #endif /* MCUCONF_H */

@@ -59,6 +59,20 @@ static struct {
   const efr32_dma_stream_t *dma_ch2;
 } dac;
 
+static const efr32_dma_stream_t *dac_dma_stream(DACDriver *dacp) {
+#if EFR32_DAC_USE_DAC1_CH1 == TRUE
+  if (dacp == &DACD1) {
+    return dac.dma_ch1;
+  }
+#endif
+#if EFR32_DAC_USE_DAC1_CH2 == TRUE
+  if (dacp == &DACD2) {
+    return dac.dma_ch2;
+  }
+#endif
+  return NULL;
+}
+
 /*===========================================================================*/
 /* Driver interrupt handler.                                                 */
 /*===========================================================================*/
@@ -105,6 +119,25 @@ msg_t dac_lld_start(DACDriver *dacp) {
   if (dacp->state == DAC_STOP) {
     bool was_on = (dac.clk_en_mask & EFR32_DAC1_CLK_EN_MASK) != 0U;
 
+#if EFR32_DAC_USE_DAC1_CH1 == TRUE
+    if (&DACD1 == dacp && dac.dma_ch1 == NULL) {
+      dac.dma_ch1 = dmaStreamAllocI(EFR32_DAC_DAC1_CH1_DMA_STREAM,
+                                    EFR32_DAC_DAC1_IRQ_PRIORITY, NULL, NULL);
+      if (dac.dma_ch1 == NULL) {
+        return HAL_RET_NO_RESOURCE;
+      }
+    }
+#endif
+#if EFR32_DAC_USE_DAC1_CH2 == TRUE
+    if (&DACD2 == dacp && dac.dma_ch2 == NULL) {
+      dac.dma_ch2 = dmaStreamAllocI(EFR32_DAC_DAC1_CH2_DMA_STREAM,
+                                    EFR32_DAC_DAC1_IRQ_PRIORITY, NULL, NULL);
+      if (dac.dma_ch2 == NULL) {
+        return HAL_RET_NO_RESOURCE;
+      }
+    }
+#endif
+
     if (!was_on) {
       CMU->CLKEN1_SET = CMU_CLKEN1_VDAC0;
       /* Functional clock: EM01GRPACLK is always running in EM0/EM1. */
@@ -129,15 +162,6 @@ msg_t dac_lld_start(DACDriver *dacp) {
       VDAC0->CH0CFG = VDAC_CH0CFG_CONVMODE_CONTINUOUS
                     | VDAC_CH0CFG_POWERMODE_HIGHPOWER
                     | (0x1U << _VDAC_CH0CFG_TRIGMODE_SHIFT);
-
-      nvicEnableVector(EFR32_VDAC_NUMBER, EFR32_DAC_DAC1_IRQ_PRIORITY);
-
-#if defined(EFR32_DMA_REQUIRED)
-      if (dac.dma_ch1 == NULL) {
-        dac.dma_ch1 = dmaStreamAlloc(EFR32_DAC_DAC1_CH1_DMA_STREAM,
-                                     EFR32_DAC_DAC1_IRQ_PRIORITY, NULL, NULL);
-      }
-#endif
     }
 #endif
 
@@ -148,17 +172,11 @@ msg_t dac_lld_start(DACDriver *dacp) {
       VDAC0->CH1CFG = VDAC_CH1CFG_CONVMODE_CONTINUOUS
                     | VDAC_CH1CFG_POWERMODE_HIGHPOWER
                     | (0x1U << _VDAC_CH1CFG_TRIGMODE_SHIFT);
-
-#if defined(EFR32_DMA_REQUIRED)
-      if (dac.dma_ch2 == NULL) {
-        dac.dma_ch2 = dmaStreamAlloc(EFR32_DAC_DAC1_CH2_DMA_STREAM,
-                                     EFR32_DAC_DAC1_IRQ_PRIORITY, NULL, NULL);
-      }
-#endif
     }
 #endif
 
     VDAC0->EN_SET = VDAC_EN_EN;
+    nvicEnableVector(EFR32_VDAC_NUMBER, EFR32_DAC_DAC1_IRQ_PRIORITY);
 
 #if EFR32_DAC_USE_DAC1_CH1 == TRUE
     if ((dac.clk_en_mask & EFR32_DAC1_CLK_EN_SHIFT(0)) != 0U) {
@@ -181,22 +199,22 @@ void dac_lld_stop(DACDriver *dacp) {
   if (dacp->state == DAC_READY) {
 #if EFR32_DAC_USE_DAC1_CH1 == TRUE
     if (&DACD1 == dacp) {
-      VDAC0->CMD_CLR = VDAC_CMD_CH0DIS;
+      VDAC0->CMD_SET = VDAC_CMD_CH0DIS;
       VDAC0->OUTCTRL_CLR = VDAC_OUTCTRL_MAINOUTENCH0;
       dac.clk_en_mask &= ~EFR32_DAC1_CLK_EN_SHIFT(0);
       if (dac.dma_ch1 != NULL) {
-        dmaStreamFree(dac.dma_ch1);
+        dmaStreamFreeI(dac.dma_ch1);
         dac.dma_ch1 = NULL;
       }
     }
 #endif
 #if EFR32_DAC_USE_DAC1_CH2 == TRUE
     if (&DACD2 == dacp) {
-      VDAC0->CMD_CLR = VDAC_CMD_CH1DIS;
+      VDAC0->CMD_SET = VDAC_CMD_CH1DIS;
       VDAC0->OUTCTRL_CLR = VDAC_OUTCTRL_MAINOUTENCH1;
       dac.clk_en_mask &= ~EFR32_DAC1_CLK_EN_SHIFT(1);
       if (dac.dma_ch2 != NULL) {
-        dmaStreamFree(dac.dma_ch2);
+        dmaStreamFreeI(dac.dma_ch2);
         dac.dma_ch2 = NULL;
       }
     }
@@ -205,6 +223,7 @@ void dac_lld_stop(DACDriver *dacp) {
     /* Disable module if no channels active. */
     if ((dac.clk_en_mask & EFR32_DAC1_CLK_EN_MASK) == 0U) {
       VDAC0->EN_CLR = VDAC_EN_EN;
+      while ((VDAC0->EN & VDAC_EN_DISABLING) != 0U) {}
       CMU->CLKEN1_CLR = CMU_CLKEN1_VDAC0;
       nvicDisableVector(EFR32_VDAC_NUMBER);
     }
@@ -229,13 +248,13 @@ msg_t dac_lld_start_conversion(DACDriver *dacp) {
   /* In continuous mode, writing to CHxF triggers a conversion automatically.
      For DMA-driven output, set up the DMA stream to feed CHxF. */
 #if defined(EFR32_DMA_REQUIRED)
-  const efr32_dma_stream_t *st = (dacp == &DACD1) ? dac.dma_ch1 : dac.dma_ch2;
+  const efr32_dma_stream_t *st = dac_dma_stream(dacp);
   if (st != NULL && dacp->grpp != NULL) {
-    dacchannel_t ch = (dacp == &DACD1) ? 0U : 1U;
+    dacchannel_t ch = (st == dac.dma_ch1) ? 0U : 1U;
     volatile uint32_t *dst = (ch == 0U) ? &VDAC0->CH0F : &VDAC0->CH1F;
 
     /* Route VDAC0 DMA request to the stream. */
-    dmaStreamSetRequestSource(st, LDMAXBAR_CH_REQSEL_SOURCESEL_VDAC0 >> 16, 0);
+    dmaStreamSetRequestSource(st, LDMAXBAR_CH_REQSEL_SOURCESEL_VDAC0 >> 16, ch);
 
     dmaStartMemToPeriph(st, dacp->samples, dst,
                         dacp->depth, EFR32_DMA_CH_CTRL_SIZE_HALFWORD);
@@ -249,7 +268,7 @@ msg_t dac_lld_start_conversion(DACDriver *dacp) {
 
 void dac_lld_stop_conversion(DACDriver *dacp) {
 #if defined(EFR32_DMA_REQUIRED)
-  const efr32_dma_stream_t *st = (dacp == &DACD1) ? dac.dma_ch1 : dac.dma_ch2;
+  const efr32_dma_stream_t *st = dac_dma_stream(dacp);
   if (st != NULL) {
     dmaStreamDisable(st);
   }

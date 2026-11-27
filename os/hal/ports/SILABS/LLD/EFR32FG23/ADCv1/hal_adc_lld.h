@@ -83,9 +83,9 @@ typedef enum {
   efr32_adc_port_t          portneg;                                        \
   /* Pin number within the port (0-15). */                                  \
   uint8_t                   pin;                                          \
-  /* Reference selection (0=VBGR, 1=VREF, 3=VDDX). */                      \
+  /* Reference selection (0=VBGR, 1=VREF, 3=VDDX, 4=VDDX0P8BUF). */         \
   uint8_t                   refsel;                                       \
-  /* Oversampling (0=HISPD2 ... 6=HISPD128). */                             \
+  /* Oversampling (0=HISPD2 ... 5=HISPD64). */                             \
   uint8_t                   osrhs;
 
 

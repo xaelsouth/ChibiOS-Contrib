@@ -152,14 +152,20 @@ void adc_lld_start_conversion(ADCDriver *adcp) {
 #if EFR32_ADC_USE_IADC0
   const ADCConversionGroup *grpp = adcp->grpp;
 
+  osalDbgCheck((grpp->refsel == 0U || grpp->refsel == 1U ||
+                grpp->refsel == 3U || grpp->refsel == 4U) &&
+               grpp->osrhs <= _IADC_CFG_OSRHS_HISPD64);
+  IADC0->EN_CLR = IADC_EN_EN;
+  while ((IADC0->EN & IADC_EN_DISABLING) != 0U) {}
+  IADC0->CFG[0].CFG = IADC_CFG_ADCMODE_NORMAL |
+                      ((uint32_t)grpp->refsel << _IADC_CFG_REFSEL_SHIFT) |
+                      ((uint32_t)grpp->osrhs << _IADC_CFG_OSRHS_SHIFT);
+  IADC0->EN_SET = IADC_EN_EN;
+
   /* Configure single conversion input from group. */
   IADC0->SINGLE = ((uint32_t)grpp->portneg << _IADC_SINGLE_PORTNEG_SHIFT)
                 | ((uint32_t)grpp->portpos << _IADC_SINGLE_PORTPOS_SHIFT)
                 | ((uint32_t)grpp->pin    << _IADC_SINGLE_PINPOS_SHIFT);
-
-  /* Note: on xG23 CFG is only writable while EN=0, so the reference is
-     fixed at adc_lld_start() time; grpp->refsel is informational. */
-  (void)grpp->refsel;
 
   /* Trigger single conversion. */
   IADC0->IF_CLR = IADC_IF_SINGLEFIFODVL;

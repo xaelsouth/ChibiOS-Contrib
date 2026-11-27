@@ -63,6 +63,12 @@ static void rtt_write(const char *s, size_t n) {
 
 #define PRINTF(...) do {   char _b[256];   int _n = snprintf(_b, sizeof(_b), __VA_ARGS__);   if (_n > 0) rtt_write(_b, (size_t)_n); } while (0)
 
+static void delayed_request(virtual_timer_t *vtp, void *arg) {
+  const efr32_dma_stream_t *st = *(const efr32_dma_stream_t * const *)arg;
+  (void)vtp;
+  LDMA->SWREQ_SET = 1U << st->selfindex;
+}
+
 int main(void) {
   halInit();
   chSysInit();
@@ -78,8 +84,28 @@ int main(void) {
   } else {
     dmaStartMemCopy(st, 0, src, dst, 256);
     dmaWaitCompletion(st);
+    bool copy_ok = memcmp(src, dst, 256) == 0;
+    PRINTF("copy verified: %s\r\n", copy_ok ? "PASS" : "FAIL");
+
+    virtual_timer_t vt;
+    static uint8_t delayed_src = 0xA5U, delayed_dst;
+    chVTObjectInit(&vt);
+    dmaStreamSetSource(st, &delayed_src);
+    dmaStreamSetDestination(st, &delayed_dst);
+    dmaStreamSetMode(st, EFR32_DMA_CH_CTRL_SIZE_BYTE |
+                         EFR32_DMA_CH_CTRL_REQMODE_ALL |
+                         EFR32_DMA_CH_CTRL_XFERCNT(1U) |
+                         EFR32_DMA_CH_CTRL_DONEIEN);
+    dmaStreamEnable(st);
+    systime_t start = chVTGetSystemTimeX();
+    chVTSet(&vt, TIME_MS2I(50), delayed_request, &st);
+    dmaWaitCompletion(st);
+    systime_t elapsed = chTimeDiffX(start, chVTGetSystemTimeX());
+    chVTReset(&vt);
+    bool waited = elapsed >= TIME_MS2I(40) && delayed_dst == delayed_src;
+    PRINTF("delayed DMA request waited: %s\r\n", waited ? "PASS" : "FAIL");
+    dmaStreamDisable(st);
     dmaStreamFree(st);
-    PRINTF("copy verified: %s\r\n", memcmp(src, dst, 256) == 0 ? "PASS" : "FAIL");
   }
   /* Peripheral DMA: EUSART0 (SIOD1) TX via LDMAXBAR request
      SOURCESEL=EUSART0, SIGSEL=TXFL, mem -> &EUSART0->TXDATA. */
@@ -107,7 +133,7 @@ int main(void) {
                      EFR32_DMA_CH_CTRL_DSTINC_NONE     |
                      EFR32_DMA_CH_CTRL_SRCINC_ONE      |
                      EFR32_DMA_CH_CTRL_REQMODE_BLOCK   |
-                     EFR32_DMA_CH_CTRL_BLOCKSIZE(1U)   |
+                     LDMA_CH_CTRL_BLOCKSIZE_UNIT1      |
                      EFR32_DMA_CH_CTRL_XFERCNT(sizeof(txmsg) - 1U) |
                      EFR32_DMA_CH_CTRL_DONEIEN);
     dmaStreamEnable(st2);

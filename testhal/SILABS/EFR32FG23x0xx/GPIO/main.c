@@ -72,7 +72,15 @@ int main(void) {
   console_init();
   PRINTF("\r\nGPIO test: LED0=PB2 BTN0=PB1 BTN1=PA5\r\n");
 
-  bool btn0_old = true, btn1_old = true;
+  palClearPad(GPIOB, 2);
+  bool low = palReadPad(GPIOB, 2) == PAL_LOW;
+  palSetPad(GPIOB, 2);
+  bool high = palReadPad(GPIOB, 2) == PAL_HIGH;
+  PRINTF("LED pin output readback: %s (buttons require interaction)\r\n",
+         low && high ? "PASS" : "FAIL");
+
+  bool btn0_old = palReadPad(GPIOB, 1) == PAL_LOW;
+  bool btn1_old = palReadPad(GPIOA, 5) == PAL_LOW;
   while (true) {
     palTogglePad(GPIOB, 2);
     bool b0 = palReadPad(GPIOB, 1) == PAL_LOW;

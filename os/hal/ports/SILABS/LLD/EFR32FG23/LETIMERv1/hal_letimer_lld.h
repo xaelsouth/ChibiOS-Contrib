@@ -45,42 +45,32 @@
 #endif
 
 /**
- * @brief   Window-end callback, invoked from the LETIMER0 underflow ISR.
+ * @brief   Window-end callback, invoked from the LETIMER0 compare ISR.
  */
 typedef void (*letimer_window_cb_t)(void);
 
 #if (EFR32_LETIMER_WIN_USE_LETIMER0 == TRUE) || defined(__DOXYGEN__)
 /*===========================================================================*/
-/* PRS-started one-shot window (independent of HAL_USE_GPT).                 */
+/* Periodic capture window (independent of HAL_USE_GPT).                    */
 /*===========================================================================*/
 
 /**
  * @brief   Arm a self-re-arming window chain on LETIMER0.
- * @details Configures LETIMER0 in REPMODE_ONESHOT. The UF interrupt fires at
- *          the end of every window and @p cb is called from ISR context —
- *          the natural place to snapshot a pulse counter (e.g. PCNT0) plus
- *          the system time into a ring buffer. Right after the callback the
- *          ISR re-arms the next one-shot window with the current period
- *          (letimer_lld_window_set_period), so windows keep coming
- *          periodically without any CPU involvement; a PRS START pulse
- *          (SIGROUTE_CON_LETIMER0_START) can additionally start a stopped
- *          window but never restarts a running one (no retrigger).
+ * @details A free-running 24-bit counter and COMP0 interrupt implement the
+ *          windows. The ISR schedules the next compare and calls @p cb.
  *
  *          Because the sampled counter (e.g. PCNT) is free-running and never
  *          reset, pulses arriving between windows are never lost — they are
  *          simply attributed to the next window's delta.
  *
- * @param[in] ticks         window length in EM23GRPACLK ticks (24-bit)
+ * @param[in] ticks         window length in EM23GRPACLK ticks (1..0xFFFFFF)
  * @param[in] cb            window-end callback (ISR context), may be NULL
  */
 void letimer_lld_window_start(uint32_t ticks, letimer_window_cb_t cb);
 
 /**
  * @brief   Change the window period.
- * @details The new period applies from the next window (the UF ISR re-arms
- *          with the stored value). COMP0 is only rewritten while the one-shot
- *          counter is stopped, so there is no glitch. If the timer is enabled
- *          but currently stopped, it is (re)started immediately.
+ * @details The new period applies when the current window ends.
  *
  * @param[in] ticks         new window length in EM23GRPACLK ticks (24-bit)
  */
@@ -88,11 +78,8 @@ void letimer_lld_window_set_period(uint32_t ticks);
 
 /**
  * @brief   Restart the window immediately with a new period.
- * @details Stops the (possibly running) one-shot counter, rewrites COMP0 and
- *          starts again — so the new period applies to the window that is
- *          about to run, not only from the next re-arm. Call from thread
- *          context (e.g. when a pulse burst starts and the remaining idle
- *          window must not delay the first measurement).
+ * @details Schedules the next compare relative to the current counter value.
+ *          Call from thread context.
  *
  * @param[in] ticks         new window length in EM23GRPACLK ticks (24-bit)
  */

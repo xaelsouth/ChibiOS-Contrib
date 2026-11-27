@@ -43,6 +43,14 @@
 
 LESENSEDriver LESENSED1;
 
+static void lesense_wait_sync(void) {
+  uint32_t spin = 4000000U;
+  while ((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U && --spin != 0U) {}
+  if (spin == 0U) {
+    osalSysHalt("LESENSE sync timeout");
+  }
+}
+
 /*===========================================================================*/
 /* Driver interrupt handler.                                                 */
 /*===========================================================================*/
@@ -212,21 +220,14 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   /* Clear result buffer and flags. */
   LESENSE->CMD_SET = LESENSE_CMD_CLEARBUF;
   LESENSE->IF_CLR = _LESENSE_IF_MASK;
+  LESENSE->IEN_CLR = _LESENSE_IEN_MASK;
 
-  /* Interrupt policy:
-     - callback set      -> per-scan IRQs (channel hits + SCANDONE + RESWL).
-     - only hit_callback -> channel-hit IRQs only (no per-scan SCANDONE),
-       e.g. SETIF=POSEDGE gives one IRQ per hit edge: a cheap "first pulse"
-       wakeup while the counting itself runs autonomously via DECOUT0/PRS.
-     - both NULL         -> fully autonomous, no IRQ at all. */
+  /* Enable only interrupts for which a callback is installed. */
   if (cfg->callback != NULL) {
-    LESENSE->IEN_SET = chen | LESENSE_IEN_SCANDONE | LESENSE_IEN_RESWL;
+    LESENSE->IEN_SET = LESENSE_IEN_SCANDONE;
   }
-  else if (cfg->hit_callback != NULL) {
+  if (cfg->hit_callback != NULL) {
     LESENSE->IEN_SET = chen;
-  }
-  else {
-    LESENSE->IEN_CLR = _LESENSE_IEN_MASK;
   }
 
   /* Enable LESENSE last, after all configuration. */
@@ -234,10 +235,7 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
 
   /* Wait for LF-domain synchronization of EN before any CMD write —
      writing CMD while SYNCBUSY is set bus-faults. */
-  {
-    volatile uint32_t sp = 1000000UL;
-    while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
-  }
+  lesense_wait_sync();
 
   if (cfg->callback != NULL || cfg->hit_callback != NULL) {
     nvicEnableVector(EFR32_LESENSE_NUMBER, EFR32_LESENSE_IRQ_PRIORITY);
@@ -248,6 +246,9 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
   if (EFR32_LESENSE_DMA_STREAM >= 0 && lp->dma == NULL) {
     lp->dma = dmaStreamAlloc(EFR32_LESENSE_DMA_STREAM,
                              EFR32_LESENSE_DMA_IRQ_PRIORITY, NULL, NULL);
+    if (lp->dma == NULL) {
+      osalSysHalt("LESENSE DMA unavailable");
+    }
   }
 #endif
 
@@ -258,7 +259,9 @@ void lesense_lld_stop(LESENSEDriver *lp) {
   nvicDisableVector(EFR32_LESENSE_NUMBER);
 #if defined(EFR32_DMA_REQUIRED)
   if (lp->dma != NULL) {
-    dmaStreamFree(lp->dma);
+    const efr32_dma_stream_t *st = lp->dma;
+    dmaStreamDisable(st);
+    dmaStreamFree(st);
     lp->dma = NULL;
   }
 #endif
@@ -267,9 +270,11 @@ void lesense_lld_stop(LESENSEDriver *lp) {
      lesense_lld_stop_scan() already); wait for register synchronization
      before touching the bus clock, otherwise the writes can bus-fault. */
   LESENSE->EN_CLR = LESENSE_EN_EN;
-  {
-    volatile uint32_t sp = 1000000UL;
-    while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
+  lesense_wait_sync();
+  uint32_t spin = 4000000U;
+  while ((LESENSE->EN & LESENSE_EN_DISABLING) != 0U && --spin != 0U) {}
+  if (spin == 0U) {
+    osalSysHalt("LESENSE disable timeout");
   }
   /* Note: no CMD STOP here — writing CMD while SYNCBUSY is set bus-faults;
      EN_CLR already stops the scan engine. */
@@ -279,18 +284,16 @@ void lesense_lld_stop(LESENSEDriver *lp) {
 }
 
 void lesense_lld_start_scan(LESENSEDriver *lp) {
-  (void)lp;
   /* CMD writes bus-fault while SYNCBUSY is set — wait first. */
-  volatile uint32_t sp = 1000000UL;
-  while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
+  lesense_wait_sync();
   LESENSE->CMD_SET = LESENSE_CMD_START;
+  lp->state = LESENSE_SCANNING;
 }
 
 void lesense_lld_stop_scan(LESENSEDriver *lp) {
-  (void)lp;
-  volatile uint32_t sp = 1000000UL;
-  while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
+  lesense_wait_sync();
   LESENSE->CMD_SET = LESENSE_CMD_STOP;
+  lp->state = LESENSE_READY;
 }
 
 uint32_t lesense_lld_get_scanres(LESENSEDriver *lp) {
@@ -307,15 +310,18 @@ uint32_t lesense_lld_get_scanres(LESENSEDriver *lp) {
  *          measurement time). The smallest achievable frequency >= @p hz is
  *          selected (never undersample); above the grid maximum the maximum
  *          is used. LFPRESC/STARTDLY are channel-timing fields and are NOT
- *          touched here. SYNCBUSY is waited out (bounded) first — writing
- *          while busy bus-faults on xG23.
+ *          touched here. Reconfiguration briefly stops scanning because
+ *          TIMCTRL is writable only while LESENSE is disabled.
  *
  * @param[in] lp    pointer to LESENSEDriver
  * @param[in] hz    requested scan frequency in Hz
  */
 void lesense_lld_set_scan_hz(LESENSEDriver *lp, float hz) {
-  (void)lp;
-
+  osalDbgAssert(lp->state == LESENSE_READY || lp->state == LESENSE_SCANNING,
+                "LESENSE not ready");
+  if (!(hz > 0.0f)) {
+    osalSysHalt("invalid LESENSE frequency");
+  }
   /* Grid search over PCPRESC (0..7 -> div 1..128) and PCTOP (0..255):
      pick the smallest f >= hz. */
   uint32_t best_pr = 0U, best_top = 0U;
@@ -326,10 +332,7 @@ void lesense_lld_set_scan_hz(LESENSEDriver *lp, float hz) {
     if (ftop < 1.0f) {
       continue;   /* hz above this prescaler's max -> handled by pr=0 */
     }
-    uint32_t top = (uint32_t)(ftop + 0.5f) - 1U;
-    if (top > 255U) {
-      top = 255U;
-    }
+    uint32_t top = (ftop >= 256.0f) ? 255U : (uint32_t)ftop - 1U;
     float f = (float)EFR32_EM23GRPACLK / ((float)(top + 1U) * div);
     if (f >= hz && (best_f == 0.0f || f < best_f)) {
       best_f = f; best_pr = pr; best_top = top;
@@ -339,14 +342,27 @@ void lesense_lld_set_scan_hz(LESENSEDriver *lp, float hz) {
     best_pr = 0U; best_top = 0U;
   }
 
-  volatile uint32_t sp = 4000000UL;
-  while (((LESENSE->SYNCBUSY & _LESENSE_SYNCBUSY_MASK) != 0U) && (--sp != 0U)) {}
-
+  bool scanning = lp->state == LESENSE_SCANNING;
+  if (scanning) {
+    lesense_lld_stop_scan(lp);
+  }
+  lesense_wait_sync();
+  LESENSE->EN_CLR = LESENSE_EN_EN;
+  uint32_t spin = 4000000U;
+  while ((LESENSE->EN & LESENSE_EN_DISABLING) != 0U && --spin != 0U) {}
+  if (spin == 0U) {
+    osalSysHalt("LESENSE disable timeout");
+  }
   uint32_t timctrl = LESENSE->TIMCTRL;
   timctrl &= ~(_LESENSE_TIMCTRL_PCPRESC_MASK | _LESENSE_TIMCTRL_PCTOP_MASK);
   timctrl |= (best_pr << _LESENSE_TIMCTRL_PCPRESC_SHIFT) & _LESENSE_TIMCTRL_PCPRESC_MASK;
   timctrl |= (best_top << _LESENSE_TIMCTRL_PCTOP_SHIFT) & _LESENSE_TIMCTRL_PCTOP_MASK;
   LESENSE->TIMCTRL = timctrl;
+  LESENSE->EN_SET = LESENSE_EN_EN;
+  lesense_wait_sync();
+  if (scanning) {
+    lesense_lld_start_scan(lp);
+  }
 }
 
 #if defined(EFR32_DMA_REQUIRED) || defined(__DOXYGEN__)
@@ -362,7 +378,9 @@ void lesense_lld_set_scan_hz(LESENSEDriver *lp, float hz) {
  */
 void lesense_lld_start_fifo_dma(LESENSEDriver *lp, uint32_t *buf, size_t n) {
   const efr32_dma_stream_t *st = lp->dma;
-  if (st == NULL || n == 0U) return;
+  if (st == NULL || buf == NULL || n == 0U || n > 2048U) {
+    osalSysHalt("invalid LESENSE DMA request");
+  }
 
   dmaStreamSetRequestSource(st, LDMAXBAR_CH_REQSEL_SOURCESEL_LESENSE >> 16,
                             LDMAXBAR_CH_REQSEL_SIGSEL_LESENSEFIFO & 0xFU);
@@ -383,7 +401,7 @@ void lesense_lld_stop_fifo_dma(LESENSEDriver *lp) {
 #endif /* EFR32_DMA_REQUIRED */
 
 void lesense_lld_serve_interrupt(LESENSEDriver *lp) {
-  uint32_t isr = LESENSE->IF;
+  uint32_t isr = LESENSE->IF & LESENSE->IEN;
   LESENSE->IF_CLR = isr;
 
   if (isr & LESENSE_IF_SCANDONE) {
@@ -408,7 +426,9 @@ void lesense_lld_set_hit_irq(LESENSEDriver *lp, bool enable) {
   uint32_t chen = 0U;
   if (lp->config != NULL) {
     for (uint32_t i = 0; i < lp->config->num_channels && i < EFR32_LESENSE_MAX_CHANNELS; i++) {
-      chen |= (1UL << i);
+      if (lp->config->channels[i].port != 0xFFU) {
+        chen |= (1UL << i);
+      }
     }
   }
   if (enable) {

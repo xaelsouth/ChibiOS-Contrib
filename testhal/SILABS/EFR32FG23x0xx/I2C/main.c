@@ -71,62 +71,51 @@ static const I2CConfig i2c_cfg = {
   .scl_pin     = 8,
 };
 
+static uint8_t si7021_crc(const uint8_t *data, size_t size) {
+  uint8_t crc = 0U;
+  for (size_t i = 0; i < size; i++) {
+    crc ^= data[i];
+    for (unsigned bit = 0; bit < 8U; bit++) {
+      crc = (crc & 0x80U) != 0U ? (uint8_t)((crc << 1) ^ 0x31U)
+                                 : (uint8_t)(crc << 1);
+    }
+  }
+  return crc;
+}
+
 int main(void) {
   halInit();
   chSysInit();
 
   console_init();
-  PRINTF("\r\nI2C test: I2C0 bus scan (SCL=PA8 SDA=PA7)\r\n");
+  PRINTF("\r\nI2C test: Si7021 at 0x40 (SCL=PA8 SDA=PA7)\r\n");
 
+  palSetPad(GPIOA, 8);
+  palSetPad(GPIOA, 7);
   palSetPadMode(GPIOA, 8, PAL_MODE_OUTPUT_OPENDRAIN);  /* SCL */
   palSetPadMode(GPIOA, 7, PAL_MODE_OUTPUT_OPENDRAIN);  /* SDA */
   /* GPIO->I2CROUTE is programmed by the I2C LLD from i2c_cfg. */
   i2cStart(&I2CD1, &i2c_cfg);
 
-  int found = 0;
-  uint8_t dummy = 0;
+  const uint8_t read_user = 0xE7U;
+  const uint8_t measure_temp = 0xF3U;
+  uint8_t user_reg = 0U;
+  uint8_t sample[3] = {0U};
   i2cAcquireBus(&I2CD1);
-  for (uint8_t addr = 0; addr < 0x80; addr++) {
-    msg_t msg = i2cMasterTransmitTimeout(&I2CD1, addr, &dummy, 1, NULL, 0, TIME_MS2I(10));
-    if (msg == MSG_OK) {
-      PRINTF("  device at 0x%02X\r\n", addr);
-      found++;
-    }
-  }
+  msg_t combined = i2cMasterTransmitTimeout(&I2CD1, 0x40, &read_user, 1U,
+                                            &user_reg, 1U, TIME_MS2I(200));
+  msg_t tx = i2cMasterTransmitTimeout(&I2CD1, 0x40, &measure_temp, 1U,
+                                       NULL, 0U, TIME_MS2I(200));
+  chThdSleepMilliseconds(50);
+  msg_t rx = tx == MSG_OK
+           ? i2cMasterReceiveTimeout(&I2CD1, 0x40, sample, sizeof(sample),
+                                     TIME_MS2I(200))
+           : MSG_RESET;
   i2cReleaseBus(&I2CD1);
-  PRINTF("scan done, %d device(s)\r\n", found);
-
-  /* Si7021 probes at 0x40: pure TX, pure RX, combined TX+RX. After each,
-     dump the I2C0 state machine and reset the driver. */
-  {
-    static const uint8_t idcmd[] = { 0xFC, 0xC9 };
-    uint8_t rx[6];
-    msg_t msg;
-
-    i2cAcquireBus(&I2CD1);
-    msg = i2cMasterTransmitTimeout(&I2CD1, 0x40, idcmd, sizeof(idcmd),
-                                   NULL, 0, TIME_MS2I(200));
-    i2cReleaseBus(&I2CD1);
-    PRINTF("tx-only: msg=%d STATE=%08lX IF=%08lX STATUS=%08lX\r\n", (int)msg,
-           (unsigned long)I2C0->STATE, (unsigned long)I2C0->IF,
-           (unsigned long)I2C0->STATUS);
-    i2cStop(&I2CD1); i2cStart(&I2CD1, &i2c_cfg);
-
-    i2cAcquireBus(&I2CD1);
-    msg = i2cMasterReceiveTimeout(&I2CD1, 0x40, rx, sizeof(rx), TIME_MS2I(200));
-    i2cReleaseBus(&I2CD1);
-    PRINTF("rx-only: msg=%d rx=%02X %02X %02X STATE=%08lX IF=%08lX\r\n",
-           (int)msg, rx[0], rx[1], rx[2],
-           (unsigned long)I2C0->STATE, (unsigned long)I2C0->IF);
-    i2cStop(&I2CD1); i2cStart(&I2CD1, &i2c_cfg);
-
-    i2cAcquireBus(&I2CD1);
-    msg = i2cMasterTransmitTimeout(&I2CD1, 0x40, idcmd, sizeof(idcmd),
-                                   rx, sizeof(rx), TIME_MS2I(200));
-    i2cReleaseBus(&I2CD1);
-    PRINTF("tx+rx: msg=%d rx=%02X %02X %02X %02X %02X %02X STATE=%08lX IF=%08lX\r\n",
-           (int)msg, rx[0], rx[1], rx[2], rx[3], rx[4], rx[5],
-           (unsigned long)I2C0->STATE, (unsigned long)I2C0->IF);
-  }
+  bool crc_ok = rx == MSG_OK && si7021_crc(sample, 2U) == sample[2];
+  PRINTF("combined=%d user=%02X tx=%d rx=%d sample=%02X%02X crc=%02X %s\r\n",
+         (int)combined, user_reg, (int)tx, (int)rx,
+         sample[0], sample[1], sample[2],
+         combined == MSG_OK && tx == MSG_OK && crc_ok ? "PASS" : "FAIL");
   while (true) chThdSleepMilliseconds(1000);
 }

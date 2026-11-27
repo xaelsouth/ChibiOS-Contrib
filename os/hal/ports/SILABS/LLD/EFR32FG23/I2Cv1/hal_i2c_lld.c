@@ -418,13 +418,19 @@ msg_t i2c_lld_master_transmit_dma_timeout(I2CDriver *i2cp, i2caddr_t addr,
 
   msg = osalThreadSuspendTimeoutS(&i2cp->thread, timeout);
 
-  /* Wait for DMA completion. */
+  /* Do not wait for requests that cannot arrive after a timeout or NACK. */
   if (tx_st != NULL && txbytes > 0U) {
-    dmaWaitCompletion(tx_st);
+    if (msg == MSG_OK && i2cp->errors == 0U &&
+        (LDMA->CHDONE & (1U << tx_st->selfindex)) == 0U) {
+      msg = MSG_RESET;
+    }
     dmaStreamDisable(tx_st);
   }
   if (rx_st != NULL && rxbytes > 0U) {
-    dmaWaitCompletion(rx_st);
+    if (msg == MSG_OK && i2cp->errors == 0U &&
+        (LDMA->CHDONE & (1U << rx_st->selfindex)) == 0U) {
+      msg = MSG_RESET;
+    }
     dmaStreamDisable(rx_st);
   }
   i2cp->dma_active = 0U;
@@ -438,7 +444,7 @@ msg_t i2c_lld_master_transmit_dma_timeout(I2CDriver *i2cp, i2caddr_t addr,
   if (i2cp->errors != 0U) {
     return (msg_t)i2cp->errors;
   }
-  return MSG_OK;
+  return msg;
 }
 
 msg_t i2c_lld_master_receive_dma_timeout(I2CDriver *i2cp, i2caddr_t addr,

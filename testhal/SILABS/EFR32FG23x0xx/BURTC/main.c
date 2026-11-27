@@ -149,6 +149,8 @@ int main(void) {
    *      NOTE: this deliberately corrupts the calendar CNT — last test.
    */
   {
+    RTCDateTime before, after;
+    rtcGetTime(&RTCD1, &before);
     uint32_t ovf0 = RTCD1.buram_state->ovf_counter;
     const uint32_t n = 32768U;
     BURTC->CNT = _BURTC_CNT_CNT_MASK - n + 1U;
@@ -173,6 +175,16 @@ int main(void) {
            (unsigned long)ovf0, (unsigned long)ovf1,
            (rate_ok && of_fired) ? "PASS" : "FAIL");
     ok = ok && rate_ok && of_fired;
+    rtcGetTime(&RTCD1, &after);
+    int32_t calendar_delta = (int32_t)after.millisecond -
+                             (int32_t)before.millisecond;
+    bool no_jump = after.year == before.year && after.month == before.month &&
+                   after.day == before.day &&
+                   calendar_delta >= -1000 && calendar_delta <= 3000;
+    PRINTF("calendar delta across forced overflow=%ld ms: %s\r\n",
+           (long)calendar_delta,
+           no_jump ? "PASS" : "FAIL");
+    ok = ok && no_jump;
     BURTC->IF_CLR = BURTC_IF_OF;
   }
 

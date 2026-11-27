@@ -257,22 +257,11 @@ void lcd_lld_update(LCDDriver *lcdp) {
 #if defined(EFR32_DMA_REQUIRED) || defined(__DOXYGEN__)
 /**
  * @brief   Update segment data via DMA.
- * @details Streams the 4 SEGD shadow words from memory to the LCD SEGD
- *          registers using the LCD DMA request. Falls back to CPU writes
- *          if no DMA stream is allocated.
+ * @details Uses CPU writes until DMA to the individual SEGD registers is
+ *          supported.
  */
 void lcd_lld_update_dma(LCDDriver *lcdp) {
-  const efr32_dma_stream_t *st = lcdp->dma;
-  if (st != NULL) {
-    dmaStreamSetRequestSource(st, LDMAXBAR_CH_REQSEL_SOURCESEL_LCD >> 16,
-                              LDMAXBAR_CH_REQSEL_SIGSEL_LCD & 0xFU);
-    dmaStartMemToPeriph(st, lcdp->segd_shadow, &LCD->SEGD0,
-                        EFR32_LCD_NUM_SEGD, EFR32_DMA_CH_CTRL_SIZE_WORD);
-    dmaWaitCompletion(st);
-    dmaStreamDisable(st);
-  } else {
-    lcd_lld_update(lcdp);
-  }
+  lcd_lld_update(lcdp);
 }
 #endif
 

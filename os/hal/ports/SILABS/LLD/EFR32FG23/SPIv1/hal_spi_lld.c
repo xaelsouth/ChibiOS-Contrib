@@ -149,14 +149,14 @@ void spi_lld_start(SPIDriver *spip) {
     u->CMD_SET = EUSART_CMD_RXEN | EUSART_CMD_TXEN | EUSART_CMD_CLEARTX;
     while ((u->SYNCBUSY & _EUSART_SYNCBUSY_MASK) != 0U) {}
 
-    /* Allocate DMA streams if configured. */
+    /* spiStart() holds the system lock while allocating DMA streams. */
 #if defined(EFR32_DMA_REQUIRED)
     if (efr32_spi_tx_dma_stream[idx] >= 0 && spip->dma_tx == NULL) {
-      spip->dma_tx = dmaStreamAlloc((uint32_t)efr32_spi_tx_dma_stream[idx],
+      spip->dma_tx = dmaStreamAllocI((uint32_t)efr32_spi_tx_dma_stream[idx],
                                      efr32_spi_dma_prio[idx], NULL, NULL);
     }
     if (efr32_spi_rx_dma_stream[idx] >= 0 && spip->dma_rx == NULL) {
-      spip->dma_rx = dmaStreamAlloc((uint32_t)efr32_spi_rx_dma_stream[idx],
+      spip->dma_rx = dmaStreamAllocI((uint32_t)efr32_spi_rx_dma_stream[idx],
                                      efr32_spi_dma_prio[idx], NULL, NULL);
     }
 #endif
@@ -170,11 +170,11 @@ void spi_lld_stop(SPIDriver *spip) {
   if (spip->state == SPI_READY) {
 #if defined(EFR32_DMA_REQUIRED)
     if (spip->dma_tx != NULL) {
-      dmaStreamFree(spip->dma_tx);
+      dmaStreamFreeI(spip->dma_tx);
       spip->dma_tx = NULL;
     }
     if (spip->dma_rx != NULL) {
-      dmaStreamFree(spip->dma_rx);
+      dmaStreamFreeI(spip->dma_rx);
       spip->dma_rx = NULL;
     }
 #endif
@@ -214,8 +214,7 @@ uint16_t spi_lld_polled_exchange(SPIDriver *spip, uint16_t frame) {
   EUSART_TypeDef *u = spip->eusart;
 
   u->TXDATA = frame;
-  while ((u->IF & EUSART_IF_TXC) == 0U) {}
-  u->IF_CLR = EUSART_IF_TXC;
+  while ((u->STATUS & EUSART_STATUS_RXFL) == 0U) {}
 
   return (uint16_t)(u->RXDATA & 0xFFFFU);
 }
@@ -318,7 +317,14 @@ void spi_lld_exchange_dma(SPIDriver *spip, size_t n,
   const efr32_dma_stream_t *tx_st = spip->dma_tx;
   const efr32_dma_stream_t *rx_st = spip->dma_rx;
 
-  if (tx_st != NULL && rx_st != NULL && n > 0U && txbuf != NULL) {
+  if (tx_st != NULL && rx_st != NULL && n > 0U &&
+      txbuf != NULL && rxbuf != NULL) {
+    uint32_t tx_mask = 1U << tx_st->selfindex;
+    uint32_t rx_mask = 1U << rx_st->selfindex;
+
+    /* CHBUSY can be clear while a channel waits for a peripheral request. */
+    LDMA->CHDONE_CLR = tx_mask | rx_mask;
+    u->IF_CLR = EUSART_IF_TXC;
     /* Route DMA requests. */
     dmaStreamSetRequestSource(tx_st, efr32_spi_dma_src[idx],
                               EFR32_SPI_DMA_SIG_TX);
@@ -326,37 +332,19 @@ void spi_lld_exchange_dma(SPIDriver *spip, size_t n,
                               EFR32_SPI_DMA_SIG_RX);
 
     /* Start RX first so it's ready to capture incoming data. */
-    if (rxbuf != NULL) {
-      dmaStartPeriphToMem(rx_st, &u->RXDATA, rxbuf, n,
-                          EFR32_DMA_CH_CTRL_SIZE_BYTE);
-    }
+    dmaStartPeriphToMem(rx_st, &u->RXDATA, rxbuf, n,
+                        EFR32_DMA_CH_CTRL_SIZE_BYTE);
 
     /* Start TX. */
     dmaStartMemToPeriph(tx_st, txbuf, &u->TXDATA, n,
                         EFR32_DMA_CH_CTRL_SIZE_BYTE);
 
-    /* If no RX buffer was given, drain the incoming data with a dummy
-       buffer in chunks so the RX FIFO cannot overflow for n > 256. */
-    if (rxbuf == NULL) {
-      static uint8_t dummy_rx[256];
-      size_t left = n;
-      while (left > 0U) {
-        size_t c = (left > sizeof(dummy_rx)) ? sizeof(dummy_rx) : left;
-        dmaStartPeriphToMem(rx_st, &u->RXDATA, dummy_rx, c,
-                            EFR32_DMA_CH_CTRL_SIZE_BYTE);
-        dmaWaitCompletion(rx_st);
-        dmaStreamDisable(rx_st);
-        left -= c;
-      }
-    }
-
     /* Wait for both transfers. */
-    dmaWaitCompletion(tx_st);
+    while ((LDMA->CHDONE & tx_mask) == 0U) {}
     dmaStreamDisable(tx_st);
-    if (rxbuf != NULL) {
-      dmaWaitCompletion(rx_st);
-      dmaStreamDisable(rx_st);
-    }
+    while ((LDMA->CHDONE & rx_mask) == 0U) {}
+    dmaStreamDisable(rx_st);
+    LDMA->CHDONE_CLR = tx_mask | rx_mask;
 
     /* Wait for TX complete (all bits shifted out). */
     while ((u->IF & EUSART_IF_TXC) == 0U) {}
@@ -376,14 +364,35 @@ void spi_lld_send_dma(SPIDriver *spip, size_t n, const void *txbuf) {
   EUSART_TypeDef *u = spip->eusart;
   uint32_t idx = spip->index;
   const efr32_dma_stream_t *tx_st = spip->dma_tx;
+  const efr32_dma_stream_t *rx_st = spip->dma_rx;
 
-  if (tx_st != NULL && n > 0U && txbuf != NULL) {
+  if (tx_st != NULL && rx_st != NULL && n > 0U && txbuf != NULL) {
+    /* A send still receives frames, which must not remain in the FIFO. */
+    volatile uint8_t discard;
+    dmaStreamSetRequestSource(rx_st, efr32_spi_dma_src[idx],
+                              EFR32_SPI_DMA_SIG_RX);
+    dmaStreamSetSource(rx_st, &u->RXDATA);
+    dmaStreamSetDestination(rx_st, &discard);
+    dmaStreamSetMode(rx_st, EFR32_DMA_CH_CTRL_DSTMODE_ABSOLUTE |
+                            EFR32_DMA_CH_CTRL_SRCMODE_ABSOLUTE |
+                            EFR32_DMA_CH_CTRL_SIZE_BYTE |
+                            EFR32_DMA_CH_CTRL_DSTINC_NONE |
+                            EFR32_DMA_CH_CTRL_SRCINC_NONE |
+                            EFR32_DMA_CH_CTRL_REQMODE_BLOCK |
+                            LDMA_CH_CTRL_BLOCKSIZE_UNIT1 |
+                            EFR32_DMA_CH_CTRL_XFERCNT(n) |
+                            EFR32_DMA_CH_CTRL_DONEIEN);
+    dmaStreamEnable(rx_st);
+
+    u->IF_CLR = EUSART_IF_TXC;
     dmaStreamSetRequestSource(tx_st, efr32_spi_dma_src[idx],
                               EFR32_SPI_DMA_SIG_TX);
     dmaStartMemToPeriph(tx_st, txbuf, &u->TXDATA, n,
                         EFR32_DMA_CH_CTRL_SIZE_BYTE);
     dmaWaitCompletion(tx_st);
     dmaStreamDisable(tx_st);
+    dmaWaitCompletion(rx_st);
+    dmaStreamDisable(rx_st);
 
     while ((u->IF & EUSART_IF_TXC) == 0U) {}
     u->IF_CLR = EUSART_IF_TXC;

@@ -177,14 +177,13 @@ void pwm_lld_start(PWMDriver *pwmp) {
     while ((tim->STATUS & _TIMER_STATUS_SYNCBUSY_MASK) != 0U) {}
 
     for (uint32_t ch = 0; ch < PWM_CHANNELS; ch++) {
-      /* On overflow: set output. On compare match: clear output.
-         This gives active-high PWM with duty = width/period. */
       tim->CC[ch].CTRL = (tim->CC[ch].CTRL &
                           ~(_TIMER_CC_CTRL_COFOA_MASK |
                             _TIMER_CC_CTRL_CMOA_MASK |
-                            _TIMER_CC_CTRL_CUFOA_MASK)) |
-                         (_TIMER_CC_CTRL_COFOA_SET << _TIMER_CC_CTRL_COFOA_SHIFT) |
-                         (_TIMER_CC_CTRL_CMOA_CLEAR << _TIMER_CC_CTRL_CMOA_SHIFT);
+                            _TIMER_CC_CTRL_CUFOA_MASK |
+                            TIMER_CC_CTRL_OUTINV)) |
+                         ((config->channels[ch].mode == PWM_OUTPUT_ACTIVE_LOW) ?
+                          TIMER_CC_CTRL_OUTINV : 0U);
       /* Initial duty cycle 0 (channels are enabled via pwmEnableChannel). */
       tim->CC[ch].OC = 0U;
     }
@@ -223,9 +222,7 @@ void _pwm_lld_enable_channel(PWMDriver *pwmp, pwmchannel_t channel, pwmcnt_t wid
 
 void _pwm_lld_disable_channel(PWMDriver *pwmp, pwmchannel_t channel) {
   osalDbgCheck(channel < PWM_CHANNELS);
-  pwmp->timer->CC[channel].CFG =
-    (pwmp->timer->CC[channel].CFG & ~_TIMER_CC_CFG_MODE_MASK) |
-    _TIMER_CC_CFG_MODE_OFF;
+  pwmp->timer->CC[channel].OC = 0U;
 }
 
 void _pwm_lld_enable_periodic_notification(PWMDriver *pwmp) {

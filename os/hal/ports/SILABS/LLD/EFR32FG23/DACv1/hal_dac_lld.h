@@ -17,6 +17,8 @@
 /**
  * @file    hal_dac_lld.h
  * @brief   EFR32 DAC subsystem low level driver header.
+ * @note    DMA conversion groups do not yet implement the ChibiOS circular
+ *          conversion and callback contract. Use direct channel writes only.
  *
  * @addtogroup DAC
  * @{

@@ -65,70 +65,53 @@ static void rtt_write(const char *s, size_t n) {
 
 static const SIOConfig sio_cfg = {
   .baud = 115200U,
-  .cfg0 = (0U << 0) | (0U << 5),   /* ASYNC, 16x oversampling */
+  .cfg0 = EUSART_CFG0_LOOPBK,
   .framecfg = EFR32_SIO_LLD_EUSART_8N1,
 };
+
+static bool loopback(const uint8_t *pattern, size_t size) {
+  uint8_t rxbuf[64] = {0U};
+  size_t written = 0U, received = 0U;
+  systime_t start = chVTGetSystemTimeX();
+
+  while ((written < size || received < size) &&
+         chVTTimeElapsedSinceX(start) < TIME_MS2I(2000)) {
+    if (written < size) {
+      written += sioAsyncWrite(&SIOD1, &pattern[written], size - written);
+    }
+    if (received < size) {
+      received += sioAsyncRead(&SIOD1, &rxbuf[received], size - received);
+    }
+  }
+  msg_t end = sioSynchronizeTXEnd(&SIOD1, TIME_MS2I(2000));
+  bool ok = written == size && received == size && end == MSG_OK &&
+            memcmp(pattern, rxbuf, size) == 0;
+  PRINTF("loopback: TX=%u RX=%u end=%d %s\r\n",
+         (unsigned)written, (unsigned)received, (int)end,
+         ok ? "PASS" : "FAIL");
+  return ok;
+}
 
 int main(void) {
   halInit();
   chSysInit();
   console_init();
-  PRINTF("\r\nSIO test: EUSART0 (SIOD1) PA9/PA10 115200\r\n");
+  PRINTF("\r\nSIO test: EUSART0 internal loopback 115200\r\n");
 
   palSetPadMode(GPIOA, 9, PAL_MODE_OUTPUT_PUSHPULL | PAL_MODE_ALTERNATE(EUSART0_TX));
   palSetPadMode(GPIOA, 10, PAL_MODE_INPUT_PULLUP | PAL_MODE_ALTERNATE(EUSART0_RX));
   sioStart(&SIOD1, &sio_cfg);
 
-  const char *msg = "SIO TX ok on EUSART0 PA9/PA10\r\n";
-  size_t tx = 0;
-  while (tx < strlen(msg)) {
-    tx += sioAsyncWrite(&SIOD1, (const uint8_t *)&msg[tx], strlen(msg) - tx);
+  uint8_t pattern[64];
+  for (size_t i = 0; i < sizeof(pattern); i++) {
+    pattern[i] = (uint8_t)(0x30U + (i % 40U));
   }
-  msg_t m = sioSynchronizeTXEnd(&SIOD1, TIME_MS2I(2000));
-  PRINTF("async write %u bytes, TX-end sync: %s\r\n",
-         (unsigned)tx, m == MSG_OK ? "OK" : "TIMEOUT");
-
-  /* RX check: wait briefly for any byte (host may send via VCOM). */
-  msg_t r = sioGetX(&SIOD1);
-  PRINTF("rx byte: %s\r\n", r >= 0 ? "got one" : "none (ok if host silent)");
-
-  /* DMA TX test: 64 bytes (>= EFR32_SIO_DMA_MIN_TRANSFER) go through the
-     LDMA stream into the driver bounce buffer. With the PA9<->PA10 loopback
-     wire the same bytes come back on RX. */
-  {
-    uint8_t pattern[64], rxbuf[64];
-    for (int i = 0; i < 64; i++) { pattern[i] = (uint8_t)(0x30 + (i % 40)); rxbuf[i] = 0; }
-
-    size_t w = 0;
-    while (w < sizeof(pattern)) {
-      size_t n = sioAsyncWrite(&SIOD1, &pattern[w], sizeof(pattern) - w);
-      if (n == 0U) {
-        /* DMA in flight: wait for TX-not-full (woken by the DMA ISR). */
-        sioSynchronizeTX(&SIOD1, TIME_MS2I(2000));
-        continue;
-      }
-      w += n;
-    }
-    msg_t dm = sioSynchronizeTXEnd(&SIOD1, TIME_MS2I(2000));
-    PRINTF("DMA TX write %u bytes, TX-end sync: %s\r\n",
-           (unsigned)w, dm == MSG_OK ? "OK" : "TIMEOUT");
-
-    /* Read back (loopback wire PA9<->PA10 required). */
-    size_t got = 0;
-    systime_t deadline = osalOsGetSystemTimeX() + TIME_MS2I(2000);
-    while (got < sizeof(rxbuf) && osalOsGetSystemTimeX() < deadline) {
-      got += sioAsyncRead(&SIOD1, &rxbuf[got], sizeof(rxbuf) - got);
-      if (got < sizeof(rxbuf)) {
-        chThdSleepMilliseconds(5);
-      }
-    }
-    int lok = (got == sizeof(rxbuf)) && (memcmp(pattern, rxbuf, sizeof(rxbuf)) == 0);
-    PRINTF("DMA TX loopback: got %u/%u bytes, %s\r\n", (unsigned)got,
-           (unsigned)sizeof(rxbuf),
-           lok ? "match: PASS" : (got == 0U ? "no RX (loopback wire?)" : "MISMATCH: FAIL"));
-  }
+  bool small_ok = loopback(pattern, 4U);
+  bool dma_allocated = SIOD1.dma_tx != NULL;
+  bool dma_ok = loopback(pattern, sizeof(pattern));
 
   sioStop(&SIOD1);
-  PRINTF("result: %s\r\n", m == MSG_OK ? "PASS" : "FAIL");
+  PRINTF("DMA allocated=%u; result: %s\r\n", (unsigned)dma_allocated,
+         small_ok && dma_allocated && dma_ok ? "PASS" : "FAIL");
   while (true) { chThdSleepMilliseconds(1000); }
 }
