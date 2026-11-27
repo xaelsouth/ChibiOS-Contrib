@@ -112,10 +112,27 @@ void lcd_lld_start(LCDDriver *lcdp, const LCDConfig *cfg) {
     /* LCD clock: prefer LFXO (usually enabled for EM23GRPACLK); fall back to
        LFRCO/ULFRCO only if those are enabled in mcuconf — selecting a clock
        whose oscillator is off leaves the LCD LF domain dead (EN.DISABLING
-       never clears) and the display blank. */
+       never clears) and the display blank.
+       IMPORTANT: the LFXO must be READY before it is selected here. A 32 kHz
+       crystal can take longer to start than the bounded wait in hal_lld, and
+       selecting a not-yet-ready LFXO latches a dead LCDCLK (the mux does not
+       recover when the oscillator later becomes ready) — the panel stays
+       blank even though LFXO->STATUS reports RDY. So wait for RDY here (the
+       CPU is on HFXO by now, so this is fast), and fall back to ULFRCO (always
+       on) if the LFXO never comes up. */
 #if EFR32_LFXO_ENABLED
     CMU->CLKEN0_SET = CMU_CLKEN0_LFXO;
-    CMU->LCDCLKCTRL = CMU_LCDCLKCTRL_CLKSEL_LFXO;
+    {
+      volatile uint32_t spin = 200000000UL;
+      while (((LFXO->STATUS & (_LFXO_STATUS_RDY_MASK | _LFXO_STATUS_ENS_MASK)) !=
+              (LFXO_STATUS_RDY | LFXO_STATUS_ENS)) && (--spin != 0U)) {
+      }
+      if ((LFXO->STATUS & LFXO_STATUS_RDY) != 0U) {
+        CMU->LCDCLKCTRL = CMU_LCDCLKCTRL_CLKSEL_LFXO;
+      } else {
+        CMU->LCDCLKCTRL = CMU_LCDCLKCTRL_CLKSEL_ULFRCO;
+      }
+    }
 #elif EFR32_LFRCO_ENABLED
     CMU->CLKEN0_SET = CMU_CLKEN0_LFRCO;
     CMU->LCDCLKCTRL = CMU_LCDCLKCTRL_CLKSEL_LFRCO;

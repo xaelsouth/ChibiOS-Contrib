@@ -182,7 +182,10 @@ __STATIC_INLINE void efr32_enable_clock_sources(void) {
   LFXO->CTRL_SET = LFXO_CTRL_FORCEEN;
 
   {
-    volatile uint32_t spin = 4000000UL;
+    /* Bounded but generous: a cold 32 kHz crystal can take over a second to
+       start, and every LF clock tree selected from LFXO (LCDCLK, EM23GRPACLK,
+       SYSRTCCLK) latches a dead mux if the source is selected before RDY. */
+    volatile uint32_t spin = 200000000UL;
     while (((LFXO->STATUS & (_LFXO_STATUS_RDY_MASK | _LFXO_STATUS_ENS_MASK)) !=
             (LFXO_STATUS_RDY | LFXO_STATUS_ENS)) && (--spin != 0U)) {
     }

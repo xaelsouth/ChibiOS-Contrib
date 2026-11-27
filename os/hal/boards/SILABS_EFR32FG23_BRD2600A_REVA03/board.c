@@ -133,8 +133,12 @@ const LCDConfig board_lcd_config = {
   .wave         = EFR32_LCD_WAVE_LOPOWER,
   .mode         = EFR32_LCD_MODE_CHARGEPUMP,
   .charge_redist= EFR32_LCD_CHGRDST_DISABLE,
-  .presc        = 63U,              /* LCDCLK = LFRCO/64 = 512 Hz */
-  .frame_rate   = 1U,               /* 512/2/8 -> 32 Hz frame rate */
+  .presc        = 63U,              /* LCDCLK prescale (see note below) */
+  .frame_rate   = 90U,              /* FRDIV=90: with the 32.768 kHz LCDCLK this
+                                       gives a ~45 Hz frame rate — verified bright
+                                       and steady on the CE322-1002 glass. FRDIV=1
+                                       (frame ~2 kHz) is far too fast and the
+                                       panel looks faint/blank. */
   .contrast     = EFR32_LCD_CONTRAST_DEFAULT,
   .seg_enable   = 0x000FFFFFU,      /* all 20 segment outputs */
   .com_enable   = 0x0000000FU,      /* all 4 COM outputs */
