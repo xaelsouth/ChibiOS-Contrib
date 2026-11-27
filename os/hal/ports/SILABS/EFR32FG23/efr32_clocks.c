@@ -22,16 +22,12 @@
  *          xshell "clocks" command (LLD/xshell/efr32_clock_cmds.c), but
  *          usable from any code with a BaseSequentialStream:
  *          - efr32_clock_points_print()  flat list of clock points + rates
- *          - efr32_clock_tree_print()    debugfs-style clock tree with
- *                                        run-time source selection and
- *                                        oscillator on/off state
+ *          - efr32_clock_tree_print()    selected parents, rates and
+ *                                        enabled bus-clock gates
  *
  * @addtogroup EFR32FG23_CLOCKS
  * @{
  */
-
-#include <string.h>
-
 
 #include "hal.h"
 #include "chprintf.h"
@@ -42,21 +38,18 @@
 /*===========================================================================*/
 
 /**
- * @brief   Prints the flat list of all clock points and their rates.
+ * @brief   Prints clock points, selected parents and bus gate counts.
  *
  * @param[in] ssp       output stream
  */
 void efr32_clock_points_print(BaseSequentialStream *ssp) {
-  static const char *names[CLK_ARRAY_SIZE] = CLK_POINT_NAMES;
-  unsigned i;
-
-  chprintf(ssp, "%-14s %12s %6s\r\n", "clock", "rate [Hz]", "users");
-  for (i = 0U; i < (unsigned)CLK_ARRAY_SIZE; i++) {
-    chprintf(ssp, "%-14s %12u %6u\r\n", names[i], (unsigned)halClockGetPointX(i),
-             efr32_clock_consumers((halclkpt_t)i));
-  }
+  efr32_clock_tree_print(ssp);
 }
 
+void cli_clock_points_print(BaseSequentialStream *ssp);
+void cli_clock_points_print(BaseSequentialStream *ssp) {
+  efr32_clock_points_print(ssp);
+}
 /*===========================================================================*/
 /* Consumer registry.                                                        */
 /*===========================================================================*/
@@ -171,7 +164,7 @@ void cli_pm_lowpower_enter_once(void) {
 #endif /* !EFR32_CLI_PM_HOOKS_IN_APP */
 
 /*===========================================================================*/
-/* Clock tree (Linux clk debugfs style).                                     */
+/* Clock relationships and bus gate diagnostics.                            */
 /*===========================================================================*/
 
 /**
@@ -186,15 +179,15 @@ typedef struct {
 /*
  * FG23 clock tree (Series 2):
  *
- *   HFRCO --> HFRCODPLL --+--> SYSCLK --> HCLK --+--> PCLK
- *                         |                     +--> RHCLK
+ *   HFRCO --> HFRCODPLL --+--> SYSCLK --> HCLK --> PCLK --> LSPCLK
+ *                         |        +--> RHCLK
  *                         +--> EM01GRPACLK
  *                         +--> EM01GRPCCLK
  *   HFRCOEM23
  *   FSRCO ----------------> SYSCLK (alternative source)
  *   HFXO -----------------> SYSCLK / EM01GRPACLK (alternative source)
  *   CLKIN0 ---------------> SYSCLK (alternative source)
- *   LFXO --+-> EM23GRPACLK --> EM4GRPACLK (BURTC)
+ *   LFXO --+-> EM23GRPACLK / EM4GRPACLK (BURTC)
  *   LFRCO -+
  *   ULFRCO-+
  */
@@ -216,6 +209,7 @@ typedef struct {
 #define N_LFXO        13U
 #define N_LFRCO       14U
 #define N_ULFRCO      15U
+#define N_LSPCLK      16U
 
 static const efr32_clk_node_t efr32_clk_tree[] = {
   /* name            parent              clock point              */
@@ -223,7 +217,7 @@ static const efr32_clk_node_t efr32_clk_tree[] = {
   { "SYSCLK",         N_HFRCODPLL,        EFR32_CLK_SYSCLK      }, /* N_SYSCLK      */
   { "HCLK",           N_SYSCLK,           EFR32_CLK_HCLK        }, /* N_HCLK        */
   { "PCLK",           N_HCLK,             EFR32_CLK_PCLK        }, /* N_PCLK        */
-  { "RHCLK",          N_HCLK,             EFR32_CLK_RHCLK       }, /* N_RHCLK       */
+  { "RHCLK",          N_SYSCLK,           EFR32_CLK_RHCLK       }, /* N_RHCLK       */
   { "HFRCOEM23",      -1,                 EFR32_CLK_HFRCOEM23   }, /* N_HFRCOEM23   */
   { "FSRCO",          -1,                 EFR32_CLK_FSRCO       }, /* N_FSRCO       */
   { "HFXO",           -1,                 EFR32_CLK_HFXO        }, /* N_HFXO        */
@@ -234,7 +228,8 @@ static const efr32_clk_node_t efr32_clk_tree[] = {
   { "EM4GRPACLK",     N_EM23GRPACLK,      EFR32_CLK_EM4GRPACLK  }, /* N_EM4GRPACLK  */
   { "LFXO",           -1,                 EFR32_CLK_LFXO        }, /* N_LFXO        */
   { "LFRCO",          -1,                 EFR32_CLK_LFRCO       }, /* N_LFRCO       */
-  { "ULFRCO",         -1,                 EFR32_CLK_ULFRCO      }  /* N_ULFRCO      */
+  { "ULFRCO",         -1,                 EFR32_CLK_ULFRCO      }, /* N_ULFRCO      */
+  { "LSPCLK",         N_PCLK,             EFR32_CLK_PCLK        }  /* N_LSPCLK      */
 };
 #define EFR32_CLK_TREE_SIZE  (sizeof(efr32_clk_tree) / sizeof(efr32_clk_tree[0]))
 
@@ -244,11 +239,11 @@ static const efr32_clk_node_t efr32_clk_tree[] = {
  *          reading the STATUS register of an oscillator whose bus clock is
  *          disabled causes a bus fault on Series 2.
  */
-static const char *osc_state(uint32_t clken_bit, volatile uint32_t *status,
+static const char *osc_state(uint32_t clken_bit, const volatile uint32_t *status,
                              uint32_t rdy_mask) {
 
   if ((CMU->CLKEN0 & clken_bit) == 0U) {
-    return "off";
+    return "status unavailable";
   }
   return ((*status & rdy_mask) != 0U) ? "on" : "off";
 }
@@ -259,10 +254,10 @@ static const char *osc_state(uint32_t clken_bit, volatile uint32_t *status,
 static const char *sysclk_source(void) {
 
   switch (CMU->SYSCLKCTRL & _CMU_SYSCLKCTRL_CLKSEL_MASK) {
-  case _CMU_SYSCLKCTRL_CLKSEL_FSRCO:     return "fsrco";
-  case _CMU_SYSCLKCTRL_CLKSEL_HFRCODPLL: return "hfrcodpll";
-  case _CMU_SYSCLKCTRL_CLKSEL_HFXO:      return "hfxo";
-  case _CMU_SYSCLKCTRL_CLKSEL_CLKIN0:    return "clkin0";
+  case _CMU_SYSCLKCTRL_CLKSEL_FSRCO:     return "FSRCO";
+  case _CMU_SYSCLKCTRL_CLKSEL_HFRCODPLL: return "HFRCODPLL";
+  case _CMU_SYSCLKCTRL_CLKSEL_HFXO:      return "HFXO";
+  case _CMU_SYSCLKCTRL_CLKSEL_CLKIN0:    return "CLKIN0";
   default:                               return "?";
   }
 }
@@ -270,13 +265,43 @@ static const char *sysclk_source(void) {
 /**
  * @brief   Returns the name of the EM23/EM4 group A clock source.
  */
-static const char *em23grpaclk_source(void) {
+static const char *lf_source(uint32_t sel) {
+  switch (sel) {
+  case _CMU_EM23GRPACLKCTRL_CLKSEL_LFXO:   return "LFXO";
+  case _CMU_EM23GRPACLKCTRL_CLKSEL_LFRCO:  return "LFRCO";
+  case _CMU_EM23GRPACLKCTRL_CLKSEL_ULFRCO: return "ULFRCO";
+  case 0U:                                 return "disabled";
+  default:                                 return "?";
+  }
+}
 
-  switch (CMU->EM23GRPACLKCTRL & _CMU_EM23GRPACLKCTRL_CLKSEL_MASK) {
-  case _CMU_EM23GRPACLKCTRL_CLKSEL_LFXO:   return "lfxo";
-  case _CMU_EM23GRPACLKCTRL_CLKSEL_LFRCO:  return "lfrco";
-  case _CMU_EM23GRPACLKCTRL_CLKSEL_ULFRCO: return "ulfrco";
-  default:                                 return "none";
+static const char *hf_group_source(uint32_t sel) {
+  switch (sel) {
+  case _CMU_EM01GRPACLKCTRL_CLKSEL_HFRCODPLL:   return "HFRCODPLL";
+  case _CMU_EM01GRPACLKCTRL_CLKSEL_HFXO:        return "HFXO";
+  case _CMU_EM01GRPACLKCTRL_CLKSEL_FSRCO:       return "FSRCO";
+  case _CMU_EM01GRPACLKCTRL_CLKSEL_HFRCOEM23:   return "HFRCOEM23";
+  case _CMU_EM01GRPACLKCTRL_CLKSEL_HFRCODPLLRT: return "HFRCODPLLRT";
+  case _CMU_EM01GRPACLKCTRL_CLKSEL_HFXORT:      return "HFXORT";
+  case 0U:                                      return "disabled";
+  default:                                      return "?";
+  }
+}
+
+static const char *node_parent(unsigned i) {
+  switch (i) {
+  case N_SYSCLK: return sysclk_source();
+  case N_EM01GRPACLK:
+    return hf_group_source(CMU->EM01GRPACLKCTRL & _CMU_EM01GRPACLKCTRL_CLKSEL_MASK);
+  case N_EM01GRPCCLK:
+    return hf_group_source(CMU->EM01GRPCCLKCTRL & _CMU_EM01GRPCCLKCTRL_CLKSEL_MASK);
+  case N_EM23GRPACLK:
+    return lf_source(CMU->EM23GRPACLKCTRL & _CMU_EM23GRPACLKCTRL_CLKSEL_MASK);
+  case N_EM4GRPACLK:
+    return lf_source(CMU->EM4GRPACLKCTRL & _CMU_EM4GRPACLKCTRL_CLKSEL_MASK);
+  default:
+    return efr32_clk_tree[i].parent < 0 ? "-" :
+           efr32_clk_tree[efr32_clk_tree[i].parent].name;
   }
 }
 
@@ -288,20 +313,11 @@ static void node_info(unsigned i, char *buf, size_t buflen) {
   buf[0] = '\0';
 
   switch (i) {
-  case N_SYSCLK:
-    chsnprintf(buf, buflen, "src=%s", sysclk_source());
-    break;
   case N_HFRCOEM23:
     chsnprintf(buf, buflen, "%s", osc_state(CMU_CLKEN0_HFRCOEM23, &HFRCOEM23->STATUS, _HFRCO_STATUS_RDY_MASK));
     break;
-  case N_FSRCO:
-    chsnprintf(buf, buflen, "always-on");  /* FSRCO has no STATUS register */
-    break;
   case N_HFXO:
     chsnprintf(buf, buflen, "%s", osc_state(CMU_CLKEN0_HFXO0, &HFXO0->STATUS, _HFXO_STATUS_RDY_MASK));
-    break;
-  case N_EM23GRPACLK:
-    chsnprintf(buf, buflen, "src=%s", em23grpaclk_source());
     break;
   case N_LFXO:
     chsnprintf(buf, buflen, "%s", osc_state(CMU_CLKEN0_LFXO, &LFXO->STATUS, _LFXO_STATUS_RDY_MASK));
@@ -317,46 +333,85 @@ static void node_info(unsigned i, char *buf, size_t buflen) {
   }
 }
 
-/**
- * @brief   Returns true if node @p i is the last among its siblings.
- */
-static bool node_is_last(unsigned i) {
-  unsigned j;
+/* CLKEN bits enable bus interfaces, not the peripheral functional clocks.
+   Some bits control interfaces on more than one bus. */
+static int bus_gate_count(unsigned i, uint32_t en0, uint32_t en1) {
+  uint32_t mask0, mask1, bits;
+  unsigned count = 0U;
 
-  for (j = i + 1U; j < (unsigned)EFR32_CLK_TREE_SIZE; j++) {
-    if (efr32_clk_tree[j].parent == efr32_clk_tree[i].parent) {
-      return false;
-    }
+  switch (i) {
+  case N_HCLK:
+    mask0 = CMU_CLKEN0_LDMA | CMU_CLKEN0_RADIOAES;
+    mask1 = CMU_CLKEN1_SMU | CMU_CLKEN1_ICACHE0 | CMU_CLKEN1_RFECA0 |
+            CMU_CLKEN1_RFECA1 | CMU_CLKEN1_DMEM | CMU_CLKEN1_SEMAILBOXHOST |
+            CMU_CLKEN1_ECAIFADC;
+    break;
+  case N_PCLK:
+    mask0 = CMU_CLKEN0_LDMA | CMU_CLKEN0_LDMAXBAR | CMU_CLKEN0_GPCRC |
+            CMU_CLKEN0_TIMER0 | CMU_CLKEN0_TIMER1 | CMU_CLKEN0_TIMER2 |
+            CMU_CLKEN0_TIMER3 | CMU_CLKEN0_TIMER4 | CMU_CLKEN0_USART0 |
+            CMU_CLKEN0_I2C1 | CMU_CLKEN0_SYSCFG | CMU_CLKEN0_DPLL0 |
+            CMU_CLKEN0_HFRCO0 | CMU_CLKEN0_FSRCO | CMU_CLKEN0_LFRCO |
+            CMU_CLKEN0_LFXO | CMU_CLKEN0_ULFRCO | CMU_CLKEN0_GPIO |
+            CMU_CLKEN0_PRS | CMU_CLKEN0_BURAM | CMU_CLKEN0_BURTC |
+            CMU_CLKEN0_SYSRTC0 | CMU_CLKEN0_DCDC;
+    mask1 = CMU_CLKEN1_HOSTMAILBOX | CMU_CLKEN1_LCD | CMU_CLKEN1_KEYSCAN |
+            CMU_CLKEN1_ICACHE0 | CMU_CLKEN1_EUSART1 | CMU_CLKEN1_EUSART2 |
+            CMU_CLKEN1_DMEM;
+    break;
+  case N_LSPCLK:
+    mask0 = CMU_CLKEN0_IADC0 | CMU_CLKEN0_AMUXCP0 | CMU_CLKEN0_LETIMER0 |
+            CMU_CLKEN0_WDOG0 | CMU_CLKEN0_I2C0 | CMU_CLKEN0_HFRCOEM23 |
+            CMU_CLKEN0_HFXO0 | CMU_CLKEN0_LESENSE;
+    mask1 = CMU_CLKEN1_WDOG1 | CMU_CLKEN1_ACMP0 | CMU_CLKEN1_ACMP1 |
+            CMU_CLKEN1_VDAC0 | CMU_CLKEN1_PCNT0 | CMU_CLKEN1_EUSART0;
+    break;
+  case N_RHCLK:
+    mask0 = 0U;
+    mask1 = CMU_CLKEN1_AGC | CMU_CLKEN1_MODEM | CMU_CLKEN1_RFCRC |
+            CMU_CLKEN1_FRC | CMU_CLKEN1_PROTIMER | CMU_CLKEN1_RAC |
+            CMU_CLKEN1_SYNTH | CMU_CLKEN1_RFSCRATCHPAD |
+            CMU_CLKEN1_RFMAILBOX | CMU_CLKEN1_BUFC | CMU_CLKEN1_RFECA0 |
+            CMU_CLKEN1_RFECA1;
+    break;
+  default:
+    return -1;
   }
-  return true;
+  bits = en0 & mask0;
+  while (bits != 0U) {
+    bits &= bits - 1U;
+    count++;
+  }
+  bits = en1 & mask1;
+  while (bits != 0U) {
+    bits &= bits - 1U;
+    count++;
+  }
+  return (int)count;
 }
 
-/**
- * @brief   Prints one tree node (root nodes without connector).
- */
 static void print_node(BaseSequentialStream *ssp, unsigned i,
-                       const char *prefix, bool last) {
-  char info[24];
+                       uint32_t en0, uint32_t en1) {
+  char info[24], gates[12];
   halfreq_t rate = halClockGetPointX(efr32_clk_tree[i].pt);
+  int count = bus_gate_count(i, en0, en1);
 
+  if (i == N_LSPCLK)
+    rate /= 2U;
   node_info(i, info, sizeof(info));
-
-  if (efr32_clk_tree[i].parent < 0) {
-    chprintf(ssp, "%-14s %10u Hz", efr32_clk_tree[i].name, (unsigned)rate);
-  }
-  else {
-    chprintf(ssp, "%s%s%-14s %10u Hz", prefix, last ? "`-- " : "|-- ",
-             efr32_clk_tree[i].name, (unsigned)rate);
-  }
-  if (info[0] != '\0') {
-    chprintf(ssp, "  (%s)", info);
-  }
+  if (count < 0)
+    chsnprintf(gates, sizeof(gates), "-");
+  else
+    chsnprintf(gates, sizeof(gates), "%u", (unsigned)count);
+  chprintf(ssp, "%-14s %-14s %12u %6s", efr32_clk_tree[i].name,
+           node_parent(i), (unsigned)rate, gates);
+  if (info[0] != '\0')
+    chprintf(ssp, "  %s", info);
   chprintf(ssp, "\r\n");
 }
 
 /**
- * @brief   Strong override of the weak cli_clock_tree_print() hook from
- *          os/various/cli/clock_cmds.c — gives "clocks w" the FG23 tree.
+ * @brief   Strong override of the generic "clocks w" hook.
  */
 void cli_clock_tree_print(BaseSequentialStream *ssp);
 void cli_clock_tree_print(BaseSequentialStream *ssp) {
@@ -365,34 +420,19 @@ void cli_clock_tree_print(BaseSequentialStream *ssp) {
 }
 
 /**
- * @brief   Prints the FG23 clock tree, Linux clk debugfs style.
- * @details Rates come from halClockGetPointX(); source selection and
- *          oscillator on/off state are read back live from the CMU.
+ * @brief   Prints the FG23 clock points and their selected parents.
+ * @details Rates come from halClockGetPointX(); sources, oscillator state
+ *          and mapped bus gate enables are read back from hardware.
  *
  * @param[in] ssp       output stream
  */
 void efr32_clock_tree_print(BaseSequentialStream *ssp) {
-  char prefix[64];
-  unsigned i;
-
-  chprintf(ssp, "FG23 clock tree:\r\n");
-
-  for (i = 0U; i < (unsigned)EFR32_CLK_TREE_SIZE; i++) {
-    int parent = efr32_clk_tree[i].parent;
-    unsigned depth = 0U;
-
-    prefix[0] = '\0';
-
-    /* Indentation: walk the parent chain, prepend "    " or "|   ". */
-    while (parent >= 0 && depth < 15U) {
-      memmove(prefix + 4, prefix, sizeof(prefix) - 4);
-      memcpy(prefix, node_is_last((unsigned)parent) ? "    " : "|   ", 4);
-      parent = efr32_clk_tree[parent].parent;
-      depth++;
-    }
-
-    print_node(ssp, i, prefix, node_is_last(i));
-  }
+  uint32_t en0 = CMU->CLKEN0, en1 = CMU->CLKEN1;
+  chprintf(ssp, "FG23 clocks (nominal rates; mapped bus gates; - = not counted):\r\n");
+  chprintf(ssp, "%-14s %-14s %12s %6s\r\n",
+           "clock", "parent", "rate [Hz]", "gates");
+  for (unsigned i = 0U; i < (unsigned)EFR32_CLK_TREE_SIZE; i++)
+    print_node(ssp, i, en0, en1);
 }
 
 /** @} */

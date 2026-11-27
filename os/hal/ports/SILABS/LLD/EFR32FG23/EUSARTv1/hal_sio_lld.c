@@ -60,7 +60,7 @@
 
 #define USART_IF_CFG_FORBIDDEN              (USART_IF_TXBL                       | \
                                              USART_IF_TXC                        | \
-                                             USART_IF_RXFULL                     | \
+                                             USART_IF_RXDATAV                    | \
                                              USART_IF_RX_ERRORS)
 
 /*===========================================================================*/
@@ -164,6 +164,10 @@ static const uint32_t efr32_sio_dma_src[4] = {
 
 /* LDMAXBAR signal (SIGSEL field) for TX: EUSARTx TXFL = 1, USART0 TXBL = 2. */
 static const uint32_t efr32_sio_dma_sig_tx[4] = { 1U, 1U, 1U, 2U };
+static const uint32_t efr32_sio_dma_rx_irq[4] = {
+  EFR32_EUSART1_RX_NUMBER, EFR32_EUSART2_RX_NUMBER,
+  EFR32_EUSART3_RX_NUMBER, EFR32_USART1_RX_NUMBER
+};
 
 /* Configured TX DMA stream per instance (-1 = disabled). */
 static const int32_t efr32_sio_tx_dma_stream[4] = {
@@ -195,31 +199,65 @@ static void sio_lld_dma_tx_isr(void* p, uint32_t flags) {
   siop->dma_tx_busy = false;
   dmaStreamDisable(siop->dma_tx);
 
+  if ((flags & EFR32_DMA_ISR_ERROR_MASK) != 0U) {
+    EFR32_SIO_DMA_ERROR_HOOK(siop);
+    return;
+  }
+
+  if (_sio_lld_is_usart(siop)) {
+    USART_TypeDef *u = siop->usart;
+    if ((siop->enabled & SIO_EV_TXNOTFULL) != 0U)
+      u->IEN_SET = USART_IEN_TXBL;
+    if ((siop->enabled & SIO_EV_TXDONE) != 0U)
+      u->IEN_SET = USART_IEN_TXC;
+  } else {
+    EUSART_TypeDef *u = siop->usart;
+    if ((siop->enabled & SIO_EV_TXNOTFULL) != 0U)
+      u->IEN_SET = EUSART_IEN_TXFL;
+    if ((siop->enabled & SIO_EV_TXDONE) != 0U)
+      u->IEN_SET = EUSART_IEN_TXC;
+  }
+
   /* NOTE: this callback is invoked from the shared LDMA handler which
      already holds the system lock (osalSysLockFromISR), therefore only
      I-class APIs may be used here — the __sio_wakeup_*() macros would
      take the lock a second time and panic with SV#6. */
 #if SIO_USE_SYNCHRONIZATION == TRUE
-  if ((flags & EFR32_DMA_ISR_ERROR_MASK) == 0U) {
-    /* Transfer done: wake the TX/TX-end waiters so the upper layer
-       continues pumping the remaining data. */
-    osalThreadResumeI(&siop->sync_tx, MSG_OK);
-    osalThreadResumeI(&siop->sync_txend, MSG_OK);
-  } else {
-    osalThreadResumeI(&siop->sync_rx, SIO_MSG_ERRORS);
-    osalThreadResumeI(&siop->sync_rxidle, SIO_MSG_ERRORS);
-  }
+  /* The physical TX-end waiter is woken by the peripheral TXC interrupt. */
+  osalThreadResumeI(&siop->sync_tx, MSG_OK);
 #endif
+}
+
+static void sio_lld_dma_rx_isr(void *p, uint32_t flags) {
+  SIODriver *siop = p;
+
+  if ((flags & EFR32_DMA_ISR_ERROR_MASK) != 0U) {
+    EFR32_SIO_DMA_ERROR_HOOK(siop);
+    return;
+  }
+  efr32_stream_rx_complete(&siop->dma_rx);
+  nvicSetPending(efr32_sio_dma_rx_irq[_sio_lld_index(siop)]);
+}
+
+static bool sio_lld_dma_rx_ready(SIODriver *siop) {
+  syssts_t sts = osalSysGetStatusAndLockX();
+  bool ready = !efr32_stream_rx_empty(&siop->dma_rx);
+  osalSysRestoreStatusX(sts);
+  return ready;
 }
 
 /**
  * @brief   Allocates the TX DMA stream for the instance (if enabled).
  */
-__STATIC_INLINE void _sio_lld_dma_alloc(SIODriver* siop) {
+__STATIC_INLINE bool _sio_lld_dma_alloc(SIODriver* siop) {
   uint32_t idx = _sio_lld_index(siop);
 
   siop->dma_tx = NULL;
   siop->dma_tx_busy = false;
+  siop->dma_rx.stream = NULL;
+  siop->dma_rx.active = false;
+  siop->dma_rx.rd = siop->dma_rx.wr = 0U;
+  siop->dma_rx_notified = false;
 
   if (efr32_sio_tx_dma_stream[idx] >= 0) {
     /* I-class: called from sio_lld_start, which runs under sioStart()'s
@@ -227,7 +265,25 @@ __STATIC_INLINE void _sio_lld_dma_alloc(SIODriver* siop) {
     siop->dma_tx = dmaStreamAllocI((uint32_t)efr32_sio_tx_dma_stream[idx],
                                     EFR32_SIO_DMA_IRQ_PRIORITY,
                                     sio_lld_dma_tx_isr, siop);
+    if (siop->dma_tx == NULL)
+      return false;
   }
+  siop->dma_rx.stream = dmaStreamAllocI(EFR32_DMA_STREAM_ID_ANY,
+                                         EFR32_SIO_DMA_IRQ_PRIORITY,
+                                         sio_lld_dma_rx_isr, siop);
+  if (siop->dma_rx.stream == NULL) {
+    if (siop->dma_tx != NULL) {
+      dmaStreamFreeI(siop->dma_tx);
+      siop->dma_tx = NULL;
+    }
+    return false;
+  }
+  siop->dma_rx.source = efr32_sio_dma_src[idx];
+  if (_sio_lld_is_usart(siop))
+    siop->dma_rx.reg = &((USART_TypeDef *)siop->usart)->RXDATA;
+  else
+    siop->dma_rx.reg = &((EUSART_TypeDef *)siop->usart)->RXDATA;
+  return true;
 }
 
 /**
@@ -235,9 +291,15 @@ __STATIC_INLINE void _sio_lld_dma_alloc(SIODriver* siop) {
  */
 __STATIC_INLINE void _sio_lld_dma_free(SIODriver* siop) {
 
+  if (siop->dma_rx.stream != NULL) {
+    efr32_stream_rx_stop(&siop->dma_rx);
+    dmaStreamFreeI(siop->dma_rx.stream);
+    siop->dma_rx.stream = NULL;
+  }
   if (siop->dma_tx != NULL) {
     if (siop->dma_tx_busy) {
       dmaStreamDisable(siop->dma_tx);
+      while ((LDMA->CHBUSY & (1U << siop->dma_tx->selfindex)) != 0U) {}
       siop->dma_tx_busy = false;
     }
     dmaStreamFreeI(siop->dma_tx);   /* under sioStop()'s lock */
@@ -262,13 +324,22 @@ __STATIC_INLINE size_t _sio_lld_write_dma(SIODriver* siop,
 
   memcpy(siop->dma_tx_buf, buffer, len);
 
+  if (_sio_lld_is_usart(siop)) {
+    USART_TypeDef *u = siop->usart;
+    u->IEN_CLR = USART_IEN_TXC;
+    u->IF_CLR = USART_IF_TXC;
+  } else {
+    EUSART_TypeDef *u = siop->usart;
+    u->IEN_CLR = EUSART_IEN_TXC;
+    u->IF_CLR = EUSART_IF_TXC;
+  }
   dmaStreamSetRequestSource(siop->dma_tx,
                             efr32_sio_dma_src[_sio_lld_index(siop)],
                             efr32_sio_dma_sig_tx[_sio_lld_index(siop)]);
+  siop->dma_tx_busy = true;
   dmaStartMemToPeriph(siop->dma_tx, siop->dma_tx_buf,
                       _sio_lld_txdata_addr(siop), len,
                       EFR32_DMA_CH_CTRL_SIZE_BYTE);
-  siop->dma_tx_busy = true;
 
   return len;
 }
@@ -405,15 +476,24 @@ __STATIC_INLINE void _sio_lld_stop_usart(SIODriver* siop) {
 
 __STATIC_INLINE void usart_enable_rx_irq(SIODriver* siop) {
 
+#if EFR32_SIO_USE_DMA
+  syssts_t sts = osalSysGetStatusAndLockX();
+  siop->dma_rx_notified = false;
+  if ((siop->enabled & SIO_EV_RXNOTEMPY) != 0U &&
+      !efr32_stream_rx_empty(&siop->dma_rx))
+    nvicSetPending(efr32_sio_dma_rx_irq[_sio_lld_index(siop)]);
+  osalSysRestoreStatusX(sts);
+#else
   if ((siop->enabled & SIO_EV_RXNOTEMPY) != 0U) {
     if (_sio_lld_is_usart(siop)) {
       USART_TypeDef* usart = siop->usart;
-      usart->IEN_SET = USART_IEN_RXFULL;
+      usart->IEN_SET = USART_IEN_RXDATAV;
     } else {
       EUSART_TypeDef* usart = siop->usart;
       usart->IEN_SET = EUSART_IEN_RXFL;
     }
   }
+#endif
 }
 
 __STATIC_INLINE void usart_enable_rx_errors_irq(SIODriver* siop) {
@@ -528,6 +608,11 @@ msg_t sio_lld_start(SIODriver* siop) {
   osalDbgAssert((siop->config != NULL), "invalid config");
 
   if (siop->state == SIO_STOP) {
+    siop->rx_errors = 0U;
+#if EFR32_SIO_USE_DMA
+    if (!_sio_lld_dma_alloc(siop))
+      return HAL_RET_NO_RESOURCE;
+#endif
     /* Enables the peripheral.*/
     /* Configures the peripheral.*/
 #if EFR32_SIO_USE_EUSART1 == TRUE
@@ -575,7 +660,7 @@ msg_t sio_lld_start(SIODriver* siop) {
 #endif
 
 #if EFR32_SIO_USE_DMA
-    _sio_lld_dma_alloc(siop);
+    efr32_stream_rx_start(&siop->dma_rx, true);
 #endif
   }
 
@@ -650,6 +735,9 @@ void sio_lld_set_baud(SIODriver *siop, uint32_t baud, uint32_t irda_mode) {
 void sio_lld_stop(SIODriver* siop) {
 
   if (siop->state == SIO_READY) {
+#if EFR32_SIO_USE_DMA
+    _sio_lld_dma_free(siop);
+#endif
     /* Resets the peripheral.*/
     /* Disables the peripheral.*/
 #if EFR32_SIO_USE_EUSART1 == TRUE
@@ -680,9 +768,6 @@ void sio_lld_stop(SIODriver* siop) {
     }
 #endif
 
-#if EFR32_SIO_USE_DMA
-    _sio_lld_dma_free(siop);
-#endif
   }
 }
 
@@ -695,28 +780,36 @@ void sio_lld_update_enable_flags(SIODriver* siop) {
 
   uint32_t ien;
 
+  if (siop->state != SIO_READY)
+    return;
+
   if (_sio_lld_is_usart(siop)) {
     USART_TypeDef* usart = siop->usart;
-    ien = usart->IF & ~(USART_IF_RX_ERRORS  |
-                        USART_IF_RXFULL     |
-                        USART_IF_TXBL       |
-                        USART_IF_TXC);
+    ien = usart->IEN & ~(USART_IEN_RX_ERRORS |
+                         USART_IEN_RXDATAV   |
+                         USART_IEN_TXBL      |
+                         USART_IEN_TXC);
 
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_FRAMING_ERR, SIO_EV_FRAMING_ERR_POS, _USART_IEN_FERR_SHIFT);
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_PARITY_ERR,  SIO_EV_PARITY_ERR_POS,  _USART_IEN_PERR_SHIFT);
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_OVERRUN_ERR, SIO_EV_OVERRUN_ERR_POS, _USART_IEN_RXOF_SHIFT);
-    ien |= __sio_reloc_field(siop->enabled, SIO_EV_RXNOTEMPY,   SIO_EV_RXNOTEMPY_POS,   _USART_IEN_RXFULL_SHIFT);
+    ien |= __sio_reloc_field(siop->enabled, SIO_EV_RXNOTEMPY,   SIO_EV_RXNOTEMPY_POS,   _USART_IEN_RXDATAV_SHIFT);
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_TXNOTFULL,   SIO_EV_TXNOTFULL_POS,   _USART_IEN_TXBL_SHIFT);
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_TXDONE,      SIO_EV_TXDONE_POS,      _USART_IEN_TXC_SHIFT);
 
+#if EFR32_SIO_USE_DMA
+    ien &= ~USART_IEN_RXDATAV;
+    if (siop->dma_tx_busy)
+      ien &= ~(USART_IEN_TXBL | USART_IEN_TXC);
+#endif
     /* Setting up the operation.*/
     usart->IEN = ien;
   } else {
     EUSART_TypeDef* usart = siop->usart;
-    ien = usart->IF & ~(EUSART_IF_RX_ERRORS  |
-                        EUSART_IF_RXFL       |
-                        EUSART_IF_TXFL       |
-                        EUSART_IF_TXC);
+    ien = usart->IEN & ~(EUSART_IEN_RX_ERRORS |
+                         EUSART_IEN_RXFL      |
+                         EUSART_IEN_TXFL      |
+                         EUSART_IEN_TXC);
 
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_FRAMING_ERR, SIO_EV_FRAMING_ERR_POS, _EUSART_IEN_FERR_SHIFT);
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_PARITY_ERR,  SIO_EV_PARITY_ERR_POS,  _EUSART_IEN_PERR_SHIFT);
@@ -725,9 +818,17 @@ void sio_lld_update_enable_flags(SIODriver* siop) {
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_TXNOTFULL,   SIO_EV_TXNOTFULL_POS,   _EUSART_IEN_TXFL_SHIFT);
     ien |= __sio_reloc_field(siop->enabled, SIO_EV_TXDONE,      SIO_EV_TXDONE_POS,      _EUSART_IEN_TXC_SHIFT);
 
+#if EFR32_SIO_USE_DMA
+    ien &= ~EUSART_IEN_RXFL;
+    if (siop->dma_tx_busy)
+      ien &= ~(EUSART_IEN_TXFL | EUSART_IEN_TXC);
+#endif
     /* Setting up the operation.*/
     usart->IEN = ien;
   }
+#if EFR32_SIO_USE_DMA
+  usart_enable_rx_irq(siop);
+#endif
 }
 
 /**
@@ -742,6 +843,9 @@ sioevents_t sio_lld_get_and_clear_errors(SIODriver* siop) {
 
   uint32_t isr;
   sioevents_t errors;
+  syssts_t sts = osalSysGetStatusAndLockX();
+  sioevents_t saved = siop->rx_errors;
+  siop->rx_errors = 0U;
 
   if (_sio_lld_is_usart(siop)) {
     USART_TypeDef* usart = siop->usart;
@@ -752,8 +856,8 @@ sioevents_t sio_lld_get_and_clear_errors(SIODriver* siop) {
     /* Clearing captured events.*/
     usart->IF_CLR = isr;
 
-    /* Status flags cleared, now the error-related interrupts can be
-       enabled again.*/
+    /* The error handler disables both RX data and error interrupts. */
+    usart_enable_rx_irq(siop);
     usart_enable_rx_errors_irq(siop);
 
     /* Translating the status flags in SIO events.*/
@@ -769,8 +873,8 @@ sioevents_t sio_lld_get_and_clear_errors(SIODriver* siop) {
     /* Clearing captured events.*/
     usart->IF_CLR = isr;
 
-    /* Status flags cleared, now the error-related interrupts can be
-       enabled again.*/
+    /* The error handler disables both RX data and error interrupts. */
+    usart_enable_rx_irq(siop);
     usart_enable_rx_errors_irq(siop);
 
     /* Translating the status flags in SIO events.*/
@@ -779,7 +883,8 @@ sioevents_t sio_lld_get_and_clear_errors(SIODriver* siop) {
              __sio_reloc_field(isr, _EUSART_IF_RXOF_MASK, _EUSART_IF_RXOF_SHIFT, SIO_EV_OVERRUN_ERR_POS);
   }
 
-  return errors;
+  osalSysRestoreStatusX(sts);
+  return errors | saved;
 }
 
 /**
@@ -794,16 +899,23 @@ sioevents_t sio_lld_get_and_clear_events(SIODriver* siop) {
 
   uint32_t isr, status;
   sioevents_t events;
+  syssts_t sts = osalSysGetStatusAndLockX();
+  sioevents_t saved = siop->rx_errors;
+  siop->rx_errors = 0U;
 
   if (_sio_lld_is_usart(siop)) {
     USART_TypeDef* usart = siop->usart;
 
     /* Getting all ISR flags.*/
     isr = usart->IF & (USART_IF_RX_ERRORS  |
-                       USART_IF_RXFULL     |
+                       USART_IF_RXDATAV    |
                        USART_IF_TXBL       |
                        USART_IF_TXC);
 
+#if EFR32_SIO_USE_DMA
+    if (siop->dma_tx_busy)
+      isr &= ~USART_IF_TXC;
+#endif
     /* Clearing captured events.*/
     usart->IF_CLR = isr;
 
@@ -816,7 +928,7 @@ sioevents_t sio_lld_get_and_clear_events(SIODriver* siop) {
     events = __sio_reloc_field(isr, _USART_IF_FERR_MASK, _USART_IF_FERR_SHIFT, SIO_EV_FRAMING_ERR_POS) |
              __sio_reloc_field(isr, _USART_IF_PERR_MASK, _USART_IF_PERR_SHIFT, SIO_EV_PARITY_ERR_POS) |
              __sio_reloc_field(isr, _USART_IF_RXOF_MASK, _USART_IF_RXOF_SHIFT, SIO_EV_OVERRUN_ERR_POS) |
-             __sio_reloc_field(isr, _USART_IF_RXFULL_MASK, _USART_IF_RXFULL_SHIFT, SIO_EV_RXNOTEMPY_POS) |
+             __sio_reloc_field(isr, _USART_IF_RXDATAV_MASK, _USART_IF_RXDATAV_SHIFT, SIO_EV_RXNOTEMPY_POS) |
              __sio_reloc_field(isr, _USART_IF_TXBL_MASK, _USART_IF_TXBL_SHIFT, SIO_EV_TXNOTFULL_POS) |
              __sio_reloc_field(isr, _USART_IF_TXC_MASK,  _USART_IF_TXC_SHIFT,  SIO_EV_TXDONE_POS);
   } else {
@@ -828,6 +940,10 @@ sioevents_t sio_lld_get_and_clear_events(SIODriver* siop) {
                        EUSART_IF_TXFL       |
                        EUSART_IF_TXC);
 
+#if EFR32_SIO_USE_DMA
+    if (siop->dma_tx_busy)
+      isr &= ~EUSART_IF_TXC;
+#endif
     status = usart->STATUS & EUSART_STATUS_RXIDLE;
 
     /* Clearing captured events.*/
@@ -848,7 +964,15 @@ sioevents_t sio_lld_get_and_clear_events(SIODriver* siop) {
              __sio_reloc_field(status, _EUSART_STATUS_RXIDLE_MASK, _EUSART_STATUS_RXIDLE_SHIFT, SIO_EV_RXIDLE_POS);
   }
 
-  return events;
+#if EFR32_SIO_USE_DMA
+  events &= ~SIO_EV_RXNOTEMPY;
+  if (sio_lld_dma_rx_ready(siop))
+    events |= SIO_EV_RXNOTEMPY;
+  if (siop->dma_tx_busy)
+    events &= ~(SIO_EV_TXNOTFULL | SIO_EV_TXDONE);
+#endif
+  osalSysRestoreStatusX(sts);
+  return events | saved;
 }
 
 /**
@@ -863,13 +987,15 @@ sioevents_t sio_lld_get_events(SIODriver* siop) {
 
   uint32_t isr, status;
   sioevents_t events;
+  syssts_t sts = osalSysGetStatusAndLockX();
+  sioevents_t saved = siop->rx_errors;
 
   if (_sio_lld_is_usart(siop)) {
     USART_TypeDef* usart = siop->usart;
 
     /* Getting all ISR flags.*/
     isr = usart->IF & (USART_IF_RX_ERRORS  |
-                       USART_IF_RXFULL    |
+                       USART_IF_RXDATAV   |
                        USART_IF_TXBL       |
                        USART_IF_TXC);
 
@@ -877,7 +1003,7 @@ sioevents_t sio_lld_get_events(SIODriver* siop) {
     events = __sio_reloc_field(isr, _USART_IF_FERR_MASK, _USART_IF_FERR_SHIFT, SIO_EV_FRAMING_ERR_POS) |
              __sio_reloc_field(isr, _USART_IF_PERR_MASK, _USART_IF_PERR_SHIFT, SIO_EV_PARITY_ERR_POS) |
              __sio_reloc_field(isr, _USART_IF_RXOF_MASK, _USART_IF_RXOF_SHIFT, SIO_EV_OVERRUN_ERR_POS) |
-             __sio_reloc_field(isr, _USART_IF_RXFULL_MASK, _USART_IF_RXFULL_SHIFT, SIO_EV_RXNOTEMPY_POS) |
+             __sio_reloc_field(isr, _USART_IF_RXDATAV_MASK, _USART_IF_RXDATAV_SHIFT, SIO_EV_RXNOTEMPY_POS) |
              __sio_reloc_field(isr, _USART_IF_TXBL_MASK, _USART_IF_TXBL_SHIFT, SIO_EV_TXNOTFULL_POS) |
              __sio_reloc_field(isr, _USART_IF_TXC_MASK,  _USART_IF_TXC_SHIFT,  SIO_EV_TXDONE_POS);
   } else {
@@ -901,11 +1027,22 @@ sioevents_t sio_lld_get_events(SIODriver* siop) {
              __sio_reloc_field(status, _EUSART_STATUS_RXIDLE_MASK, _EUSART_STATUS_RXIDLE_SHIFT, SIO_EV_RXIDLE_POS);
   }
 
-  return events;
+#if EFR32_SIO_USE_DMA
+  events &= ~SIO_EV_RXNOTEMPY;
+  if (sio_lld_dma_rx_ready(siop))
+    events |= SIO_EV_RXNOTEMPY;
+  if (siop->dma_tx_busy)
+    events &= ~(SIO_EV_TXNOTFULL | SIO_EV_TXDONE);
+#endif
+  osalSysRestoreStatusX(sts);
+  return events | saved;
 }
 
 bool _sio_lld_is_rx_empty(SIODriver* siop) {
 
+#if EFR32_SIO_USE_DMA
+  return !sio_lld_dma_rx_ready(siop);
+#else
   bool rv;
 
   if (_sio_lld_is_usart(siop)) {
@@ -917,6 +1054,7 @@ bool _sio_lld_is_rx_empty(SIODriver* siop) {
   }
 
   return rv;
+#endif
 }
 
 bool _sio_lld_is_rx_idle(SIODriver* siop) {
@@ -947,13 +1085,17 @@ bool _sio_lld_has_rx_errors(SIODriver* siop) {
     rv = (usart->IF & (EUSART_IF_FERR | EUSART_IF_PERR | EUSART_IF_RXOF)) != 0U;
   }
 
-  return rv;
+  return rv || siop->rx_errors != 0U;
 }
 
 bool _sio_lld_is_tx_full(SIODriver* siop) {
 
   bool rv;
 
+#if EFR32_SIO_USE_DMA
+  if (siop->dma_tx_busy)
+    return true;
+#endif
   if (_sio_lld_is_usart(siop)) {
     USART_TypeDef* usart = siop->usart;
     rv = (usart->STATUS & USART_STATUS_TXBL) == 0U;
@@ -962,6 +1104,8 @@ bool _sio_lld_is_tx_full(SIODriver* siop) {
     rv = (usart->STATUS & EUSART_STATUS_TXFL) == 0U;
   }
 
+  if (rv)
+    usart_enable_tx_irq(siop);
   return rv;
 }
 
@@ -969,6 +1113,10 @@ bool _sio_lld_is_tx_ongoing(SIODriver* siop) {
 
   bool rv;
 
+#if EFR32_SIO_USE_DMA
+  if (siop->dma_tx_busy)
+    return true;
+#endif
   if (_sio_lld_is_usart(siop)) {
     USART_TypeDef* usart = siop->usart;
     rv = (usart->STATUS & USART_STATUS_TXC) == 0U;
@@ -982,6 +1130,13 @@ bool _sio_lld_is_tx_ongoing(SIODriver* siop) {
 
 __STATIC_INLINE uint_fast16_t _sio_lld_read(SIODriver* siop) {
 
+#if EFR32_SIO_USE_DMA
+  syssts_t sts = osalSysGetStatusAndLockX();
+  uint_fast16_t data = efr32_stream_rx_get(&siop->dma_rx);
+  efr32_stream_rx_rearm(&siop->dma_rx, true);
+  osalSysRestoreStatusX(sts);
+  return data;
+#else
   uint_fast16_t data;
 
   if (_sio_lld_is_usart(siop)) {
@@ -993,6 +1148,7 @@ __STATIC_INLINE uint_fast16_t _sio_lld_read(SIODriver* siop) {
   }
 
   return data;
+#endif
 }
 
 __STATIC_INLINE void _sio_lld_write(SIODriver* siop, uint_fast16_t data) {
@@ -1031,8 +1187,9 @@ size_t sio_lld_read(SIODriver* siop, uint8_t* buffer, size_t n) {
       break;
     }
 
-    /* Buffer filled condition.*/
+    /* The receive status can lag the last FIFO read. */
     if (rd >= n) {
+      usart_enable_rx_irq(siop);
       break;
     }
 
@@ -1059,18 +1216,14 @@ size_t sio_lld_write(SIODriver* siop, const uint8_t* buffer, size_t n) {
   size_t wr;
 
 #if EFR32_SIO_USE_DMA
-  /* DMA TX path: large transfers go through the LDMA stream using the
-     driver-owned bounce buffer. The TXC interrupt is still enabled below
-     (via usart_enable_tx_end_irq) so that sioSynchronizeTXEnd() works. */
+  if (siop->dma_tx_busy)
+    return 0U;
+
+  /* DMA TX path uses the driver-owned bounce buffer. */
   if (n >= (size_t)EFR32_SIO_DMA_MIN_TRANSFER) {
     size_t dma_wr = _sio_lld_write_dma(siop, buffer, n);
     if (dma_wr > 0U) {
-      usart_enable_tx_end_irq(siop);
       return dma_wr;
-    }
-    /* DMA busy: report 0, the DMA ISR wakes the TX waiters. */
-    if (siop->dma_tx_busy) {
-      return 0U;
     }
   }
 #endif
@@ -1119,6 +1272,7 @@ msg_t sio_lld_get(SIODriver* siop) {
     msg = MSG_TIMEOUT;
   } else {
     msg = (msg_t)_sio_lld_read(siop);
+    usart_enable_rx_irq(siop);
   }
 
   return msg;
@@ -1189,11 +1343,38 @@ __STATIC_INLINE void sio_lld_serve_interrupt_eusart(SIODriver* siop) {
 
   /* Events to be processed.*/
   events = sio_lld_get_events(siop) & siop->enabled;
+  if ((ien & EUSART_IEN_TXFL) == 0U)
+    events &= ~SIO_EV_TXNOTFULL;
+  if ((ien & EUSART_IEN_TXC) == 0U)
+    events &= ~SIO_EV_TXDONE;
+  if ((ien & EUSART_IEN_RXOF) == 0U)
+    events &= ~SIO_EV_OVERRUN_ERR;
+  if ((ien & EUSART_IEN_PERR) == 0U)
+    events &= ~SIO_EV_PARITY_ERR;
+  if ((ien & EUSART_IEN_FERR) == 0U)
+    events &= ~SIO_EV_FRAMING_ERR;
+#if EFR32_SIO_USE_DMA
+  if (siop->dma_rx_notified)
+    events &= ~SIO_EV_RXNOTEMPY;
+#else
+  if ((ien & EUSART_IEN_RXFL) == 0U) {
+    events &= ~SIO_EV_RXNOTEMPY;
+  } else if ((events & SIO_EV_RXNOTEMPY) != 0U &&
+             (u->STATUS & EUSART_STATUS_RXFL) == 0U) {
+    u->IF_CLR = EUSART_IF_RXFL;
+    if ((u->STATUS & EUSART_STATUS_RXFL) == 0U) {
+      events &= ~SIO_EV_RXNOTEMPY;
+    }
+  }
+#endif
   if (events != 0U) {
 
     /* Error events handled as a group.*/
     if ((events & SIO_EV_ALL_ERRORS) != 0U) {
 
+      syssts_t sts = osalSysGetStatusAndLockX();
+      siop->rx_errors |= events & SIO_EV_ALL_ERRORS;
+      osalSysRestoreStatusX(sts);
       ifr &= ~(EUSART_IF_RXFL | EUSART_IF_RX_ERRORS);
 
       /* All RX-related interrupt sources disabled.*/
@@ -1219,7 +1400,11 @@ __STATIC_INLINE void sio_lld_serve_interrupt_eusart(SIODriver* siop) {
         ifr &= ~(EUSART_IF_RXFL);
 
         /* Interrupt source disabled.*/
+#if EFR32_SIO_USE_DMA
+        siop->dma_rx_notified = true;
+#else
         ien &= ~(EUSART_IEN_RXFL);
+#endif
 
         /* Waiting thread woken, if any.*/
         __sio_wakeup_rx(siop);
@@ -1255,8 +1440,6 @@ __STATIC_INLINE void sio_lld_serve_interrupt_eusart(SIODriver* siop) {
 
     /* The callback is invoked.*/
     __sio_callback(siop);
-  } else {
-    osalDbgAssert(false, "spurious interrupt");
   }
 }
 
@@ -1280,15 +1463,36 @@ __STATIC_INLINE void sio_lld_serve_interrupt_usart(SIODriver* siop) {
 
   /* Events to be processed.*/
   events = sio_lld_get_events(siop) & siop->enabled;
+  if ((ien & USART_IEN_TXBL) == 0U)
+    events &= ~SIO_EV_TXNOTFULL;
+  if ((ien & USART_IEN_TXC) == 0U)
+    events &= ~SIO_EV_TXDONE;
+  if ((ien & USART_IEN_RXOF) == 0U)
+    events &= ~SIO_EV_OVERRUN_ERR;
+  if ((ien & USART_IEN_PERR) == 0U)
+    events &= ~SIO_EV_PARITY_ERR;
+  if ((ien & USART_IEN_FERR) == 0U)
+    events &= ~SIO_EV_FRAMING_ERR;
+#if EFR32_SIO_USE_DMA
+  if (siop->dma_rx_notified)
+    events &= ~SIO_EV_RXNOTEMPY;
+#else
+  if ((ien & USART_IEN_RXDATAV) == 0U) {
+    events &= ~SIO_EV_RXNOTEMPY;
+  }
+#endif
   if (events != 0U) {
 
     /* Error events handled as a group.*/
     if ((events & SIO_EV_ALL_ERRORS) != 0U) {
 
-      ifr &= ~(USART_IF_RXFULL | USART_IF_RX_ERRORS);
+      syssts_t sts = osalSysGetStatusAndLockX();
+      siop->rx_errors |= events & SIO_EV_ALL_ERRORS;
+      osalSysRestoreStatusX(sts);
+      ifr &= ~(USART_IF_RXDATAV | USART_IF_RX_ERRORS);
 
       /* All RX-related interrupt sources disabled.*/
-      ien &= ~(USART_IEN_RXFULL | USART_IEN_RX_ERRORS);
+      ien &= ~(USART_IEN_RXDATAV | USART_IEN_RX_ERRORS);
 
       /* Waiting thread woken, if any.*/
       __sio_wakeup_errors(siop);
@@ -1307,10 +1511,14 @@ __STATIC_INLINE void sio_lld_serve_interrupt_usart(SIODriver* siop) {
       /* RX FIFO is non-empty.*/
       if ((events & SIO_EV_RXNOTEMPY) != 0U) {
 
-        ifr &= ~(USART_IF_RXFULL);
+        ifr &= ~(USART_IF_RXDATAV);
 
         /* Interrupt source disabled.*/
-        ien &= ~(USART_IEN_RXFULL);
+#if EFR32_SIO_USE_DMA
+        siop->dma_rx_notified = true;
+#else
+        ien &= ~(USART_IEN_RXDATAV);
+#endif
 
         /* Waiting thread woken, if any.*/
         __sio_wakeup_rx(siop);
@@ -1346,9 +1554,8 @@ __STATIC_INLINE void sio_lld_serve_interrupt_usart(SIODriver* siop) {
 
     /* The callback is invoked.*/
     __sio_callback(siop);
-  } else {
-    osalDbgAssert(false, "spurious interrupt");
   }
+  /* RXDATAV can deassert after a FIFO read while its IRQ remains pending. */
 }
 
 /**

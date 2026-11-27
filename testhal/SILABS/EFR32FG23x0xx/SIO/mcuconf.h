@@ -97,7 +97,9 @@
 #define EFR32_SIO_USE_EUSART3               FALSE
 #define EFR32_SIO_USE_USART1                TRUE
 /* Use LDMA for SIO TX transfers >= EFR32_SIO_DMA_MIN_TRANSFER bytes. */
+#if !defined(EFR32_SIO_USE_DMA)
 #define EFR32_SIO_USE_DMA                   TRUE
+#endif
 #define EFR32_SIO_DMA_MIN_TRANSFER        8U
 #define EFR32_EUSART1_RX_IRQ_PRIORITY       4
 #define EFR32_EUSART1_TX_IRQ_PRIORITY       4

@@ -27,6 +27,10 @@
 
 #if (HAL_USE_UART == TRUE) || defined(__DOXYGEN__)
 
+#include "efr32_irda.h"
+
+#define UART_LLD_ENHANCED_API
+
 /*===========================================================================*/
 /* Driver pre-compile time settings.                                         */
 /*===========================================================================*/
@@ -57,9 +61,34 @@
 #define EFR32_UART_USART1_IRQ_PRIORITY   4
 #endif
 
+/**
+ * @brief   Enables TX and RX DMA for each UART instance.
+ * @details Starting an instance requires two LDMA channels and returns
+ *          @p HAL_RET_NO_RESOURCE if both cannot be allocated. Buffers must
+ *          remain valid until completion or cancellation.
+ */
+#if !defined(EFR32_UART_USE_DMA) || defined(__DOXYGEN__)
+#define EFR32_UART_USE_DMA               FALSE
+#endif
+#if !defined(EFR32_UART_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_UART_DMA_IRQ_PRIORITY      5
+#endif
+#if !defined(EFR32_UART_DMA_ERROR_HOOK) || defined(__DOXYGEN__)
+#define EFR32_UART_DMA_ERROR_HOOK(uartp) osalSysHalt("UART DMA failure")
+#endif
+#if EFR32_UART_USE_DMA && !defined(EFR32_DMA_REQUIRED)
+#define EFR32_DMA_REQUIRED
+#endif
+
 /*===========================================================================*/
 /* Driver data structures and types.                                         */
 /*===========================================================================*/
+
+typedef uint32_t uartflags_t;
+typedef struct hal_uart_driver UARTDriver;
+typedef void (*uartcb_t)(UARTDriver *uartp);
+typedef void (*uartccb_t)(UARTDriver *uartp, uint16_t c);
+typedef void (*uartecb_t)(UARTDriver *uartp, uartflags_t errors);
 
 /**
  * @brief   UART driver configuration structure.
@@ -114,16 +143,42 @@ typedef struct {
 /**
  * @brief   UART driver structure fields.
  */
-#define uart_lld_driver_fields                                              \
-  /* Pointer to the EUSART/USART registers (as void*). */                   \
-  void                      *usart;                                         \
-  /* True if this is a USART (not EUSART). */                               \
-  bool                      is_usart;                                      \
-  /* UART instance index (0=EUSART0, 1=EUSART1, 2=EUSART2, 3=USART0). */   \
-  uint32_t                  index;                                         \
-  /* Clock frequency for baud rate calculation. */                          \
+struct hal_uart_driver {
+  uartstate_t               state;
+  uarttxstate_t             txstate;
+  uartrxstate_t             rxstate;
+  const UARTConfig          *config;
+#if UART_USE_WAIT == TRUE
+  bool                      early;
+  thread_reference_t        threadrx;
+  thread_reference_t        threadtx;
+#endif
+#if UART_USE_MUTUAL_EXCLUSION == TRUE
+  mutex_t                   mutex;
+#endif
+#if defined(UART_DRIVER_EXT_FIELDS)
+  UART_DRIVER_EXT_FIELDS
+#endif
+  void                      *usart;
+  bool                      is_usart;
+  bool                      wide;
+  uint32_t                  index;
   uint32_t                  clock;
-
+  const uint8_t             *txbuf;
+  uint8_t                   *rxbuf;
+  size_t                    txremaining;
+  size_t                    rxremaining;
+#if EFR32_UART_USE_DMA
+  const efr32_dma_stream_t  *dma_tx;
+  const efr32_dma_stream_t  *dma_rx;
+  size_t                    dma_tx_count;
+  size_t                    dma_rx_count;
+  bool                      dma_tx_active;
+  bool                      dma_rx_active;
+  bool                      dma_tx_done;
+  bool                      dma_rx_done;
+#endif
+};
 
 /*===========================================================================*/
 /* External declarations.                                                    */
@@ -146,7 +201,7 @@ extern UARTDriver UARTD4;
 extern "C" {
 #endif
   void uart_lld_init(void);
-  msg_t uart_lld_start(UARTDriver *uartp, const UARTConfig *config);
+  msg_t uart_lld_start(UARTDriver *uartp);
   void uart_lld_stop(UARTDriver *uartp);
   void uart_lld_start_send(UARTDriver *uartp, size_t n, const void *txbuf);
   size_t uart_lld_stop_send(UARTDriver *uartp);
@@ -157,22 +212,20 @@ extern "C" {
 }
 #endif
 
-#endif /* HAL_USE_UART == TRUE */
-
-#endif /* HAL_UART_LLD_H */
-
-/** @} */
-
 /*===========================================================================*/
 /* UART IrDA presets (8E1, 3/16 pulse).                                       */
 /*===========================================================================*/
+
+#define EFR32_UART_LLD_EUSART_8E1                                              \
+  (EUSART_FRAMECFG_DATABITS_EIGHT | EUSART_FRAMECFG_PARITY_EVEN |             \
+   EUSART_FRAMECFG_STOPBITS_ONE)
 
 /* 2400 baud, 8E1, LF IrDA (LFXO/LFRCO clocked, EM2/EM3). */
 #define EFR32_UART_LLD_IRDA_2400_8E1_LF                                        \
   {                                                                            \
     .speed    = 2400U,                                                         \
     .cfg0     = (0U << 0) | (4U << 5),   /* ASYNC, OVS disabled */             \
-    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                      \
+    .framecfg = EFR32_UART_LLD_EUSART_8E1,                                     \
     .irhfcg   = 0,                                                             \
     .irlfcfg  = 0,                                                             \
     .irctrl   = EFR32_IRDA_LF,                                                 \
@@ -183,7 +236,7 @@ extern "C" {
   {                                                                            \
     .speed    = 2400U,                                                         \
     .cfg0     = (0U << 0) | (0U << 5),   /* ASYNC, 16x OVS */                  \
-    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                      \
+    .framecfg = EFR32_UART_LLD_EUSART_8E1,                                     \
     .irhfcg   = EFR32_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                  \
     .irlfcfg  = 0,                                                             \
     .irctrl   = EFR32_IRDA_HF,                                                 \
@@ -194,7 +247,7 @@ extern "C" {
   {                                                                            \
     .speed    = 9600U,                                                         \
     .cfg0     = (0U << 0) | (0U << 5),                                         \
-    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                      \
+    .framecfg = EFR32_UART_LLD_EUSART_8E1,                                     \
     .irhfcg   = EFR32_IRDA_PW_3_16 | EUSART_IRHFCFG_IRHFFILT,                  \
     .irlfcfg  = 0,                                                             \
     .irctrl   = EFR32_IRDA_HF,                                                 \
@@ -205,8 +258,14 @@ extern "C" {
   {                                                                            \
     .speed    = 9600U,                                                         \
     .cfg0     = (0U << 0) | (4U << 5),                                         \
-    .framecfg = EFR32_SIO_LLD_EUSART_8E1,                                      \
+    .framecfg = EFR32_UART_LLD_EUSART_8E1,                                     \
     .irhfcg   = 0,                                                             \
     .irlfcfg  = 0,                                                             \
     .irctrl   = EFR32_IRDA_LF,                                                 \
   }
+
+#endif /* HAL_USE_UART == TRUE */
+
+#endif /* HAL_UART_LLD_H */
+
+/** @} */

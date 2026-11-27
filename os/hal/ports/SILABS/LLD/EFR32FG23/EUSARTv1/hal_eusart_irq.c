@@ -36,6 +36,25 @@
 
 /* Fallback defaults for driver enable macros when the corresponding HAL
    driver is not compiled in. */
+#if HAL_USE_SIO != TRUE
+#undef EFR32_SIO_USE_EUSART1
+#undef EFR32_SIO_USE_EUSART2
+#undef EFR32_SIO_USE_EUSART3
+#undef EFR32_SIO_USE_USART1
+#define EFR32_SIO_USE_EUSART1     FALSE
+#define EFR32_SIO_USE_EUSART2     FALSE
+#define EFR32_SIO_USE_EUSART3     FALSE
+#define EFR32_SIO_USE_USART1      FALSE
+#endif
+#if HAL_USE_UART != TRUE
+#undef EFR32_UART_USE_EUSART1
+#undef EFR32_UART_USE_EUSART2
+#undef EFR32_UART_USE_EUSART3
+#undef EFR32_UART_USE_USART1
+#endif
+#if HAL_USE_SERIAL != TRUE
+#undef EFR32_SERIAL_USE_USART1
+#endif
 #if !defined(EFR32_UART_USE_EUSART1) || defined(__DOXYGEN__)
 #define EFR32_UART_USE_EUSART1    FALSE
 #endif
@@ -50,6 +69,19 @@
 #endif
 #if !defined(EFR32_SERIAL_USE_USART1) || defined(__DOXYGEN__)
 #define EFR32_SERIAL_USE_USART1   FALSE
+#endif
+
+#if EFR32_SIO_USE_EUSART1 && EFR32_UART_USE_EUSART1
+#error "EUSART1 is assigned to both SIO and UART"
+#endif
+#if EFR32_SIO_USE_EUSART2 && EFR32_UART_USE_EUSART2
+#error "EUSART2 is assigned to both SIO and UART"
+#endif
+#if EFR32_SIO_USE_EUSART3 && EFR32_UART_USE_EUSART3
+#error "EUSART3 is assigned to both SIO and UART"
+#endif
+#if (EFR32_SIO_USE_USART1 + EFR32_UART_USE_USART1 + EFR32_SERIAL_USE_USART1) > 1
+#error "USART1 is assigned to multiple serial drivers"
 #endif
 
 #if HAL_USE_SIO == TRUE

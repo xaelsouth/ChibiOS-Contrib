@@ -8,8 +8,9 @@ observation, or access persistent state. A build or a printed PASS does not
 establish that every operation of the corresponding LLD works.
 
 Build a test in its directory with "make -j4". Its Makefile's "flash" target
-programs the board. The tests use RTT; attach an RTT viewer or read the
-test's rtt_buf symbol with a debugger. The GPIO, debugger and board resource
+programs the board. Most tests use RTT; attach an RTT viewer or read the
+test's rtt_buf symbol with a debugger. SERIAL and UART expose results in
+serial_results and uart_results instead. The GPIO, debugger and board resource
 assignments must be checked before running a test alongside other hardware.
 PA1 and PA2 are SWCLK and SWDIO; do not reconfigure them as outputs.
 
@@ -25,11 +26,34 @@ ground-to-ground conversion and a PA0 completion smoke test; the DAC test
 also compares VBGR and VDDX references. External analog routing and
 scan/streaming remain unverified.
 
-SIO and SPI use EUSART0 internal loopback; neither requires an external
-loopback wire. The I2C test uses the onboard Si7021 at 0x40 on PA7/PA8;
+SIO tests EUSART0 loopback and USART0 local loopback. USART0 drives PA9
+(VCOM TX) for its loopback; neither SIO nor the SPI EUSART0 loopback test
+requires an external loopback wire. SIO tests single-byte blocking USART0
+receives and recovery after software-injected framing-error flags. The I2C
+test uses the onboard Si7021 at 0x40 on PA7/PA8;
 it does not scan or write to arbitrary bus addresses. GPIO button checks
 and LCD visual checks require physical observation. PWM-TIMER samples the
 PB2 input while driving duty cycles and checking channel disable and polarity.
+SERIAL exercises USART0 local loopback, repeated bytes and restart. UART
+exercises EUSART0 and USART0 local loopback, callbacks, receive timeout and
+restart. UART also tests 9-bit USART frames and masks a real framing-error
+bit from received data. Build UART with USE_COPT=-DEFR32_UART_USE_DMA=TRUE
+to exercise DMA transfers, partial receive, a 2300-byte transfer, and channel
+exhaustion and TX cancellation. SERIAL supports TX and RX DMA independently:
+use USE_COPT=-DEFR32_SERIAL_USE_DMA=TRUE for both, or set
+EFR32_SERIAL_USE_TX_DMA or EFR32_SERIAL_USE_RX_DMA to TRUE individually.
+Its RX DMA test covers bursts, overrun and recovery. SIO enables DMA by
+default in its test; set USE_COPT=-DEFR32_SIO_USE_DMA=FALSE to test interrupts.
+Its DMA tests cover bursts, ring wrap, overrun, recovery and channel
+exhaustion on EUSART0 and USART0. Both SIO configurations also test sustained
+blocking transmission. These tests do not cover every framing, error or
+cancellation path.
+
+On FG23, "clocks w" lists selected parent clocks, nominal rates and mapped
+enabled bus gates. A dash means the gate count is not tracked for that clock;
+bus gates do not establish whether a peripheral's functional clock is running.
+The separate low-power decision still uses the software consumer registry,
+which is not populated by the peripheral drivers.
 
 DMA, CRYPTO-AES, CRC, TEMP, KEYSCAN, SYSRTC, RTC, SYSTICKv1 and SYSTICKv2
 exercise their respective peripherals. Some standalone APIs and modes do not
@@ -50,6 +74,11 @@ overwrite the running firmware; restore the intended application afterwards.
 
 Known limitations
 -----------------
+UART, SERIAL and SIO support optional TX and RX DMA. Startup fails with
+HAL_RET_NO_RESOURCE if a required DMA channel is unavailable. SERIAL and
+SIO buffer received DMA data in a bounded ring; when consumers cannot keep
+up, hardware overrun is reported and data can be lost. Their DMA and
+interrupt paths have not been performance-benchmarked.
 LESENSE coil excitation, thresholds and metal detection remain uncalibrated.
 PULSECAP passed its injected-pulse and DMA checks, but restarting PCNT took
 many seconds with the system locked on one run; it is not a latency test.

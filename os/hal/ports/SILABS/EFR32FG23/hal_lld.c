@@ -313,6 +313,21 @@ __STATIC_INLINE void efr32_enable_em23grpaclk(void) {
 #endif
 }
 
+__STATIC_INLINE void efr32_enable_em4grpaclk(void) {
+
+#if EFR32_LFXO_ENABLED && (EFR32_EM4GRPACLKSEL == EFR32_EM4GRPACLKSEL_LFXO)
+  CMU->EM4GRPACLKCTRL = CMU_EM4GRPACLKCTRL_CLKSEL_LFXO;
+#elif EFR32_LFRCO_ENABLED && (EFR32_EM4GRPACLKSEL == EFR32_EM4GRPACLKSEL_LFRCO)
+  CMU->EM4GRPACLKCTRL = CMU_EM4GRPACLKCTRL_CLKSEL_LFRCO;
+#elif EFR32_ULFRCO_ENABLED && (EFR32_EM4GRPACLKSEL == EFR32_EM4GRPACLKSEL_ULFRCO)
+  CMU->EM4GRPACLKCTRL = CMU_EM4GRPACLKCTRL_CLKSEL_ULFRCO;
+#elif EFR32_EM4GRPACLKSEL == EFR32_EM4GRPACLKSEL_NOCLOCK
+  CMU->EM4GRPACLKCTRL = 0U;
+#else
+#error "No enabled clock source selected for EFR32_EM4GRPACLK"
+#endif
+}
+
 __STATIC_INLINE void efr32_enable_buram(void) {
 
   CMU->CLKEN0_SET = CMU_CLKEN0_BURAM;
@@ -420,6 +435,7 @@ void efr32_clock_init(void) {
   efr32_enable_em01grpaclk();
   efr32_enable_em01grpcclk();
   efr32_enable_em23grpaclk();
+  efr32_enable_em4grpaclk();
   efr32_enable_buram();
   efr32_enable_eusartclk();
   efr32_enable_vdacclk();

@@ -19,15 +19,13 @@
  * @brief   Generic clock commands, usable with both shell and xshell.
  *
  * @details Commands:
- *          - clocks          flat list of all clock points, rates and
- *                            consumer counts
+ *          - clocks          list clock points and port-specific diagnostics
  *          - lowpower [sec]  show the low-power mode decision (consumer
  *                            registry) and sleep in the port's low-power
  *                            mode (e.g. EM2 on SILABS EFR32), waking on
  *                            each interrupt
- *          - clocks w      clock tree view, if the port provides one via
- *                          the cli_clock_tree_print() hook (e.g. EFR32FG23
- *                          prints a Linux clk debugfs style tree)
+ *          - clocks w      clock relationships, if the port provides them
+ *                          via the cli_clock_tree_print() hook
  *          - clock reset|default   (only when HAL_LLD_USE_CLOCK_MANAGEMENT)
  *                          switch the clock configuration at run-time
  *
@@ -74,6 +72,8 @@ extern "C" {
 
   /* Consumer-count hook for the "clocks" users column (weak default 0). */
   unsigned cli_clock_users(halclkpt_t pt);
+  /* Flat-list hook; ports may supply hardware-specific diagnostics. */
+  void cli_clock_points_print(BaseSequentialStream *ssp);
   /* Low-power hooks for the "lowpower" command (weak defaults: mode name
      "low-power", all points block it, entry not allowed, enter is a no-op).
      Ports override these; e.g. SILABS EFR32 enters EM2. */

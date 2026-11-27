@@ -145,17 +145,12 @@
 
 /**
  * @brief   SIO DMA support switch.
- * @details If set to @p TRUE the SIO drivers allocate an LDMA stream per
- *          instance and use it for TX transfers of at least
- *          EFR32_SIO_DMA_MIN_TRANSFER bytes (through a bounce buffer in the
- *          driver structure). RX stays FIFO/interrupt driven on purpose:
- *          sio_lld_read() is non-blocking and the HAL-level async read
- *          passes a different (advancing) buffer pointer on every call,
- *          so a peripheral-to-memory DMA into the caller buffer could
- *          not work, and the LLD keeps no RX queue to bounce into.
- *          For large buffered receives use the SPI driver (full-duplex
- *          DMA) or a dedicated DMA-based driver with idle-line
- *          termination.
+ * @details Allocates an RX LDMA stream and, unless explicitly disabled,
+ *          a TX stream. TX uses DMA for transfers of at least
+ *          EFR32_SIO_DMA_MIN_TRANSFER bytes. RX uses a driver-owned buffer
+ *          and signals the first byte promptly before batching subsequent
+ *          bytes. Starting fails with @p HAL_RET_NO_RESOURCE if a required
+ *          stream cannot be allocated.
  * @note    The default is @p FALSE.
  */
 #if !defined(EFR32_SIO_USE_DMA) || defined(__DOXYGEN__)
@@ -192,6 +187,9 @@
 #if !defined(EFR32_SIO_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
 #define EFR32_SIO_DMA_IRQ_PRIORITY        5
 #endif
+#if !defined(EFR32_SIO_DMA_ERROR_HOOK) || defined(__DOXYGEN__)
+#define EFR32_SIO_DMA_ERROR_HOOK(siop)    osalSysHalt("SIO DMA failure")
+#endif
 /** @} */
 
 /*===========================================================================*/
@@ -224,9 +222,10 @@
 /*===========================================================================*/
 
 /**
- * @brief   DMA-related fields of the SIO driver structure (TX DMA only).
+ * @brief   DMA-related fields of the SIO driver structure.
  */
 #if EFR32_SIO_USE_DMA || defined(__DOXYGEN__)
+#include "efr32_stream_rx_dma.h"
 #define sio_lld_dma_fields                                                  \
   /* LDMA stream used for TX (NULL if not allocated). */                    \
   const efr32_dma_stream_t *dma_tx;                                         \
@@ -234,7 +233,9 @@
      not have to stay valid until the transfer ends). */                    \
   uint8_t dma_tx_buf[EFR32_SIO_DMA_TX_BUFSIZE];                             \
   /* True while a DMA TX transfer is in flight. */                         \
-  volatile bool dma_tx_busy;
+  volatile bool dma_tx_busy;                                                 \
+  efr32_stream_rx_dma_t dma_rx;                                             \
+  bool dma_rx_notified;
 
 #else
 #define sio_lld_dma_fields
@@ -249,6 +250,7 @@
   void *usart;                                                              \
 /* Clock frequency for the associated USART/UART.*/                         \
   uint32_t clock;                                                           \
+  sioevents_t rx_errors;                                                    \
   sio_lld_dma_fields;
 
 

@@ -27,6 +27,8 @@
 
 #if (HAL_USE_SERIAL == TRUE) || defined(__DOXYGEN__)
 
+#define SD_LLD_ENHANCED_API
+
 /*===========================================================================*/
 /* Driver constants.                                                         */
 /*===========================================================================*/
@@ -46,6 +48,30 @@
  */
 #if !defined(EFR32_SERIAL_USE_USART1) || defined(__DOXYGEN__)
 #define EFR32_SERIAL_USE_USART1             FALSE
+#endif
+
+#if !defined(EFR32_SERIAL_USE_DMA) || defined(__DOXYGEN__)
+#define EFR32_SERIAL_USE_DMA                FALSE
+#endif
+/**
+ * @brief   Enables USART0 TX and RX DMA independently.
+ * @details Starting returns @p HAL_RET_NO_RESOURCE if a required LDMA
+ *          channel cannot be allocated.
+ */
+#if !defined(EFR32_SERIAL_USE_TX_DMA) || defined(__DOXYGEN__)
+#define EFR32_SERIAL_USE_TX_DMA             EFR32_SERIAL_USE_DMA
+#endif
+#if !defined(EFR32_SERIAL_USE_RX_DMA) || defined(__DOXYGEN__)
+#define EFR32_SERIAL_USE_RX_DMA             EFR32_SERIAL_USE_DMA
+#endif
+#if !defined(EFR32_SERIAL_DMA_IRQ_PRIORITY) || defined(__DOXYGEN__)
+#define EFR32_SERIAL_DMA_IRQ_PRIORITY       5
+#endif
+#if !defined(EFR32_SERIAL_DMA_ERROR_HOOK) || defined(__DOXYGEN__)
+#define EFR32_SERIAL_DMA_ERROR_HOOK(sdp)   osalSysHalt("SERIAL DMA failure")
+#endif
+#if (EFR32_SERIAL_USE_TX_DMA || EFR32_SERIAL_USE_RX_DMA) && !defined(EFR32_DMA_REQUIRED)
+#define EFR32_DMA_REQUIRED
 #endif
 /** @} */
 
@@ -88,6 +114,22 @@ typedef struct hal_serial_config {
 /**
  * @brief   @p SerialDriver specific data.
  */
+#if EFR32_SERIAL_USE_TX_DMA
+#define _serial_tx_dma_fields                                               \
+  const efr32_dma_stream_t *dma_tx;                                          \
+  uint8_t                   dma_tx_buf[64];                                 \
+  bool                      dma_tx_busy;
+#else
+#define _serial_tx_dma_fields
+#endif
+#if EFR32_SERIAL_USE_RX_DMA
+#include "efr32_stream_rx_dma.h"
+#define _serial_rx_dma_fields                                               \
+  efr32_stream_rx_dma_t     dma_rx;
+#else
+#define _serial_rx_dma_fields
+#endif
+
 #define _serial_driver_data                                                 \
   _base_asynchronous_channel_data                                           \
   /* Driver state.*/                                                        \
@@ -104,7 +146,9 @@ typedef struct hal_serial_config {
   /* Pointer to the USART registers block.*/                                \
   void                     *usart;                                          \
   /* Clock frequency for the associated USART.*/                            \
-  uint32_t                  clock;
+  uint32_t                  clock;                                          \
+  _serial_tx_dma_fields                                                     \
+  _serial_rx_dma_fields
 
 /*===========================================================================*/
 /* Driver macros.                                                            */
@@ -122,7 +166,7 @@ extern SerialDriver SD1;
 extern "C" {
 #endif
   void sd_lld_init(void);
-  void sd_lld_start(SerialDriver *sdp, const SerialConfig *config);
+  msg_t sd_lld_start(SerialDriver *sdp, const SerialConfig *config);
   void sd_lld_stop(SerialDriver *sdp);
   void sd_lld_serve_interrupt(SerialDriver *sdp);
 #ifdef __cplusplus

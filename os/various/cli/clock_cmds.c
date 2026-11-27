@@ -72,6 +72,11 @@ static void clock_points_print(BaseSequentialStream *ssp) {
   }
 }
 
+CC_WEAK void cli_clock_points_print(BaseSequentialStream *ssp) {
+
+  clock_points_print(ssp);
+}
+
 /**
  * @brief   Default (weak) clock tree view: no tree on this port, so just
  *          print the flat list. Ports with a real clock tree override this
@@ -82,7 +87,7 @@ static void clock_points_print(BaseSequentialStream *ssp) {
 CC_WEAK void cli_clock_tree_print(BaseSequentialStream *ssp) {
 
   chprintf(ssp, "no clock tree on this port, flat list:\r\n");
-  clock_points_print(ssp);
+  cli_clock_points_print(ssp);
 }
 
 /*===========================================================================*/
@@ -90,21 +95,21 @@ CC_WEAK void cli_clock_tree_print(BaseSequentialStream *ssp) {
 /*===========================================================================*/
 
 /**
- * @brief   "clocks" command: list clock points, "clocks w" for the tree.
+ * @brief   "clocks" command: list clock points, "clocks w" for relationships.
  */
 void cli_cmd_clocks(BaseSequentialStream *chp, int argc, char *argv[]) {
 
-  if (argc == 2 && strcmp(argv[1], "w") == 0) {
+  if (argc == 1 && strcmp(argv[0], "w") == 0) {
     cli_clock_tree_print(chp);
     return;
   }
 
-  if (argc != 1) {
+  if (argc != 0) {
     chprintf(chp, "Usage: clocks [w]\r\n");
     return;
   }
 
-  clock_points_print(chp);
+  cli_clock_points_print(chp);
 }
 
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
@@ -243,7 +248,11 @@ void cli_cmd_lowpower(BaseSequentialStream *chp, int argc, char *argv[]) {
 /*===========================================================================*/
 
 #if CLI_HAS_XSHELL
-CLI_XSHELL_ADAPTER(cli_cmd_clocks)
+void cli_xshell_cli_cmd_clocks(xshell_t *xshp, int argc, char *argv[],
+                               char *envp[]) {
+  (void)envp;
+  cli_cmd_clocks(xshp->stream, argc - 1, argv + 1);
+}
 CLI_XSHELL_ADAPTER(cli_cmd_lowpower)
 #if defined(HAL_LLD_USE_CLOCK_MANAGEMENT) || defined(__DOXYGEN__)
 CLI_XSHELL_ADAPTER(cli_cmd_clock)

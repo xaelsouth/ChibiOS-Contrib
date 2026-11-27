@@ -33,6 +33,10 @@ PLATFORMSRC_CONTRIB += $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/EUSA
 else
 ifneq ($(findstring HAL_USE_SIO TRUE,$(HALCONF)),)
 PLATFORMSRC_CONTRIB += $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/EUSARTv1/hal_eusart_irq.c
+else
+ifneq ($(findstring HAL_USE_SERIAL TRUE,$(HALCONF)),)
+PLATFORMSRC_CONTRIB += $(CHIBIOS_CONTRIB)/os/hal/ports/SILABS/LLD/EFR32FG23/EUSARTv1/hal_eusart_irq.c
+endif
 endif
 endif
 

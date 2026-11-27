@@ -55,6 +55,28 @@ int main(void) {
 
   bool ok = true;
 
+#if EFR32_EM4GRPACLKSEL == EFR32_EM4GRPACLKSEL_LFXO && EFR32_LFXO_ENABLED && \
+    defined(EFR32_ST_OWNS_SYSRTC_SEQ)
+  {
+    bool clock_ok = (CMU->EM4GRPACLKCTRL & _CMU_EM4GRPACLKCTRL_CLKSEL_MASK) ==
+                    CMU_EM4GRPACLKCTRL_CLKSEL_LFXO;
+    chSysLock();
+    uint32_t b0 = BURTC->CNT;
+    uint32_t s0 = SYSRTC0->CNT;
+    chSysUnlock();
+    chThdSleepMilliseconds(2000);
+    chSysLock();
+    uint32_t bd = BURTC->CNT - b0;
+    uint32_t sd = SYSRTC0->CNT - s0;
+    chSysUnlock();
+    bool rate_ok = (bd >= sd ? bd - sd : sd - bd) <= 8U;
+    PRINTF("LFXO selection=%u, BURTC/SYSRTC deltas=%lu/%lu: %s\r\n",
+           (unsigned)clock_ok, (unsigned long)bd, (unsigned long)sd,
+           clock_ok && rate_ok ? "PASS" : "FAIL");
+    ok = ok && clock_ok && rate_ok;
+  }
+#endif
+
   /*
    * 0. Diagnostic: is a raw CNT read stable? Read it 8 times back-to-back
    *    — at 32768 Hz the counter changes every ~30 us, so consecutive
