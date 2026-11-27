@@ -57,6 +57,29 @@ OSAL_IRQ_HANDLER(EFR32_LESENSE_HANDLER) {
 /* Driver exported functions.                                                */
 /*===========================================================================*/
 
+/* On xG23 a GPIO pad only connects to the analog bus (ABUS/BBUS/CDBUS)
+   when the corresponding *BUSALLOC field allocates the pad's bus line to
+   the peripheral (xG23 RM 24.6.22-24.6.24). Without this, ACMP inputs and
+   VDAC outputs stay tristated and LESENSE never sees a signal.
+   periph codes: 1=ADC0, 2=ACMP0, 3=ACMP1, 4=VDAC0CH0, 5=VDAC0CH1. */
+static void lesense_alloc_abus(uint32_t port, uint32_t pin, uint32_t periph) {
+  volatile uint32_t *reg;
+  uint32_t shift;
+  if (port == 0U) {
+    reg = &GPIO->ABUSALLOC;
+  } else if (port == 1U) {
+    reg = &GPIO->BBUSALLOC;
+  } else {
+    reg = &GPIO->CDBUSALLOC;
+  }
+  if ((pin & 1U) == 0U) {
+    shift = (pin < 8U ? 0U : 8U);            /* xEVEN0 / xEVEN1 */
+  } else {
+    shift = (pin < 8U ? 16U : 24U);           /* xODD0 / xODD1 */
+  }
+  *reg = (*reg & ~(0xFUL << shift)) | ((periph & 0xFUL) << shift);
+}
+
 void lesense_lld_init(void) {
   LESENSED1.state = LESENSE_STOP;
   LESENSED1.config = NULL;
@@ -101,6 +124,8 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
     }
   }
 
+  /* Allocate each used channel pin to its ACMP on the analog bus (see
+     lesense_alloc_abus above). */
   /* Configure each channel. channels[] is indexed by channel number; an
      entry with port == 0xFF is unused (config not written, CHEN bit not
      set). */
@@ -109,6 +134,8 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
     if (cfg->channels[i].port == 0xFFU) {
       continue;
     }
+    lesense_alloc_abus(cfg->channels[i].port, cfg->channels[i].pin,
+                       (i < 8U) ? 2U /* ACMP0 */ : 3U /* ACMP1 */);
     LESENSE->CH[i].TIMING    = cfg->channels[i].timing;
     /* OFFSET = pad number within the port; the ACMP positive mux is driven
        by LESENSE from POSSEL port base + this offset (xG23 RM 29.3.1). */
@@ -178,6 +205,8 @@ void lesense_lld_start(LESENSEDriver *lp, const LESENSEConfig *cfg) {
                        ((uint32_t)cfg->dac_port << _VDAC_OUTCTRL_ABUSPORTSELCH0_SHIFT) |
                        ((uint32_t)cfg->dac_pin  << _VDAC_OUTCTRL_ABUSPINSELCH0_SHIFT);
     VDAC0_S->CMD_SET = VDAC_CMD_CH0EN;   /* enable channel 0 (LESENSE-triggered) */
+    /* Allocate the DAC output pin on the analog bus (VDAC0 CH0). */
+    lesense_alloc_abus(cfg->dac_port, cfg->dac_pin, 4U /* VDAC0CH0 */);
   }
 
   /* Clear result buffer and flags. */
